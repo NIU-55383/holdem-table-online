@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>德州牌桌 / Hold'em Table</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <button id="brandButton" class="brand-button" type="button" aria-label="返回主页">
+        <span class="brand-mark">A♠</span>
+        <span>
+          <strong data-i18n="appName">德州牌桌</strong>
+          <small>Hold'em Table</small>
+        </span>
+      </button>
+
+      <nav class="view-tabs" aria-label="功能导航">
+        <button type="button" data-view-target="home" class="active" data-i18n="home">主页</button>
+        <button type="button" data-view-target="calculator" data-i18n="calculator">概率计算</button>
+        <button type="button" data-view-target="game" data-i18n="soloGame">单机对局</button>
+        <button type="button" data-view-target="online">多人联机 / Online</button>
+      </nav>
+
+      <div class="language-toggle" role="group" aria-label="Language">
+        <button id="langZh" type="button" class="active">中文</button>
+        <button id="langEn" type="button">EN</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="homeView" class="view home-view active">
+        <div class="home-heading">
+          <p class="eyebrow">TEXAS HOLD'EM</p>
+          <h1>选择一个模式 <span class="en-inline">/ Choose a mode</span></h1>
+          <p>练习决策，或直接坐上牌桌。<span class="en-line">Study a decision or take a seat at the table.</span></p>
+        </div>
+
+        <div class="mode-grid">
+          <button class="mode-card calculator-card" type="button" data-open-view="calculator">
+            <span class="mode-icon">%</span>
+            <span class="mode-copy">
+              <strong>概率计算 <span>/ Odds Calculator</span></strong>
+              <small>选择手牌和公共牌，查看牌型分布、胜率与底池赔率。<span class="en-line">Choose hole and community cards to see hand distribution, equity, and pot odds.</span></small>
+            </span>
+            <span class="mode-arrow" aria-hidden="true">→</span>
+          </button>
+
+          <button class="mode-card game-card" type="button" data-open-view="game">
+            <span class="mode-icon">♠</span>
+            <span class="mode-copy">
+              <strong>单机对局 <span>/ Solo Game</span></strong>
+              <small>选择人数，与打法各不相同的机器人进行完整牌局。<span class="en-line">Choose a table size and play a full game against bots with distinct styles.</span></small>
+            </span>
+            <span class="mode-arrow" aria-hidden="true">→</span>
+          </button>
+
+          <button class="mode-card online-card" type="button" data-open-view="online">
+            <span class="mode-icon">◎</span>
+            <span class="mode-copy">
+              <strong>多人联机 <span>/ Online Table</span></strong>
+              <small>创建房间码，邀请 2–8 位朋友实时对局。<span class="en-line">Create a room code and play live with 2–8 friends.</span></small>
+            </span>
+            <span class="mode-arrow" aria-hidden="true">→</span>
+          </button>
+        </div>
+
+        <div class="home-strip">
+          <span>2-8 <small>玩家 / Players</small></span>
+          <span>1 / 2 <small>盲注 / Blinds</small></span>
+          <span>100 / 150 / 200 <small>起始筹码 / Starting Stack</small></span>
+          <span>中 / EN <small>语言 / Language</small></span>
+        </div>
+      </section>
+
+      <section id="calculatorView" class="view calculator-view">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">ODDS LAB</p>
+            <h1 data-i18n="calculator">概率计算</h1>
+            <p data-i18n="calculatorIntro">选择 2 张手牌和 0-5 张公共牌，计算最终牌型和对随机对手的胜率。</p>
+          </div>
+          <button id="resetCalculatorBtn" class="secondary-button" type="button" data-i18n="reset">清空</button>
+        </div>
+
+        <div class="calculator-layout">
+          <section class="calculator-workspace">
+            <div class="selected-area">
+              <div class="selection-block">
+                <div class="block-title">
+                  <h2 data-i18n="holeCards">手牌</h2>
+                  <span>HOLE</span>
+                </div>
+                <div id="handSlots" class="slots hand-slots"></div>
+              </div>
+              <div class="selection-block">
+                <div class="block-title">
+                  <h2 data-i18n="communityCards">公共牌</h2>
+                  <span>BOARD</span>
+                </div>
+                <div id="boardSlots" class="slots board-slots"></div>
+              </div>
+            </div>
+
+            <div class="deck-panel">
+              <div class="deck-head">
+                <div class="block-title">
+                  <h2 data-i18n="deck">牌组</h2>
+                  <span data-i18n="clickToSelect">点击选牌</span>
+                </div>
+                <div class="segmented-control" role="group" aria-label="选择区域">
+                  <button type="button" class="active" data-card-target="hand" data-i18n="hole">手牌</button>
+                  <button type="button" data-card-target="board" data-i18n="board">公共牌</button>
+                </div>
+              </div>
+              <div id="deck" class="deck"></div>
+            </div>
+          </section>
+
+          <aside class="calculator-results">
+            <div class="calculate-row">
+              <label>
+                <span data-i18n="opponents">对手人数</span>
+                <input id="opponentInput" type="number" min="1" max="5" value="1">
+              </label>
+              <button id="calculateBtn" class="primary-button" type="button" data-i18n="calculate">计算</button>
+            </div>
+
+            <div class="metric-grid">
+              <div class="metric">
+                <span data-i18n="equity">胜率</span>
+                <strong id="equityValue">--</strong>
+                <small id="equityNote" data-i18n="selectTwoCards">请先选择两张手牌</small>
+              </div>
+              <div class="metric">
+                <span data-i18n="runouts">补牌样本</span>
+                <strong id="comboCount">0</strong>
+                <small id="sampleNote" data-i18n="exactOrSample">精确计算或随机采样</small>
+              </div>
+            </div>
+
+            <div class="odds-tool">
+              <div class="block-title">
+                <h2 data-i18n="potOdds">底池赔率</h2>
+                <span>POT ODDS</span>
+              </div>
+              <div class="two-fields">
+                <label>
+                  <span data-i18n="potBeforeCall">当前底池</span>
+                  <input id="potInput" type="number" min="0" value="100">
+                </label>
+                <label>
+                  <span data-i18n="callAmount">跟注金额</span>
+                  <input id="callInput" type="number" min="0" value="50">
+                </label>
+              </div>
+              <div id="potOddsResult" class="odds-answer"></div>
+            </div>
+
+            <div class="distribution-panel">
+              <div class="block-title">
+                <h2 data-i18n="handDistribution">牌型概率</h2>
+                <span>FINAL HAND</span>
+              </div>
+              <div id="results" class="bar-list"></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="gameView" class="view game-view">
+        <div id="gameSetup" class="game-setup">
+          <div class="setup-copy">
+            <p class="eyebrow">SOLO TABLE</p>
+            <h1 data-i18n="setYourTable">设置你的牌桌</h1>
+            <p data-i18n="setupHint">你将与理性但风格不同的机器人进行无限注德州扑克。</p>
+          </div>
+
+          <div class="setup-controls">
+            <div class="player-count-control">
+              <span data-i18n="tableSize">牌桌人数</span>
+              <div id="playerCountButtons" class="count-buttons" role="group" aria-label="牌桌人数">
+                <button type="button" data-count="2">2</button>
+                <button type="button" data-count="3">3</button>
+                <button type="button" data-count="4" class="active">4</button>
+                <button type="button" data-count="5">5</button>
+                <button type="button" data-count="6">6</button>
+                <button type="button" data-count="7">7</button>
+                <button type="button" data-count="8">8</button>
+              </div>
+            </div>
+            <div class="setup-option">
+              <span>起始筹码 / Starting Stack</span>
+              <div class="setup-choice-buttons" role="group" aria-label="起始筹码">
+                <button type="button" data-stack="100">100</button>
+                <button type="button" data-stack="150" class="active">150</button>
+                <button type="button" data-stack="200">200</button>
+              </div>
+            </div>
+            <div class="setup-option">
+              <span>涨盲节奏 / Blind Schedule</span>
+              <div class="setup-choice-buttons blind-choice-buttons" role="group" aria-label="涨盲节奏">
+                <button type="button" data-blind-interval="0">固定 / Fixed</button>
+                <button type="button" data-blind-interval="5">每 5 手 / 5 Hands</button>
+                <button type="button" data-blind-interval="10" class="active">每 10 手 / 10 Hands</button>
+              </div>
+            </div>
+            <button id="startGameBtn" class="primary-button large-button" type="button" data-i18n="takeSeat">坐下开局</button>
+          </div>
+        </div>
+
+        <div id="pokerRoom" class="poker-room" hidden>
+          <button id="backToSetupBtn" class="table-back-button" type="button" aria-label="返回牌桌设置">
+            <span aria-hidden="true">←</span>
+            <span>返回 / Back</span>
+          </button>
+          <div id="matchResultNotice" class="match-result-notice" hidden>
+            <div class="match-result-panel">
+              <span id="matchResultIcon" class="match-result-icon">!</span>
+              <h2 id="matchResultTitle"></h2>
+              <p id="matchResultDetail"></p>
+              <button id="resultBackBtn" class="primary-button" type="button">返回设置 / Back to Setup</button>
+            </div>
+          </div>
+          <div class="table-toolbar">
+            <div>
+              <span id="handNumber">#1</span>
+              <strong id="streetLabel">PRE-FLOP</strong>
+              <span id="blindLevelLabel" class="blind-level-label">1 / 2</span>
+            </div>
+            <div class="toolbar-actions">
+              <button id="nextHandBtn" class="secondary-button" type="button" disabled>下一手 / Next Hand</button>
+            </div>
+          </div>
+
+          <div class="table-stage">
+            <div class="poker-table">
+              <div id="dealAnimationLayer" class="deal-animation-layer" aria-hidden="true">
+                <div class="deck-stack">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <small id="dealAnimationText"></small>
+              </div>
+              <div class="table-deck" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div class="muck-pile" aria-hidden="true">
+                <span></span>
+                <span></span>
+              </div>
+              <div id="playersLayer" class="players-layer"></div>
+              <div class="table-center">
+                <div class="pot-display">
+                  <span>底池 / Pot</span>
+                  <strong id="potValue">0</strong>
+                </div>
+                <div id="communityCards" class="community-row"></div>
+                <div id="tableMessage" class="table-message"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="game-console">
+            <div class="hero-status">
+              <div id="heroCards" class="hero-cards"></div>
+              <div>
+                <strong id="heroHandName">--</strong>
+                <span id="heroStack">150</span>
+              </div>
+            </div>
+
+            <div id="actionPanel" class="action-panel">
+              <button id="foldBtn" class="action-button fold-button" type="button" data-action="fold">弃牌 / Fold</button>
+              <button id="checkCallBtn" class="action-button call-button" type="button" data-action="call">过牌</button>
+              <div class="raise-control">
+                <input id="raiseInput" type="number" min="2" step="1" value="4" aria-label="加注到">
+                <button id="raiseBtn" class="action-button raise-button" type="button" data-action="raise">加注 / Raise</button>
+              </div>
+            </div>
+
+            <div class="hand-log">
+              <div class="block-title">
+                <h2>牌局记录 / Hand Log</h2>
+                <span>HAND LOG</span>
+              </div>
+              <div id="logEntries" class="log-entries"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="onlineView" class="view online-view">
+        <div id="onlineSetup" class="online-setup">
+          <div class="setup-copy">
+            <p class="eyebrow">ONLINE TABLE</p>
+            <h1>多人联机对局 <span class="en-inline">/ Multiplayer</span></h1>
+            <p>创建房间或输入房间码加入。牌局由服务器洗牌、发牌和结算。<span class="en-line">Create or join a room. The server securely deals and settles every hand.</span></p>
+            <div id="onlineConnectionStatus" class="connection-status">正在连接 / Connecting</div>
+          </div>
+
+          <div class="setup-controls online-controls">
+            <label class="online-field">
+              <span>你的名字 / Your Name</span>
+              <input id="onlineNameInput" type="text" maxlength="18" autocomplete="nickname" placeholder="Player">
+            </label>
+            <div class="online-create-options">
+              <div class="setup-option">
+                <span>房间人数 / Seats</span>
+                <div class="setup-choice-buttons" role="group">
+                  <button type="button" data-online-count="2">2</button>
+                  <button type="button" data-online-count="4" class="active">4</button>
+                  <button type="button" data-online-count="6">6</button>
+                  <button type="button" data-online-count="8">8</button>
+                </div>
+              </div>
+              <div class="setup-option">
+                <span>起始筹码 / Starting Stack</span>
+                <div class="setup-choice-buttons" role="group">
+                  <button type="button" data-online-stack="100">100</button>
+                  <button type="button" data-online-stack="150" class="active">150</button>
+                  <button type="button" data-online-stack="200">200</button>
+                </div>
+              </div>
+              <div class="setup-option">
+                <span>涨盲 / Blind Schedule</span>
+                <div class="setup-choice-buttons" role="group">
+                  <button type="button" data-online-blinds="0">固定 / Fixed</button>
+                  <button type="button" data-online-blinds="5">5 手</button>
+                  <button type="button" data-online-blinds="10" class="active">10 手</button>
+                </div>
+              </div>
+              <button id="createOnlineRoomBtn" class="primary-button large-button" type="button">创建房间 / Create Room</button>
+            </div>
+            <div class="join-divider"><span>或 / OR</span></div>
+            <div class="join-room-row">
+              <label class="online-field">
+                <span>房间码 / Room Code</span>
+                <input id="onlineRoomCodeInput" type="text" maxlength="5" autocomplete="off" placeholder="ABCDE">
+              </label>
+              <button id="joinOnlineRoomBtn" class="secondary-button large-button" type="button">加入 / Join</button>
+            </div>
+            <p id="onlineError" class="online-error" role="alert"></p>
+          </div>
+        </div>
+
+        <div id="onlineLobby" class="online-lobby" hidden>
+          <button id="leaveOnlineLobbyBtn" class="table-back-button" type="button">
+            <span aria-hidden="true">←</span><span>离开 / Leave</span>
+          </button>
+          <div class="lobby-heading">
+            <div>
+              <p class="eyebrow">PRIVATE ROOM</p>
+              <h1>房间 <button id="onlineRoomCodeButton" class="room-code-button" type="button">-----</button></h1>
+              <p>点击房间码复制邀请信息。<span class="en-line">Click the room code to copy the invitation.</span></p>
+            </div>
+            <div class="lobby-config" id="onlineLobbyConfig"></div>
+          </div>
+          <div class="lobby-body">
+            <div id="onlineLobbyPlayers" class="lobby-player-list"></div>
+            <div class="lobby-actions">
+              <p id="onlineLobbyMessage">等待其他玩家 / Waiting for players</p>
+              <button id="startOnlineGameBtn" class="primary-button large-button" type="button">开始牌局 / Start Game</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="onlinePokerRoom" class="poker-room online-poker-room" hidden>
+          <button id="leaveOnlineGameBtn" class="table-back-button" type="button">
+            <span aria-hidden="true">←</span><span>离开 / Leave</span>
+          </button>
+          <div class="table-toolbar">
+            <div>
+              <span id="onlineHandNumber">#1</span>
+              <strong id="onlineStreetLabel">PRE-FLOP</strong>
+              <span id="onlineBlindLabel" class="blind-level-label">1 / 2</span>
+            </div>
+            <div class="toolbar-actions">
+              <span id="onlineRoomBadge" class="online-room-badge"></span>
+              <button id="onlineNextHandBtn" class="secondary-button" type="button" hidden>下一手 / Next Hand</button>
+            </div>
+          </div>
+          <div class="table-stage">
+            <div class="poker-table">
+              <div class="table-deck" aria-hidden="true"><span></span><span></span><span></span></div>
+              <div id="onlinePlayersLayer" class="players-layer"></div>
+              <div class="table-center">
+                <div class="pot-display"><span>底池 / Pot</span><strong id="onlinePotValue">0</strong></div>
+                <div id="onlineCommunityCards" class="community-row"></div>
+                <div id="onlineTableMessage" class="table-message"></div>
+              </div>
+            </div>
+          </div>
+          <div class="game-console">
+            <div class="hero-status">
+              <div id="onlineHeroCards" class="hero-cards"></div>
+              <div><strong id="onlineHeroName">--</strong><span id="onlineHeroStack">0 筹码 / chips</span></div>
+            </div>
+            <div id="onlineActionPanel" class="action-panel waiting">
+              <button id="onlineFoldBtn" class="action-button fold-button" type="button">弃牌 / Fold</button>
+              <button id="onlineCallBtn" class="action-button call-button" type="button">过牌 / Check</button>
+              <div class="raise-control">
+                <input id="onlineRaiseInput" type="number" min="2" step="1" value="4" aria-label="加注到">
+                <button id="onlineRaiseBtn" class="action-button raise-button" type="button">加注 / Raise</button>
+              </div>
+            </div>
+            <div class="hand-log">
+              <div class="block-title"><h2>牌局记录 / Hand Log</h2><span>HAND LOG</span></div>
+              <div id="onlineLogEntries" class="log-entries"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="online.js"></script>
+</body>
+</html>

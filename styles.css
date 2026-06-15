@@ -930,6 +930,21 @@ input {
   line-height: 1.55;
 }
 
+.online-bot-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.lobby-player.bot {
+  border-color: rgba(39, 100, 122, 0.35);
+  background: #f4f9fb;
+}
+
+.lobby-player.bot > span {
+  background: #27647a;
+}
+
 .online-room-badge {
   align-self: center;
   white-space: nowrap;
@@ -1407,6 +1422,18 @@ input {
   font-size: 7px;
   font-weight: 900;
   white-space: nowrap;
+}
+
+.bot-button {
+  min-height: 18px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px;
+  padding: 0 5px;
+  background: #27647a;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 850;
 }
 
 .blind-button {

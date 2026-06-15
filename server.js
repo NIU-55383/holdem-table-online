@@ -10,6 +10,10 @@ const ROOT = __dirname;
 const BLIND_LEVELS = [[1, 2], [2, 4], [3, 6], [5, 10], [10, 20], [15, 30], [20, 40]];
 const rooms = new Map();
 const clients = new Set();
+const BOT_NAMES = [
+  "Connie", "Colin", "Angela", "Stephan", "Zoey", "William", "Tim", "Gary",
+  "Alison", "David", "Emma", "Sophia", "Daniel", "Rachel", "Chris", "Alex",
+];
 
 const ranks = [
   ["A", 14], ["K", 13], ["Q", 12], ["J", 11], ["10", 10], ["9", 9], ["8", 8],
@@ -142,9 +146,41 @@ function makeRoom(host, config) {
     message: "等待玩家 / Waiting for players",
     log: [],
     winners: [],
+    botSerial: 0,
+    botTimer: null,
   };
   rooms.set(room.code, room);
   return room;
+}
+
+function addBot(room) {
+  if (room.status !== "lobby") throw new Error("Only in lobby / 只能在等待室添加机器人");
+  if (room.players.length >= room.maxPlayers) throw new Error("Room is full / 房间已满");
+  const usedNames = new Set(room.players.map((player) => player.name));
+  const name = BOT_NAMES.find((candidate) => !usedNames.has(candidate)) || `Bot ${room.botSerial + 1}`;
+  room.botSerial += 1;
+  room.players.push({
+    clientId: `bot-${room.code}-${room.botSerial}`,
+    name,
+    isBot: true,
+    chips: room.startingStack,
+    hand: [],
+    bet: 0,
+    totalBet: 0,
+    folded: false,
+    allIn: false,
+    connected: true,
+    socket: null,
+    aggression: 0.38 + Math.random() * 0.42,
+    looseness: 0.18 + Math.random() * 0.28,
+  });
+}
+
+function removeBot(room) {
+  if (room.status !== "lobby") throw new Error("Only in lobby / 只能在等待室移除机器人");
+  const index = room.players.map((player) => player.isBot).lastIndexOf(true);
+  if (index < 0) throw new Error("No bot to remove / 没有机器人可移除");
+  room.players.splice(index, 1);
 }
 
 function addPlayer(room, client, name) {
@@ -216,6 +252,91 @@ function postBlind(room, index, amount, label) {
   addLog(room, `${player.name} ${label} ${Math.min(amount, player.bet)}`);
 }
 
+function preflopStrength(hand) {
+  if (!hand || hand.length !== 2) return 0;
+  const [a, b] = [...hand].sort((left, right) => right.value - left.value);
+  const pair = a.value === b.value;
+  const suited = a.suit === b.suit;
+  const gap = Math.abs(a.value - b.value);
+  if (pair) return Math.min(1, 0.42 + a.value / 18);
+  let score = (a.value + b.value) / 32;
+  if (suited) score += 0.08;
+  if (gap <= 1) score += 0.06;
+  if (gap >= 4) score -= 0.08;
+  if (a.value >= 14 && b.value >= 10) score += 0.12;
+  return Math.max(0, Math.min(1, score));
+}
+
+function madeHandStrength(player, room) {
+  if (room.board.length < 3) return preflopStrength(player.hand);
+  const rank = bestRank([...player.hand, ...room.board]);
+  if (!rank) return 0.25;
+  const category = rank[0];
+  if (category >= 5) return 0.94;
+  if (category === 4) return 0.86;
+  if (category === 3) return 0.78;
+  if (category === 2) return 0.66;
+  if (category === 1) return 0.44 + Math.min(rank[1], 14) / 40;
+  return Math.min(0.42, rank[1] / 34);
+}
+
+function chooseBotAction(room, index) {
+  const player = room.players[index];
+  const toCall = Math.max(0, room.currentBet - player.bet);
+  const stack = player.chips;
+  const pressure = stack ? toCall / Math.max(stack, 1) : 1;
+  const strength = room.street === "preflop"
+    ? preflopStrength(player.hand)
+    : madeHandStrength(player, room);
+  const temperament = (player.aggression || 0.55) - 0.5 + (Math.random() - 0.5) * 0.1;
+  const canRaise = stack > toCall + room.minRaise;
+
+  if (toCall > 0) {
+    const callLine = strength + (player.looseness || 0.28) * 0.35 - pressure * 0.72 + temperament * 0.15;
+    if (callLine < 0.24 && Math.random() > 0.08) return { action: "fold" };
+    if (canRaise && strength > 0.72 && Math.random() < 0.38 + (player.aggression || 0.5) * 0.3) {
+      const multiplier = room.street === "preflop" ? 2.6 : 2.2;
+      const target = Math.min(
+        player.bet + stack,
+        Math.max(room.currentBet + room.minRaise, Math.round(room.currentBet * multiplier + room.bigBlindAmount))
+      );
+      return { action: "raise", target };
+    }
+    return { action: "call" };
+  }
+
+  if (canRaise && strength > 0.68 && Math.random() < 0.26 + (player.aggression || 0.5) * 0.22) {
+    const base = room.street === "preflop"
+      ? room.bigBlindAmount * (2.5 + (player.aggression || 0.5))
+      : Math.max(room.bigBlindAmount, room.pot * (0.35 + (player.aggression || 0.5) * 0.18));
+    return { action: "raise", target: Math.min(player.bet + stack, Math.round(base)) };
+  }
+  return { action: "call" };
+}
+
+function scheduleBot(room) {
+  clearTimeout(room.botTimer);
+  if (room.status !== "playing" || room.actor < 0) return;
+  const player = room.players[room.actor];
+  if (!player || !player.isBot || !actionable(player)) return;
+  const delay = 650 + Math.floor(Math.random() * 850);
+  room.botTimer = setTimeout(() => {
+    if (room.status !== "playing" || room.players[room.actor] !== player) return;
+    try {
+      const decision = chooseBotAction(room, room.actor);
+      performAction(room, room.actor, decision.action, decision.target);
+    } catch {
+      try {
+        performAction(room, room.actor, "call");
+      } catch {
+        if (room.status === "playing" && room.players[room.actor] === player) {
+          performAction(room, room.actor, "fold");
+        }
+      }
+    }
+  }, delay);
+}
+
 function beginHand(room) {
   const active = livePlayers(room);
   if (active.length < 2) {
@@ -273,6 +394,7 @@ function beginHand(room) {
   room.message = `第 ${room.handNumber} 手 / Hand ${room.handNumber}`;
   skipDisconnectedActor(room);
   broadcast(room);
+  scheduleBot(room);
 }
 
 function bettingComplete(room) {
@@ -340,6 +462,7 @@ function performAction(room, index, action, target) {
   room.actor = nextActor(room, index);
   skipDisconnectedActor(room);
   broadcast(room);
+  scheduleBot(room);
 }
 
 function resetStreetBets(room) {
@@ -383,6 +506,7 @@ function advanceStreet(room) {
   room.message = `${room.street.toUpperCase()}`;
   skipDisconnectedActor(room);
   broadcast(room);
+  scheduleBot(room);
 }
 
 function awardUncontested(room) {
@@ -460,7 +584,7 @@ function showdown(room) {
 
 function skipDisconnectedActor(room) {
   let guard = room.players.length + 1;
-  while (room.actor >= 0 && !room.players[room.actor].connected && guard > 0) {
+  while (room.actor >= 0 && !room.players[room.actor].isBot && !room.players[room.actor].connected && guard > 0) {
     const index = room.actor;
     room.players[index].folded = true;
     room.acted.add(room.players[index].clientId);
@@ -515,6 +639,7 @@ function publicState(room, clientId) {
         folded: player.folded,
         allIn: player.allIn,
         connected: player.connected,
+        isBot: Boolean(player.isBot),
         cardCount: player.hand.length,
         hand: index === viewerIndex || (showdownVisible && !player.folded) ? player.hand : [],
       })),
@@ -534,6 +659,7 @@ function leaveClient(client) {
   if (!client.roomCode) return;
   const room = rooms.get(client.roomCode);
   if (!room) return;
+  clearTimeout(room.botTimer);
   const index = room.players.findIndex((player) => player.clientId === client.clientId);
   if (index < 0) return;
   const player = room.players[index];
@@ -558,6 +684,7 @@ function leaveClient(client) {
     skipDisconnectedActor(room);
   }
   broadcast(room);
+  scheduleBot(room);
 }
 
 function handleMessage(client, message) {
@@ -597,6 +724,14 @@ function handleMessage(client, message) {
     if (room.status !== "lobby") throw new Error("牌局已经开始 / Game already started");
     if (room.players.length < 2) throw new Error("至少需要两位玩家 / At least two players");
     beginHand(room);
+  } else if (data.type === "addBot") {
+    if (room.hostId !== client.clientId) throw new Error("Host only / 只有房主可以添加机器人");
+    addBot(room);
+    broadcast(room);
+  } else if (data.type === "removeBot") {
+    if (room.hostId !== client.clientId) throw new Error("Host only / 只有房主可以移除机器人");
+    removeBot(room);
+    broadcast(room);
   } else if (data.type === "action") {
     performAction(room, playerIndex, data.action, data.target);
   } else if (data.type === "nextHand") {

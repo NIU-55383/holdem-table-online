@@ -25,6 +25,9 @@
     lobbyPlayers: document.querySelector("#onlineLobbyPlayers"),
     lobbyConfig: document.querySelector("#onlineLobbyConfig"),
     lobbyMessage: document.querySelector("#onlineLobbyMessage"),
+    botControls: document.querySelector("#onlineBotControls"),
+    addBot: document.querySelector("#addOnlineBotBtn"),
+    removeBot: document.querySelector("#removeOnlineBotBtn"),
     startButton: document.querySelector("#startOnlineGameBtn"),
     nextButton: document.querySelector("#onlineNextHandBtn"),
     playersLayer: document.querySelector("#onlinePlayersLayer"),
@@ -211,6 +214,8 @@
   });
 
   elements.startButton.addEventListener("click", () => send({ type: "start" }));
+  elements.addBot.addEventListener("click", () => send({ type: "addBot" }));
+  elements.removeBot.addEventListener("click", () => send({ type: "removeBot" }));
   elements.nextButton.addEventListener("click", () => send({ type: "nextHand" }));
   elements.fold.addEventListener("click", () => send({ type: "action", action: "fold" }));
   elements.call.addEventListener("click", () => send({ type: "action", action: "call" }));
@@ -258,17 +263,22 @@
         return `<div class="lobby-player empty"><span>${index + 1}</span><strong>等待加入 / Open seat</strong></div>`;
       }
       const host = player.clientId === room.hostId;
+      const bot = player.isBot;
       return `
-        <div class="lobby-player">
+        <div class="lobby-player ${bot ? "bot" : ""}">
           <span>${index + 1}</span>
           <strong>${escapeHtml(player.name)}</strong>
-          <small>${host ? "房主 / Host" : (player.connected ? "已就座 / Seated" : "断线 / Offline")}</small>
+          <small>${bot ? "机器人 / Bot" : (host ? "房主 / Host" : (player.connected ? "已就座 / Seated" : "断线 / Offline"))}</small>
         </div>
       `;
     }).join("");
     const isHost = room.hostId === state.clientId;
+    const botCount = room.players.filter((player) => player.isBot).length;
     elements.startButton.hidden = !isHost;
     elements.startButton.disabled = room.players.length < 2;
+    elements.botControls.hidden = !isHost;
+    elements.addBot.disabled = room.players.length >= room.maxPlayers;
+    elements.removeBot.disabled = botCount <= 0;
     elements.lobbyMessage.textContent = room.players.length < 2
       ? "至少还需要一位玩家 / One more player needed"
       : isHost
@@ -324,7 +334,7 @@
       return `
         <div class="${classes}" style="left:${left}%;top:${top}%">
           <div class="seat-head"><span class="seat-name">${escapeHtml(player.name)}</span></div>
-          <span class="seat-badges">${badges}</span>
+          <span class="seat-badges">${player.isBot ? `<span class="bot-button">BOT · 机器人</span>` : ""}${badges}</span>
           <div class="seat-cards">${cards}</div>
           <div class="seat-foot">
             <span class="seat-stack">${player.chips}${player.allIn ? " · ALL-IN" : ""}</span>

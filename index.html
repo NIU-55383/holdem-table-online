@@ -292,6 +292,9 @@
               <div id="logEntries" class="log-entries"></div>
             </div>
           </div>
+          <div class="table-tools-row">
+            <button class="secondary-button hand-rank-open" type="button">牌型大小 / Hand Rankings</button>
+          </div>
         </div>
       </section>
 
@@ -391,6 +394,14 @@
           </div>
           <div class="table-stage">
             <div class="poker-table">
+              <div id="onlineDealAnimationLayer" class="deal-animation-layer" aria-hidden="true">
+                <div class="deck-stack">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <small id="onlineDealAnimationText"></small>
+              </div>
               <div class="table-deck" aria-hidden="true"><span></span><span></span><span></span></div>
               <div id="onlinePlayersLayer" class="players-layer"></div>
               <div class="table-center">
@@ -418,9 +429,32 @@
               <div id="onlineLogEntries" class="log-entries"></div>
             </div>
           </div>
+          <div class="table-tools-row">
+            <button class="secondary-button hand-rank-open" type="button">牌型大小 / Hand Rankings</button>
+          </div>
         </div>
       </section>
     </main>
+  </div>
+
+  <div id="handRankModal" class="rank-modal" hidden>
+    <div class="rank-panel" role="dialog" aria-modal="true" aria-labelledby="handRankTitle">
+      <button id="handRankCloseBtn" class="rank-close-button" type="button" aria-label="关闭 / Close">×</button>
+      <p class="eyebrow">POKER HANDS</p>
+      <h2 id="handRankTitle">牌型大小顺序 / Hand Rankings</h2>
+      <div class="rank-list">
+        <div><strong>1. 皇家同花顺 / Royal Flush</strong><span>A K Q J 10 同花 / same suit</span></div>
+        <div><strong>2. 同花顺 / Straight Flush</strong><span>连续五张同花 / five consecutive suited cards</span></div>
+        <div><strong>3. 四条 / Four of a Kind</strong><span>四张同点数 / four cards of one rank</span></div>
+        <div><strong>4. 葫芦 / Full House</strong><span>三条加一对 / three of a kind plus a pair</span></div>
+        <div><strong>5. 同花 / Flush</strong><span>五张同花色 / five cards of one suit</span></div>
+        <div><strong>6. 顺子 / Straight</strong><span>连续五张 / five consecutive cards</span></div>
+        <div><strong>7. 三条 / Three of a Kind</strong><span>三张同点数 / three cards of one rank</span></div>
+        <div><strong>8. 两对 / Two Pair</strong><span>两组对子 / two different pairs</span></div>
+        <div><strong>9. 一对 / One Pair</strong><span>一组对子 / one pair</span></div>
+        <div><strong>10. 高牌 / High Card</strong><span>未成牌时比最大牌 / highest card wins</span></div>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>

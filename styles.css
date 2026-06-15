@@ -1344,6 +1344,11 @@ input {
 
 .player-seat.current {
   border-color: #f0c75e;
+  box-shadow:
+    0 0 0 4px rgba(240, 199, 94, 0.34),
+    0 0 24px rgba(240, 199, 94, 0.72),
+    0 7px 20px rgba(0, 0, 0, 0.28);
+  animation: active-seat-glow 1.05s ease-in-out infinite alternate;
 }
 
 .player-seat.folded {
@@ -1555,6 +1560,21 @@ input {
   to { transform: translate(25px, 2px) rotate(10deg); }
 }
 
+@keyframes active-seat-glow {
+  from {
+    box-shadow:
+      0 0 0 3px rgba(240, 199, 94, 0.28),
+      0 0 18px rgba(240, 199, 94, 0.55),
+      0 7px 20px rgba(0, 0, 0, 0.28);
+  }
+  to {
+    box-shadow:
+      0 0 0 6px rgba(240, 199, 94, 0.42),
+      0 0 34px rgba(240, 199, 94, 0.88),
+      0 7px 20px rgba(0, 0, 0, 0.28);
+  }
+}
+
 @keyframes deck-pulse {
   from { transform: translateY(0); }
   to { transform: translateY(-3px); }
@@ -1603,7 +1623,8 @@ input {
   .deal-animation-layer .deck-stack,
   .mini-card.dealt-card,
   .playing-card.board-dealt-card,
-  .player-seat.folding .seat-cards {
+  .player-seat.folding .seat-cards,
+  .player-seat.current {
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
   }
@@ -1613,6 +1634,77 @@ input {
   display: grid;
   grid-template-columns: minmax(220px, 0.7fr) minmax(320px, 1fr) minmax(250px, 0.8fr);
   gap: 10px;
+}
+
+.table-tools-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rank-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(18, 24, 20, 0.72);
+  backdrop-filter: blur(5px);
+}
+
+.rank-panel {
+  position: relative;
+  width: min(620px, 100%);
+  max-height: min(760px, calc(100vh - 36px));
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 26px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+}
+
+.rank-panel h2 {
+  margin-right: 42px;
+  font-size: 28px;
+}
+
+.rank-close-button {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.rank-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.rank-list div {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 10px 12px;
+  background: var(--surface-soft);
+}
+
+.rank-list strong {
+  font-size: 14px;
+}
+
+.rank-list span {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .hero-status,

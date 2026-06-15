@@ -10,6 +10,9 @@
     blindInterval: 10,
     intentionalClose: false,
     shareUrl: "",
+    lastRoomSnapshot: null,
+    animationTimer: null,
+    animationPhase: "",
   };
   localStorage.setItem("holdem-online-client", state.clientId);
 
@@ -47,6 +50,8 @@
     raise: document.querySelector("#onlineRaiseBtn"),
     raiseInput: document.querySelector("#onlineRaiseInput"),
     log: document.querySelector("#onlineLogEntries"),
+    dealLayer: document.querySelector("#onlineDealAnimationLayer"),
+    dealText: document.querySelector("#onlineDealAnimationText"),
   };
 
   elements.name.value = localStorage.getItem("holdem-online-name") || "";
@@ -234,6 +239,9 @@
   document.querySelector("#leaveOnlineGameBtn").addEventListener("click", leaveRoom);
 
   function resetToSetup() {
+    clearTimeout(state.animationTimer);
+    state.animationPhase = "";
+    state.lastRoomSnapshot = null;
     state.room = null;
     state.desiredRoom = "";
     sessionStorage.removeItem("holdem-online-room");
@@ -304,6 +312,49 @@
       : `<span class="mini-card ${card.color}">${card.rank}${card.suitLabel}</span>`;
   }
 
+  function setOnlineAnimation(phase, duration = 520) {
+    clearTimeout(state.animationTimer);
+    state.animationPhase = phase;
+    renderOnlineAnimation();
+    if (phase) {
+      state.animationTimer = setTimeout(() => {
+        state.animationPhase = "";
+        renderOnlineAnimation();
+      }, duration);
+    }
+  }
+
+  function renderOnlineAnimation() {
+    elements.dealLayer.className = `deal-animation-layer ${state.animationPhase ? `active ${state.animationPhase}` : ""}`;
+    elements.dealText.textContent = state.animationPhase === "shuffle"
+      ? "洗牌 / Shuffle"
+      : state.animationPhase === "burn"
+        ? "烧牌 / Burn"
+        : state.animationPhase
+          ? "发牌 / Deal"
+          : "";
+  }
+
+  function updateOnlineAnimation(room) {
+    const previous = state.lastRoomSnapshot;
+    if (!previous && room.status === "playing") {
+      setOnlineAnimation("shuffle", 620);
+    } else if (previous) {
+      if (room.status === "playing" && room.handNumber !== previous.handNumber) {
+        setOnlineAnimation("shuffle", 620);
+        setTimeout(() => setOnlineAnimation("deal", 520), 640);
+      } else if (room.status === "playing" && room.board.length > previous.boardCount) {
+        setOnlineAnimation("burn", 260);
+        setTimeout(() => setOnlineAnimation("board", 520), 280);
+      }
+    }
+    state.lastRoomSnapshot = {
+      handNumber: room.handNumber,
+      boardCount: room.board.length,
+      status: room.status,
+    };
+  }
+
   function renderTable(room) {
     elements.setup.hidden = true;
     elements.lobby.hidden = true;
@@ -352,6 +403,8 @@
     elements.blind.textContent = `盲注 / Blinds ${room.smallBlindAmount} / ${room.bigBlindAmount}`;
     elements.roomBadge.textContent = `房间 / Room ${room.code}`;
     elements.log.innerHTML = room.log.map((entry) => `<div class="log-entry">${escapeHtml(entry)}</div>`).join("");
+    updateOnlineAnimation(room);
+    renderOnlineAnimation();
 
     const hero = room.players[room.viewerIndex];
     if (!hero) return;

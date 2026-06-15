@@ -1769,6 +1769,22 @@ document.querySelector("#raiseBtn").addEventListener("click", () => {
   performAction(0, "raise", Number(document.querySelector("#raiseInput").value));
 });
 
+const handRankModal = document.querySelector("#handRankModal");
+document.querySelectorAll(".hand-rank-open").forEach((button) => {
+  button.addEventListener("click", () => {
+    handRankModal.hidden = false;
+  });
+});
+document.querySelector("#handRankCloseBtn").addEventListener("click", () => {
+  handRankModal.hidden = true;
+});
+handRankModal.addEventListener("click", (event) => {
+  if (event.target === handRankModal) handRankModal.hidden = true;
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") handRankModal.hidden = true;
+});
+
 applyLanguage();
 renderCalculator();
 renderPotOdds();

@@ -10,9 +10,13 @@ const ROOT = __dirname;
 const BLIND_LEVELS = [[1, 2], [2, 4], [3, 6], [5, 10], [10, 20], [15, 30], [20, 40]];
 const rooms = new Map();
 const clients = new Set();
-const BOT_NAMES = [
-  "Connie", "Colin", "Angela", "Stephan", "Zoey", "William", "Tim", "Gary",
-  "Alison", "David", "Emma", "Sophia", "Daniel", "Rachel", "Chris", "Alex",
+const FAMILIAR_BOT_NAMES = [
+  "Connie", "Colin", "Angela", "Stephan", "Zoey", "William", "Tim", "Gary", "Alison",
+];
+const COMMON_BOT_NAMES = [
+  "James", "Emma", "Michael", "Olivia", "Daniel", "Sophia", "David", "Emily",
+  "Chris", "Anna", "Alex", "Sarah", "Ryan", "Jessica", "Matthew", "Rachel",
+  "Kevin", "Laura", "Andrew", "Megan",
 ];
 
 const ranks = [
@@ -160,7 +164,15 @@ function addBot(room) {
   if (room.status !== "lobby") throw new Error("Only in lobby / 只能在等待室添加机器人");
   if (room.players.length >= room.maxPlayers) throw new Error("Room is full / 房间已满");
   const usedNames = new Set(room.players.map((player) => player.name));
-  const name = BOT_NAMES.find((candidate) => !usedNames.has(candidate)) || `Bot ${room.botSerial + 1}`;
+  const familiar = FAMILIAR_BOT_NAMES.filter((candidate) => !usedNames.has(candidate));
+  const common = COMMON_BOT_NAMES.filter((candidate) => !usedNames.has(candidate));
+  const preferFamiliar = Math.random() < 0.4;
+  const source = preferFamiliar
+    ? (familiar.length ? familiar : common)
+    : (common.length ? common : familiar);
+  const name = source.length
+    ? source[crypto.randomInt(source.length)]
+    : `Bot ${room.botSerial + 1}`;
   room.botSerial += 1;
   room.players.push({
     clientId: `bot-${room.code}-${room.botSerial}`,

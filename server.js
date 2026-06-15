@@ -141,6 +141,9 @@ function makeRoom(host, config) {
     pot: 0,
     currentBet: 0,
     minRaise: 2,
+    raiseCount: 0,
+    lastAggressor: -1,
+    playerReads: {},
     actor: -1,
     acted: new Set(),
     message: "等待玩家 / Waiting for players",
@@ -173,7 +176,30 @@ function addBot(room) {
     socket: null,
     aggression: 0.38 + Math.random() * 0.42,
     looseness: 0.18 + Math.random() * 0.28,
+    mastery: 0.78 + Math.random() * 0.2,
+    handBluff: 0,
   });
+}
+
+function updatePlayerRead(room, index, action, target = 0) {
+  const player = room.players[index];
+  if (!player || player.isBot) return;
+  const read = room.playerReads[player.clientId] || {
+    largeRaises: 0,
+    shownBluffs: 0,
+    suspicion: 0,
+  };
+  if (action === "raise") {
+    const bigRaise = target >= Math.max(room.bigBlindAmount * 12, room.startingStack * 0.28);
+    const potRaise = target >= Math.max(room.currentBet + room.pot * 0.75, room.bigBlindAmount * 8);
+    if (bigRaise || potRaise) {
+      read.largeRaises += 1;
+      read.suspicion = clamp(read.suspicion + (read.largeRaises <= 2 ? 0.08 : 0.18), 0, 1);
+    } else {
+      read.suspicion *= 0.94;
+    }
+  }
+  room.playerReads[player.clientId] = read;
 }
 
 function removeBot(room) {
@@ -241,6 +267,10 @@ function contribute(room, player, amount) {
   return paid;
 }
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function addLog(room, text) {
   room.log.unshift(text);
   room.log = room.log.slice(0, 18);
@@ -258,58 +288,314 @@ function preflopStrength(hand) {
   const pair = a.value === b.value;
   const suited = a.suit === b.suit;
   const gap = Math.abs(a.value - b.value);
-  if (pair) return Math.min(1, 0.42 + a.value / 18);
-  let score = (a.value + b.value) / 32;
-  if (suited) score += 0.08;
-  if (gap <= 1) score += 0.06;
-  if (gap >= 4) score -= 0.08;
-  if (a.value >= 14 && b.value >= 10) score += 0.12;
-  return Math.max(0, Math.min(1, score));
+  if (pair) return clamp(0.42 + a.value / 28, 0.48, 0.92);
+
+  let score = 0.08;
+  score += ((a.value - 2) / 12) * 0.35;
+  score += ((b.value - 2) / 12) * 0.18;
+  if (suited) score += 0.05;
+  if (gap === 1) score += 0.045;
+  if (gap === 2) score += 0.02;
+  if (gap >= 4) score -= 0.055;
+  if (a.value >= 13 && b.value >= 10) score += 0.055;
+  return clamp(score, 0.06, 0.78);
 }
 
-function madeHandStrength(player, room) {
-  if (room.board.length < 3) return preflopStrength(player.hand);
-  const rank = bestRank([...player.hand, ...room.board]);
-  if (!rank) return 0.25;
-  const category = rank[0];
-  if (category >= 5) return 0.94;
-  if (category === 4) return 0.86;
-  if (category === 3) return 0.78;
-  if (category === 2) return 0.66;
-  if (category === 1) return 0.44 + Math.min(rank[1], 14) / 40;
-  return Math.min(0.42, rank[1] / 34);
+function estimateBotEquity(room, index, trials = 80) {
+  const player = room.players[index];
+  const opponents = Math.max(1, remaining(room).length - 1);
+  if (room.board.length === 0) {
+    return clamp(preflopStrength(player.hand) - (opponents - 1) * 0.055, 0.04, 0.9);
+  }
+
+  const knownIds = new Set([...player.hand, ...room.board].map((card) => card.id));
+  const unseen = fullDeck.filter((card) => !knownIds.has(card.id));
+  let share = 0;
+
+  for (let trial = 0; trial < trials; trial += 1) {
+    const sample = shuffle(unseen);
+    let cursor = 0;
+    const board = [...room.board, ...sample.slice(cursor, cursor + (5 - room.board.length))];
+    cursor += 5 - room.board.length;
+    const heroRank = bestRank([...player.hand, ...board]);
+    let lost = false;
+    let ties = 0;
+
+    for (let opponent = 0; opponent < opponents; opponent += 1) {
+      const opponentHand = sample.slice(cursor, cursor + 2);
+      cursor += 2;
+      const comparison = compareRank(heroRank, bestRank([...opponentHand, ...board]));
+      if (comparison < 0) {
+        lost = true;
+        break;
+      }
+      if (comparison === 0) ties += 1;
+    }
+    if (!lost) share += 1 / (ties + 1);
+  }
+  return share / trials;
+}
+
+function preflopPositionScore(room, index) {
+  const liveIndexes = room.players
+    .map((player, playerIndex) => ({ player, playerIndex }))
+    .filter(({ player }) => player.chips > 0 && !player.folded)
+    .map(({ playerIndex }) => playerIndex);
+  const dealerPosition = liveIndexes.indexOf(room.dealer);
+  const playerPosition = liveIndexes.indexOf(index);
+  if (dealerPosition < 0 || playerPosition < 0 || liveIndexes.length < 2) return 0.5;
+  const distanceFromDealer = (playerPosition - dealerPosition + liveIndexes.length) % liveIndexes.length;
+  return 1 - distanceFromDealer / liveIndexes.length;
+}
+
+function handTexture(cards) {
+  const suitCounts = new Map();
+  const values = cards.map((card) => card.value);
+  cards.forEach((card) => suitCounts.set(card.suit, (suitCounts.get(card.suit) || 0) + 1));
+  const uniqueValues = [...new Set(values)];
+  if (uniqueValues.includes(14)) uniqueValues.push(1);
+  let straightOuts = 0;
+  for (let low = 1; low <= 10; low += 1) {
+    const present = [low, low + 1, low + 2, low + 3, low + 4]
+      .filter((value) => uniqueValues.includes(value)).length;
+    if (present === 4) straightOuts += 1;
+    if (present === 3) straightOuts += 0.35;
+  }
+  const maxSuit = Math.max(0, ...suitCounts.values());
+  return {
+    flushDraw: maxSuit === 4,
+    strongFlushDraw: maxSuit >= 4,
+    straightDraw: straightOuts >= 1,
+    backdoorStraight: straightOuts > 0 && straightOuts < 1,
+    drawScore: (maxSuit === 4 ? 0.18 : 0) + Math.min(straightOuts * 0.1, 0.22),
+  };
+}
+
+function boardTexture(board) {
+  if (board.length < 3) return { wetness: 0, paired: false, flushPossible: false, straightPossible: false };
+  const suitCounts = new Map();
+  const valueCounts = new Map();
+  board.forEach((card) => {
+    suitCounts.set(card.suit, (suitCounts.get(card.suit) || 0) + 1);
+    valueCounts.set(card.value, (valueCounts.get(card.value) || 0) + 1);
+  });
+  const values = [...new Set(board.map((card) => card.value))];
+  if (values.includes(14)) values.push(1);
+  let connected = 0;
+  for (let low = 1; low <= 10; low += 1) {
+    const present = [low, low + 1, low + 2, low + 3, low + 4]
+      .filter((value) => values.includes(value)).length;
+    connected = Math.max(connected, present);
+  }
+  const maxSuit = Math.max(...suitCounts.values());
+  const paired = [...valueCounts.values()].some((count) => count >= 2);
+  const flushPossible = maxSuit >= 3;
+  const straightPossible = connected >= 3;
+  return {
+    paired,
+    flushPossible,
+    straightPossible,
+    wetness: (flushPossible ? 0.16 : 0) + (straightPossible ? 0.16 : 0) + (paired ? 0.07 : 0),
+  };
+}
+
+function boardForcesTie(board) {
+  if (board.length !== 5) return false;
+  const boardRank = evaluateFive(board);
+  const boardIds = new Set(board.map((card) => card.id));
+  const available = fullDeck.filter((card) => !boardIds.has(card.id));
+  for (const hand of combinations(available, 2)) {
+    if (compareRank(bestRank([...board, ...hand]), boardRank) > 0) return false;
+  }
+  return true;
+}
+
+function readAgainstAggressor(room) {
+  const aggressor = room.players[room.lastAggressor];
+  if (!aggressor || aggressor.isBot) return 0;
+  return room.playerReads[aggressor.clientId]?.suspicion || 0;
+}
+
+function choosePreflopBotAction(room, index) {
+  const player = room.players[index];
+  const toCall = Math.max(0, room.currentBet - player.bet);
+  const strength = preflopStrength(player.hand);
+  const values = player.hand.map((card) => card.value).sort((a, b) => b - a);
+  const isPair = values[0] === values[1];
+  const pairValue = isPair ? values[0] : 0;
+  const hasAce = values[0] === 14;
+  const aceKicker = hasAce ? values[1] : 0;
+  const strongBroadway = (hasAce && aceKicker >= 11) || (values[0] === 13 && values[1] === 12);
+  const stackPressure = toCall / Math.max(player.chips + toCall, 1);
+  const canRaise = player.chips > toCall + room.minRaise;
+  const unopened = room.currentBet <= room.bigBlindAmount;
+  const position = preflopPositionScore(room, index);
+  const mastery = player.mastery || 0.82;
+  const aggression = player.aggression || 0.55;
+  const callers = room.players.filter((other, otherIndex) => (
+    otherIndex !== index
+    && otherIndex !== room.lastAggressor
+    && !other.folded
+    && other.bet === room.currentBet
+    && other.bet > room.bigBlindAmount
+  )).length;
+
+  if (unopened) {
+    const positionAdjustment = (position - 0.5) * 0.12 * mastery;
+    const openThreshold = 0.45 - aggression * 0.06 - positionAdjustment;
+    const occasionalOpenBluff = Math.random() < (player.handBluff || 0.08) * (0.16 + position * 0.3) * mastery;
+    if (strength < openThreshold && !occasionalOpenBluff) {
+      return toCall > 0 ? { action: "fold" } : { action: "call" };
+    }
+    if (canRaise) {
+      const premiumOpen = pairValue >= 12 || (hasAce && aceKicker >= 13);
+      const strongOpen = pairValue >= 9 || strongBroadway;
+      const pressureChance = premiumOpen
+        ? 0.16 + aggression * 0.2
+        : strongOpen
+          ? 0.035 + aggression * 0.055
+          : 0;
+      if (mastery > 0.78 && Math.random() < pressureChance) {
+        const target = premiumOpen
+          ? room.bigBlindAmount * (6 + crypto.randomInt(5))
+          : room.bigBlindAmount * (5 + crypto.randomInt(3));
+        return { action: "raise", target };
+      }
+      const openTarget = room.bigBlindAmount * (2.5 + aggression * 0.8)
+        + Math.min(callers, 2) * room.bigBlindAmount;
+      return {
+        action: "raise",
+        target: clamp(
+          Math.round(openTarget),
+          Math.ceil(room.bigBlindAmount * 2.5),
+          room.bigBlindAmount * 4.5
+        ),
+      };
+    }
+    return { action: "call" };
+  }
+
+  if (room.currentBet >= room.bigBlindAmount * 15) {
+    if ((pairValue >= 10 || (hasAce && aceKicker >= 11)) && stackPressure <= 0.62) {
+      return { action: "call" };
+    }
+    if ((pairValue >= 7 || (hasAce && aceKicker >= 9) || strongBroadway)
+      && stackPressure <= 0.38
+      && Math.random() < 0.42 + aggression * 0.16) {
+      return { action: "call" };
+    }
+    return { action: "fold" };
+  }
+
+  if (room.raiseCount >= 2 || room.currentBet >= room.bigBlindAmount * 7.5) {
+    const fourBetValue = pairValue >= 12 || (hasAce && aceKicker === 13);
+    const fourBetBluff = mastery > 0.84
+      && (player.handBluff || 0) > 0.12
+      && hasAce
+      && aceKicker >= 10
+      && Math.random() < (player.handBluff || 0) * 0.16;
+    if (canRaise && (fourBetValue || fourBetBluff)) {
+      const target = Math.round(room.currentBet * (2.25 + aggression * 0.25));
+      return {
+        action: "raise",
+        target: clamp(
+          target,
+          room.currentBet + room.minRaise,
+          room.bigBlindAmount * (fourBetValue ? 29 : 23)
+        ),
+      };
+    }
+    if (strength < 0.69 + (1 - mastery) * 0.07 || stackPressure > 0.36) {
+      return { action: "fold" };
+    }
+    return { action: "call" };
+  }
+
+  const requiredStrength = 0.49
+    + Math.min(room.currentBet / Math.max(room.bigBlindAmount * 28, 1), 0.14)
+    - position * 0.035 * mastery;
+  if (strength < requiredStrength) return { action: "fold" };
+
+  const premium = strength >= 0.82;
+  const valueThreeBet = strength >= 0.69 - mastery * 0.025;
+  const squeeze = callers >= 1 && strength >= 0.62 && mastery > 0.78;
+  const threeBetBluff = mastery > 0.8
+    && position > 0.45
+    && Math.random() < (player.handBluff || 0.08) * 0.25;
+  if (canRaise && (valueThreeBet || squeeze || threeBetBluff)) {
+    const inPosition = position >= 0.55;
+    const multiplier = inPosition ? 3 : 3.3;
+    const squeezeExtra = callers * room.bigBlindAmount * 1.5;
+    const premiumExtra = premium ? room.bigBlindAmount : 0;
+    const target = Math.round(room.currentBet * multiplier + squeezeExtra + premiumExtra);
+    const cap = room.bigBlindAmount * (premium ? 16 : (squeeze ? 13.5 : 12));
+    return {
+      action: "raise",
+      target: clamp(target, room.currentBet + room.minRaise, cap),
+    };
+  }
+  return { action: "call" };
 }
 
 function chooseBotAction(room, index) {
   const player = room.players[index];
   const toCall = Math.max(0, room.currentBet - player.bet);
-  const stack = player.chips;
-  const pressure = stack ? toCall / Math.max(stack, 1) : 1;
-  const strength = room.street === "preflop"
-    ? preflopStrength(player.hand)
-    : madeHandStrength(player, room);
-  const temperament = (player.aggression || 0.55) - 0.5 + (Math.random() - 0.5) * 0.1;
-  const canRaise = stack > toCall + room.minRaise;
+  if (room.street === "preflop") return choosePreflopBotAction(room, index);
+  if (boardForcesTie(room.board)) return { action: "call" };
+
+  const texture = handTexture([...player.hand, ...room.board]);
+  const board = boardTexture(room.board);
+  const readStrength = readAgainstAggressor(room) * (player.mastery || 0.82);
+  const equity = clamp(
+    estimateBotEquity(room, index, room.street === "river" ? 120 : 140) + texture.drawScore * 0.28,
+    0,
+    0.98
+  );
+  const potOdds = toCall ? toCall / Math.max(room.pot + toCall, 1) : 0;
+  const stackPressure = toCall / Math.max(player.chips + toCall, 1);
+  const aggression = player.aggression || 0.55;
+  const bluffing = Math.random() < (player.handBluff || 0.08)
+    * (room.street === "river" ? 1.05 : 0.7)
+    * (texture.strongFlushDraw || texture.straightDraw ? 1.55 : 1)
+    * (board.paired ? 0.78 : 1)
+    * (stackPressure > 0.25 ? 0.32 : 1);
+  const canRaise = player.chips > toCall + room.minRaise;
 
   if (toCall > 0) {
-    const callLine = strength + (player.looseness || 0.28) * 0.35 - pressure * 0.72 + temperament * 0.15;
-    if (callLine < 0.24 && Math.random() > 0.08) return { action: "fold" };
-    if (canRaise && strength > 0.72 && Math.random() < 0.38 + (player.aggression || 0.5) * 0.3) {
-      const multiplier = room.street === "preflop" ? 2.6 : 2.2;
-      const target = Math.min(
-        player.bet + stack,
-        Math.max(room.currentBet + room.minRaise, Math.round(room.currentBet * multiplier + room.bigBlindAmount))
+    const safetyMargin = 0.035 + stackPressure * 0.16 + board.wetness * 0.12 - readStrength * 0.12;
+    if (!bluffing && equity < potOdds + safetyMargin) {
+      return { action: "fold" };
+    }
+    if (stackPressure > 0.42 && equity < 0.78 - readStrength * 0.18 && !bluffing) {
+      return { action: "fold" };
+    }
+    const strongThreshold = 0.72 - aggression * 0.08 - texture.drawScore * 0.08;
+    if (canRaise && (equity > strongThreshold || bluffing)) {
+      const protection = board.wetness > 0.22 && equity > 0.68 ? 0.12 : 0;
+      const size = Math.max(
+        room.minRaise,
+        Math.round(room.pot * (0.32 + aggression * 0.24 + protection))
       );
+      let target = room.currentBet + size;
+      const normalCommitmentCap = player.bet + Math.max(
+        room.bigBlindAmount * 3,
+        Math.floor(player.chips * 0.28)
+      );
+      if (equity < 0.84) target = Math.min(target, normalCommitmentCap);
+      if (target >= player.bet + player.chips && equity < 0.9) return { action: "call" };
       return { action: "raise", target };
     }
     return { action: "call" };
   }
 
-  if (canRaise && strength > 0.68 && Math.random() < 0.26 + (player.aggression || 0.5) * 0.22) {
-    const base = room.street === "preflop"
-      ? room.bigBlindAmount * (2.5 + (player.aggression || 0.5))
-      : Math.max(room.bigBlindAmount, room.pot * (0.35 + (player.aggression || 0.5) * 0.18));
-    return { action: "raise", target: Math.min(player.bet + stack, Math.round(base)) };
+  const valueThreshold = 0.64 - aggression * 0.07 - texture.drawScore * 0.08;
+  if (canRaise && (equity > valueThreshold || bluffing)) {
+    const protection = board.wetness > 0.22 && equity > 0.68 ? 0.12 : 0;
+    const target = Math.max(
+      room.bigBlindAmount,
+      Math.round(room.pot * (0.32 + aggression * 0.22 + protection))
+    );
+    return { action: "raise", target };
   }
   return { action: "call" };
 }
@@ -359,6 +645,8 @@ function beginHand(room) {
   room.pot = 0;
   room.currentBet = 0;
   room.minRaise = room.bigBlindAmount;
+  room.raiseCount = 0;
+  room.lastAggressor = -1;
   room.actor = -1;
   room.acted = new Set();
   room.winners = [];
@@ -369,6 +657,13 @@ function beginHand(room) {
     player.totalBet = 0;
     player.folded = player.chips <= 0;
     player.allIn = false;
+    if (player.isBot) {
+      player.handBluff = clamp(
+        (player.looseness || 0.25) * (0.45 + Math.random() * 0.9),
+        0.02,
+        0.34
+      );
+    }
   });
 
   room.dealer = nextIndex(room, room.dealer, (player) => player.chips > 0);
@@ -427,6 +722,7 @@ function performAction(room, index, action, target) {
     room.acted.add(player.clientId);
     addLog(room, paid ? `${player.name} 跟注 ${paid} / calls` : `${player.name} 过牌 / checks`);
   } else if (action === "raise") {
+    updatePlayerRead(room, index, action, target);
     const maximum = player.bet + player.chips;
     const minimum = room.currentBet === 0
       ? room.bigBlindAmount
@@ -445,6 +741,8 @@ function performAction(room, index, action, target) {
     if (room.currentBet - previousBet >= room.minRaise) {
       room.minRaise = room.currentBet - previousBet;
     }
+    room.lastAggressor = index;
+    room.raiseCount += 1;
     room.acted = new Set([player.clientId]);
     addLog(room, `${player.name} 加注到 ${player.bet} / raises to ${player.bet}`);
   } else {
@@ -471,6 +769,8 @@ function resetStreetBets(room) {
   });
   room.currentBet = 0;
   room.minRaise = room.bigBlindAmount;
+  room.raiseCount = 0;
+  room.lastAggressor = -1;
   room.acted = new Set();
 }
 

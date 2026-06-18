@@ -297,7 +297,7 @@
     const toCall = Math.max(0, room.currentBet - hero.bet);
     const base = hero.bet + toCall;
     let target = minimum;
-    if (kind === "half") target = base + Math.ceil(room.pot * 0.5);
+    if (kind === "half") target = base + Math.ceil((room.pot + toCall) * 0.5);
     if (kind === "pot") target = base + room.pot + toCall;
     if (kind === "allin") target = maximum;
     elements.raiseInput.value = Math.max(minimum, Math.min(maximum, Math.round(target)));

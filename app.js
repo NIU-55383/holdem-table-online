@@ -1801,7 +1801,7 @@ document.querySelectorAll("[data-quick-bet]").forEach((button) => {
     const toCall = Math.max(0, game.currentBet - hero.bet);
     const base = hero.bet + toCall;
     let target = minimum;
-    if (button.dataset.quickBet === "half") target = base + Math.ceil(game.pot * 0.5);
+    if (button.dataset.quickBet === "half") target = base + Math.ceil((game.pot + toCall) * 0.5);
     if (button.dataset.quickBet === "pot") target = base + game.pot + toCall;
     if (button.dataset.quickBet === "allin") target = maximum;
     raiseInput.value = Math.max(minimum, Math.min(maximum, Math.round(target)));

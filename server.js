@@ -122,6 +122,7 @@ function makeRoom(host, config) {
   const room = {
     code: roomCode(),
     hostId: host.clientId,
+    originalHostId: host.clientId,
     maxPlayers: Math.max(2, Math.min(8, Number(config.maxPlayers) || 4)),
     startingStack: [100, 150, 200].includes(Number(config.startingStack))
       ? Number(config.startingStack)
@@ -152,9 +153,13 @@ function makeRoom(host, config) {
     acted: new Set(),
     message: "等待玩家 / Waiting for players",
     log: [],
+    chat: [],
     winners: [],
+    autoNext: true,
+    nextHandAt: 0,
     botSerial: 0,
     botTimer: null,
+    autoNextTimer: null,
   };
   rooms.set(room.code, room);
   return room;
@@ -174,6 +179,8 @@ function addBot(room) {
     ? source[crypto.randomInt(source.length)]
     : `Bot ${room.botSerial + 1}`;
   room.botSerial += 1;
+  const aggression = 0.38 + Math.random() * 0.42;
+  const looseness = 0.18 + Math.random() * 0.28;
   room.players.push({
     clientId: `bot-${room.code}-${room.botSerial}`,
     name,
@@ -183,14 +190,23 @@ function addBot(room) {
     bet: 0,
     totalBet: 0,
     folded: false,
+    showCards: false,
     allIn: false,
     connected: true,
     socket: null,
-    aggression: 0.38 + Math.random() * 0.42,
-    looseness: 0.18 + Math.random() * 0.28,
+    aggression,
+    looseness,
     mastery: 0.78 + Math.random() * 0.2,
+    style: botStyleLabel(aggression, looseness),
     handBluff: 0,
   });
+}
+
+function botStyleLabel(aggression, looseness) {
+  if (looseness > 0.38 && aggression > 0.58) return "LAG / 松凶";
+  if (looseness < 0.28 && aggression > 0.54) return "TAG / 紧凶";
+  if (looseness > 0.35 && aggression < 0.5) return "Calling Station / 跟注站";
+  return "Balanced / 均衡";
 }
 
 function updatePlayerRead(room, index, action, target = 0) {
@@ -227,6 +243,7 @@ function addPlayer(room, client, name) {
     existing.connected = true;
     existing.socket = client;
     existing.name = cleanName(name) || existing.name;
+    if (client.clientId === room.originalHostId) room.hostId = client.clientId;
     return existing;
   }
   if (room.status !== "lobby") throw new Error("牌局已经开始 / Game already started");
@@ -241,12 +258,19 @@ function addPlayer(room, client, name) {
     bet: 0,
     totalBet: 0,
     folded: false,
+    showCards: false,
     allIn: false,
     connected: true,
     socket: client,
   };
   room.players.push(player);
   return player;
+}
+
+function canManageRoom(room, clientId) {
+  if (room.hostId === clientId || room.originalHostId === clientId) return true;
+  const host = room.players.find((player) => player.clientId === room.hostId);
+  return !host || !host.connected;
 }
 
 function nextIndex(room, start, predicate) {
@@ -286,6 +310,15 @@ function clamp(value, min, max) {
 function addLog(room, text) {
   room.log.unshift(text);
   room.log = room.log.slice(0, 18);
+}
+
+function addChat(room, name, text) {
+  room.chat.push({
+    name,
+    text: String(text || "").trim().slice(0, 120),
+    time: Date.now(),
+  });
+  room.chat = room.chat.slice(-40);
 }
 
 function postBlind(room, index, amount, label) {
@@ -635,7 +668,22 @@ function scheduleBot(room) {
   }, delay);
 }
 
+function scheduleAutoNext(room) {
+  clearTimeout(room.autoNextTimer);
+  room.nextHandAt = 0;
+  if (!room.autoNext || room.status !== "handComplete") return;
+  if (livePlayers(room).length < 2) return;
+  room.nextHandAt = Date.now() + 8000;
+  room.autoNextTimer = setTimeout(() => {
+    if (room.status === "handComplete" && room.autoNext && livePlayers(room).length >= 2) {
+      beginHand(room);
+    }
+  }, 8000);
+}
+
 function beginHand(room) {
+  clearTimeout(room.autoNextTimer);
+  room.nextHandAt = 0;
   const active = livePlayers(room);
   if (active.length < 2) {
     room.status = "finished";
@@ -663,11 +711,13 @@ function beginHand(room) {
   room.acted = new Set();
   room.winners = [];
   room.log = [];
+  addLog(room, `Hand ${room.handNumber} begins / 第 ${room.handNumber} 手开始`);
   room.players.forEach((player) => {
     player.hand = [];
     player.bet = 0;
     player.totalBet = 0;
     player.folded = player.chips <= 0;
+    player.showCards = false;
     player.allIn = false;
     if (player.isBot) {
       player.handBluff = clamp(
@@ -727,6 +777,7 @@ function performAction(room, index, action, target) {
 
   if (action === "fold") {
     player.folded = true;
+    if (player.isBot) player.showCards = Math.random() < 0.08 + (player.aggression || 0.5) * 0.08;
     room.acted.add(player.clientId);
     addLog(room, `${player.name} 弃牌 / folds`);
   } else if (action === "call") {
@@ -830,6 +881,7 @@ function awardUncontested(room) {
   room.actor = -1;
   room.message = `${winner.player.name} 赢得底池 ${amount} / wins the pot`;
   addLog(room, room.message);
+  scheduleAutoNext(room);
   broadcast(room);
 }
 
@@ -848,6 +900,7 @@ function showdown(room) {
   let previous = 0;
   const allWinners = new Set();
   const awards = new Map();
+  const segments = [];
 
   contributions.forEach((level) => {
     const contributors = room.players
@@ -878,6 +931,10 @@ function showdown(room) {
       awards.set(index, (awards.get(index) || 0) + amount);
       allWinners.add(index);
     });
+    segments.push({
+      amount: potAmount,
+      winners: [...ordered],
+    });
   });
 
   awards.forEach((amount, index) => {
@@ -889,8 +946,12 @@ function showdown(room) {
   const summary = [...awards.entries()]
     .map(([index, amount]) => `${room.players[index].name} +${amount}`)
     .join(", ");
-  room.message = `${summary} · 摊牌 / Showdown`;
+  const sidePotText = segments.length > 1
+    ? ` · Side pots ${segments.map((segment) => `${segment.amount}:${segment.winners.map((index) => room.players[index].name).join("/")}`).join(" | ")}`
+    : "";
+  room.message = `${summary} · 摊牌 / Showdown${sidePotText}`;
   addLog(room, room.message);
+  scheduleAutoNext(room);
   broadcast(room);
 }
 
@@ -922,6 +983,7 @@ function publicState(room, clientId) {
     room: {
       code: room.code,
       hostId: room.hostId,
+      originalHostId: room.originalHostId,
       maxPlayers: room.maxPlayers,
       startingStack: room.startingStack,
       blindInterval: room.blindInterval,
@@ -940,7 +1002,12 @@ function publicState(room, clientId) {
       actor: room.actor,
       message: room.message,
       log: room.log,
+      chat: room.chat,
       winners: room.winners,
+      autoNext: room.autoNext,
+      nextHandAt: room.nextHandAt,
+      hostConnected: room.players.some((player) => player.clientId === room.hostId && player.connected),
+      canManage: canManageRoom(room, clientId),
       viewerIndex,
       players: room.players.map((player, index) => ({
         clientId: player.clientId,
@@ -949,11 +1016,12 @@ function publicState(room, clientId) {
         bet: player.bet,
         totalBet: player.totalBet,
         folded: player.folded,
+        showCards: player.showCards,
         allIn: player.allIn,
         connected: player.connected,
         isBot: Boolean(player.isBot),
         cardCount: player.hand.length,
-        hand: index === viewerIndex || (showdownVisible && !player.folded) ? player.hand : [],
+        hand: index === viewerIndex || player.showCards || (showdownVisible && !player.folded) ? player.hand : [],
       })),
     },
   };
@@ -981,7 +1049,7 @@ function leaveClient(client) {
     const nextHost = room.players.find((candidate) => (
       candidate.clientId !== client.clientId && candidate.connected
     ));
-    if (nextHost) room.hostId = nextHost.clientId;
+    if (nextHost && room.status === "lobby") room.hostId = nextHost.clientId;
   }
   if (room.status === "lobby") {
     room.players.splice(index, 1);
@@ -1032,22 +1100,53 @@ function handleMessage(client, message) {
   if (playerIndex < 0) throw new Error("座位不存在 / Seat not found");
 
   if (data.type === "start") {
-    if (room.hostId !== client.clientId) throw new Error("只有房主可以开局 / Host only");
+    if (!canManageRoom(room, client.clientId)) throw new Error("只有房主可以开局 / Host only");
     if (room.status !== "lobby") throw new Error("牌局已经开始 / Game already started");
     if (room.players.length < 2) throw new Error("至少需要两位玩家 / At least two players");
     beginHand(room);
   } else if (data.type === "addBot") {
-    if (room.hostId !== client.clientId) throw new Error("Host only / 只有房主可以添加机器人");
+    if (!canManageRoom(room, client.clientId)) throw new Error("Host only / 只有房主可以添加机器人");
     addBot(room);
     broadcast(room);
   } else if (data.type === "removeBot") {
-    if (room.hostId !== client.clientId) throw new Error("Host only / 只有房主可以移除机器人");
+    if (!canManageRoom(room, client.clientId)) throw new Error("Host only / 只有房主可以移除机器人");
     removeBot(room);
+    broadcast(room);
+  } else if (data.type === "takeHost") {
+    const host = room.players.find((player) => player.clientId === room.hostId);
+    if (host && host.connected && room.hostId !== client.clientId) {
+      throw new Error("房主仍在线 / Host is still online");
+    }
+    room.hostId = client.clientId;
+    addLog(room, `${room.players[playerIndex].name} 接管房主 / takes host`);
+    broadcast(room);
+  } else if (data.type === "toggleAutoNext") {
+    if (!canManageRoom(room, client.clientId)) throw new Error("Host only / 只有房主可以设置");
+    room.autoNext = Boolean(data.enabled);
+    if (room.autoNext) {
+      scheduleAutoNext(room);
+    } else {
+      clearTimeout(room.autoNextTimer);
+      room.nextHandAt = 0;
+    }
+    broadcast(room);
+  } else if (data.type === "chat") {
+    const text = String(data.text || "").trim();
+    if (!text) return;
+    addChat(room, room.players[playerIndex].name, text);
     broadcast(room);
   } else if (data.type === "action") {
     performAction(room, playerIndex, data.action, data.target);
+  } else if (data.type === "showCards") {
+    const player = room.players[playerIndex];
+    if (!player.folded || !player.hand.length) {
+      throw new Error("只有弃牌后可以选择亮牌 / You can reveal only after folding");
+    }
+    player.showCards = Boolean(data.show);
+    addLog(room, `${player.name} ${player.showCards ? "亮牌 / shows" : "盖牌 / mucks"}`);
+    broadcast(room);
   } else if (data.type === "nextHand") {
-    if (room.hostId !== client.clientId) throw new Error("只有房主可以开始下一手 / Host only");
+    if (!canManageRoom(room, client.clientId)) throw new Error("只有房主可以开始下一手 / Host only");
     if (room.status !== "handComplete") throw new Error("本手尚未结束 / Hand is not complete");
     beginHand(room);
   } else if (data.type === "leave") {

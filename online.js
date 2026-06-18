@@ -13,6 +13,10 @@
     lastRoomSnapshot: null,
     animationTimer: null,
     animationPhase: "",
+    pulseSeats: false,
+    pulseBoard: new Set(),
+    pulseTimer: null,
+    countdownTimer: null,
   };
   localStorage.setItem("holdem-online-client", state.clientId);
 
@@ -33,6 +37,7 @@
     removeBot: document.querySelector("#removeOnlineBotBtn"),
     startButton: document.querySelector("#startOnlineGameBtn"),
     nextButton: document.querySelector("#onlineNextHandBtn"),
+    autoNext: document.querySelector("#onlineAutoNextBtn"),
     playersLayer: document.querySelector("#onlinePlayersLayer"),
     board: document.querySelector("#onlineCommunityCards"),
     pot: document.querySelector("#onlinePotValue"),
@@ -49,7 +54,14 @@
     call: document.querySelector("#onlineCallBtn"),
     raise: document.querySelector("#onlineRaiseBtn"),
     raiseInput: document.querySelector("#onlineRaiseInput"),
+    revealPanel: document.querySelector("#onlineRevealPanel"),
+    showCards: document.querySelector("#onlineShowCardsBtn"),
+    muckCards: document.querySelector("#onlineMuckCardsBtn"),
     log: document.querySelector("#onlineLogEntries"),
+    replay: document.querySelector("#onlineReplayEntries"),
+    chatEntries: document.querySelector("#onlineChatEntries"),
+    chatInput: document.querySelector("#onlineChatInput"),
+    chatSend: document.querySelector("#onlineChatSendBtn"),
     dealLayer: document.querySelector("#onlineDealAnimationLayer"),
     dealText: document.querySelector("#onlineDealAnimationText"),
   };
@@ -221,7 +233,13 @@
   elements.startButton.addEventListener("click", () => send({ type: "start" }));
   elements.addBot.addEventListener("click", () => send({ type: "addBot" }));
   elements.removeBot.addEventListener("click", () => send({ type: "removeBot" }));
-  elements.nextButton.addEventListener("click", () => send({ type: "nextHand" }));
+  elements.nextButton.addEventListener("click", () => {
+    send({ type: elements.nextButton.dataset.action === "takeHost" ? "takeHost" : "nextHand" });
+  });
+  elements.autoNext.addEventListener("click", () => {
+    if (!state.room) return;
+    send({ type: "toggleAutoNext", enabled: !state.room.autoNext });
+  });
   elements.fold.addEventListener("click", () => send({ type: "action", action: "fold" }));
   elements.call.addEventListener("click", () => send({ type: "action", action: "call" }));
   elements.raise.addEventListener("click", () => send({
@@ -229,6 +247,15 @@
     action: "raise",
     target: Number(elements.raiseInput.value),
   }));
+  elements.showCards.addEventListener("click", () => send({ type: "showCards", show: true }));
+  elements.muckCards.addEventListener("click", () => send({ type: "showCards", show: false }));
+  elements.chatSend.addEventListener("click", sendChat);
+  elements.chatInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") sendChat();
+  });
+  document.querySelectorAll("[data-online-quick-bet]").forEach((button) => {
+    button.addEventListener("click", () => setQuickBet(button.dataset.onlineQuickBet));
+  });
 
   function leaveRoom() {
     if (state.room) send({ type: "leave" });
@@ -240,7 +267,11 @@
 
   function resetToSetup() {
     clearTimeout(state.animationTimer);
+    clearTimeout(state.pulseTimer);
+    clearInterval(state.countdownTimer);
     state.animationPhase = "";
+    state.pulseSeats = false;
+    state.pulseBoard = new Set();
     state.lastRoomSnapshot = null;
     state.room = null;
     state.desiredRoom = "";
@@ -248,6 +279,28 @@
     elements.setup.hidden = false;
     elements.lobby.hidden = true;
     elements.pokerRoom.hidden = true;
+  }
+
+  function sendChat() {
+    const text = elements.chatInput.value.trim();
+    if (!text) return;
+    if (send({ type: "chat", text })) elements.chatInput.value = "";
+  }
+
+  function setQuickBet(kind) {
+    if (!state.room) return;
+    const room = state.room;
+    const hero = room.players[room.viewerIndex];
+    if (!hero) return;
+    const minimum = Number(elements.raiseInput.min) || room.bigBlindAmount;
+    const maximum = Number(elements.raiseInput.max) || (hero.bet + hero.chips);
+    const toCall = Math.max(0, room.currentBet - hero.bet);
+    const base = hero.bet + toCall;
+    let target = minimum;
+    if (kind === "half") target = base + Math.ceil(room.pot * 0.5);
+    if (kind === "pot") target = base + room.pot + toCall;
+    if (kind === "allin") target = maximum;
+    elements.raiseInput.value = Math.max(minimum, Math.min(maximum, Math.round(target)));
   }
 
   function blindScheduleLabel(interval) {
@@ -280,7 +333,7 @@
         </div>
       `;
     }).join("");
-    const isHost = room.hostId === state.clientId;
+    const isHost = room.canManage || room.hostId === state.clientId || room.originalHostId === state.clientId;
     const botCount = room.players.filter((player) => player.isBot).length;
     elements.startButton.hidden = !isHost;
     elements.startButton.disabled = room.players.length < 2;
@@ -291,7 +344,9 @@
       ? "至少还需要一位玩家 / One more player needed"
       : isHost
         ? "全员准备后即可开局 / Start when everyone is ready"
-        : "等待房主开局 / Waiting for the host";
+        : room.hostConnected
+          ? "等待房主开局 / Waiting for the host"
+          : "房主离线，你可以接管 / Host offline, you can take over";
   }
 
   function seatMap(count) {
@@ -302,14 +357,14 @@
     });
   }
 
-  function card(card, hidden = false, large = false) {
+  function card(card, hidden = false, large = false, extraClass = "") {
     if (hidden) return large
-      ? `<div class="playing-card back"></div>`
-      : `<span class="mini-card back">?</span>`;
+      ? `<div class="playing-card back ${extraClass}"></div>`
+      : `<span class="mini-card back ${extraClass}">?</span>`;
     if (!card) return large ? `<div class="playing-card placeholder"></div>` : "";
     return large
-      ? `<div class="playing-card ${card.color}"><span class="rank">${card.rank}</span><span class="suit">${card.suitLabel}</span></div>`
-      : `<span class="mini-card ${card.color}">${card.rank}${card.suitLabel}</span>`;
+      ? `<div class="playing-card ${card.color} ${extraClass}"><span class="rank">${card.rank}</span><span class="suit">${card.suitLabel}</span></div>`
+      : `<span class="mini-card ${card.color} ${extraClass}">${card.rank}${card.suitLabel}</span>`;
   }
 
   function setOnlineAnimation(phase, duration = 520) {
@@ -335,17 +390,43 @@
           : "";
   }
 
+  function pulseDealtCards(boardIndexes = []) {
+    clearTimeout(state.pulseTimer);
+    state.pulseSeats = boardIndexes.length === 0;
+    state.pulseBoard = new Set(boardIndexes);
+    render();
+    state.pulseTimer = setTimeout(() => {
+      state.pulseSeats = false;
+      state.pulseBoard = new Set();
+      render();
+    }, 760);
+  }
+
   function updateOnlineAnimation(room) {
     const previous = state.lastRoomSnapshot;
     if (!previous && room.status === "playing") {
       setOnlineAnimation("shuffle", 620);
+      setTimeout(() => {
+        setOnlineAnimation("deal", 560);
+        pulseDealtCards();
+      }, 640);
     } else if (previous) {
       if (room.status === "playing" && room.handNumber !== previous.handNumber) {
         setOnlineAnimation("shuffle", 620);
-        setTimeout(() => setOnlineAnimation("deal", 520), 640);
+        setTimeout(() => {
+          setOnlineAnimation("deal", 560);
+          pulseDealtCards();
+        }, 640);
       } else if (room.status === "playing" && room.board.length > previous.boardCount) {
+        const newIndexes = Array.from(
+          { length: room.board.length - previous.boardCount },
+          (_, index) => previous.boardCount + index
+        );
         setOnlineAnimation("burn", 260);
-        setTimeout(() => setOnlineAnimation("board", 520), 280);
+        setTimeout(() => {
+          setOnlineAnimation("board", 540);
+          pulseDealtCards(newIndexes);
+        }, 280);
       }
     }
     state.lastRoomSnapshot = {
@@ -359,13 +440,15 @@
     elements.setup.hidden = true;
     elements.lobby.hidden = true;
     elements.pokerRoom.hidden = false;
+    updateOnlineAnimation(room);
     const positions = seatMap(room.players.length);
     elements.playersLayer.innerHTML = room.players.map((player, index) => {
       const [left, top] = positions[index];
       const visibleCards = player.hand || [];
+      const dealtClass = state.pulseSeats ? "dealt-card" : "";
       const cards = visibleCards.length
-        ? visibleCards.map((item) => card(item)).join("")
-        : Array.from({ length: player.cardCount || 0 }, () => card(null, true)).join("");
+        ? visibleCards.map((item) => card(item, false, false, dealtClass)).join("")
+        : Array.from({ length: player.cardCount || 0 }, () => card(null, true, false, dealtClass)).join("");
       const badges = [
         index === room.dealer ? `<span class="dealer-button">D · 庄家 / Dealer</span>` : "",
         index === room.smallBlind
@@ -395,7 +478,10 @@
       `;
     }).join("");
 
-    elements.board.innerHTML = Array.from({ length: 5 }, (_, index) => card(room.board[index], false, true)).join("");
+    elements.board.innerHTML = Array.from(
+      { length: 5 },
+      (_, index) => card(room.board[index], false, true, state.pulseBoard.has(index) ? "board-dealt-card" : "")
+    ).join("");
     elements.pot.textContent = room.pot;
     elements.message.textContent = room.message;
     elements.handNumber.textContent = `#${room.handNumber}`;
@@ -403,12 +489,21 @@
     elements.blind.textContent = `盲注 / Blinds ${room.smallBlindAmount} / ${room.bigBlindAmount}`;
     elements.roomBadge.textContent = `房间 / Room ${room.code}`;
     elements.log.innerHTML = room.log.map((entry) => `<div class="log-entry">${escapeHtml(entry)}</div>`).join("");
-    updateOnlineAnimation(room);
+    elements.replay.innerHTML = room.log.map((entry, index) => `<div class="log-entry">${room.log.length - index}. ${escapeHtml(entry)}</div>`).join("");
+    elements.chatEntries.innerHTML = (room.chat || []).map((entry) => (
+      `<div class="chat-line"><strong>${escapeHtml(entry.name)}:</strong> ${escapeHtml(entry.text)}</div>`
+    )).join("");
+    elements.chatEntries.scrollTop = elements.chatEntries.scrollHeight;
     renderOnlineAnimation();
 
     const hero = room.players[room.viewerIndex];
     if (!hero) return;
-    elements.heroCards.innerHTML = hero.hand.map((item) => card(item, false, true)).join("");
+    elements.heroCards.innerHTML = hero.hand.map((item) => card(
+      item,
+      false,
+      true,
+      state.pulseSeats ? "board-dealt-card" : ""
+    )).join("");
     elements.heroName.textContent = hero.name;
     elements.heroStack.textContent = `${hero.chips} 筹码 / chips`;
     const heroTurn = room.status === "playing" && room.actor === room.viewerIndex;
@@ -429,8 +524,31 @@
     if (Number(elements.raiseInput.value) < minimum || Number(elements.raiseInput.value) > maximum) {
       elements.raiseInput.value = Math.min(minimum, maximum);
     }
-    const isHost = room.hostId === state.clientId;
-    elements.nextButton.hidden = !(room.status === "handComplete" && isHost);
+    const canChooseReveal = room.status !== "lobby" && hero.folded && hero.hand.length > 0;
+    elements.revealPanel.hidden = !canChooseReveal;
+    elements.showCards.disabled = !canChooseReveal || hero.showCards;
+    elements.muckCards.disabled = !canChooseReveal || !hero.showCards;
+    const isHost = room.canManage || room.hostId === state.clientId || room.originalHostId === state.clientId;
+    elements.autoNext.hidden = !isHost;
+    elements.autoNext.textContent = room.autoNext
+      ? "自动下一手：开 / Auto On"
+      : "自动下一手：关 / Auto Off";
+    if (room.status === "handComplete" && isHost && !room.hostConnected && room.hostId !== state.clientId) {
+      elements.nextButton.hidden = false;
+      elements.nextButton.dataset.action = "takeHost";
+      elements.nextButton.textContent = "接管房主 / Take Host";
+    } else {
+      elements.nextButton.dataset.action = "nextHand";
+      elements.nextButton.hidden = !(room.status === "handComplete" && isHost);
+      const seconds = room.nextHandAt ? Math.max(0, Math.ceil((room.nextHandAt - Date.now()) / 1000)) : 0;
+      elements.nextButton.textContent = seconds
+        ? `下一手 ${seconds}s / Next`
+        : "下一手 / Next Hand";
+    }
+    clearInterval(state.countdownTimer);
+    if (room.status === "handComplete" && room.nextHandAt) {
+      state.countdownTimer = setInterval(render, 1000);
+    }
   }
 
   function escapeHtml(value) {

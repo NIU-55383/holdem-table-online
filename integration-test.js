@@ -99,12 +99,13 @@ async function waitForRoom(client, predicate, after = 0, label = "room condition
     alice.send({
       type: "create",
       name: "Alice",
-      maxPlayers: 4,
+      maxPlayers: 5,
       startingStack: 200,
       blindInterval: 5,
     });
     const created = await alice.next();
     const code = created.room.code;
+    assert(created.room.maxPlayers === 5, "Odd player room size was not applied");
     assert(created.room.startingStack === 200, "Starting stack was not applied");
     assert(created.room.blindInterval === 5, "Blind interval was not applied");
 
@@ -148,6 +149,34 @@ async function waitForRoom(client, predicate, after = 0, label = "room condition
       acted.room.players.reduce((total, player) => total + player.chips, 0) === 400,
       "Chips were not conserved after settlement"
     );
+
+    const aliceBeforeNext = alice.messages.length;
+    alice.send({ type: "nextHand" });
+    const nextAliceGame = await waitForRoom(alice, (room) => room.status === "playing", aliceBeforeNext, "next hand start");
+    const foldActor = nextAliceGame.room.actor;
+    const foldClient = foldActor === 0 ? alice : bob;
+    const revealObserver = foldActor === 0 ? bob : alice;
+    const beforeFold = revealObserver.messages.length;
+    foldClient.send({ type: "action", action: "fold" });
+    await waitForRoom(revealObserver, (room) => room.status === "handComplete", beforeFold, "fold hand complete");
+    const beforeShow = revealObserver.messages.length;
+    foldClient.send({ type: "showCards", show: true });
+    const shown = await waitForRoom(
+      revealObserver,
+      (room) => room.players[foldActor].hand.length === 2,
+      beforeShow,
+      "folded player reveal"
+    );
+    assert(shown.room.players[foldActor].showCards === true, "Folded reveal flag was not set");
+    const beforeMuck = revealObserver.messages.length;
+    foldClient.send({ type: "showCards", show: false });
+    const mucked = await waitForRoom(
+      revealObserver,
+      (room) => room.players[foldActor].hand.length === 0,
+      beforeMuck,
+      "folded player muck"
+    );
+    assert(mucked.room.players[foldActor].showCards === false, "Folded muck flag was not cleared");
 
     console.log(`PASS room=${code} actor=${actor} board=${acted.room.board.length} chips=400`);
     alice.socket.close();
@@ -199,8 +228,26 @@ async function waitForRoom(client, predicate, after = 0, label = "room condition
       botGame.room.players.reduce((total, player) => total + player.chips, 0) === 300,
       "Bot game chips were not conserved"
     );
+    const botCode = botGame.room.code;
+    await new Promise((resolve) => {
+      host.socket.addEventListener("close", resolve, { once: true });
+      host.socket.close();
+    });
+    const rejoinedHost = makeClient("host-bot-test");
+    await rejoinedHost.open();
+    rejoinedHost.send({ type: "join", name: "Host", code: botCode });
+    const rejoined = await waitForRoom(
+      rejoinedHost,
+      (room) => room.status === "handComplete" && room.hostId === "host-bot-test",
+      0,
+      "host rejoin hand complete"
+    );
+    assert(rejoined.room.originalHostId === "host-bot-test", "Original host id was not preserved");
+    const beforeRejoinNext = rejoinedHost.messages.length;
+    rejoinedHost.send({ type: "nextHand" });
+    await waitForRoom(rejoinedHost, (room) => room.status === "playing", beforeRejoinNext, "rejoined host next hand");
     console.log("PASS bot-room board=" + botGame.room.board.length + " chips=300");
-    host.socket.close();
+    rejoinedHost.socket.close();
   } finally {
     server.kill();
   }

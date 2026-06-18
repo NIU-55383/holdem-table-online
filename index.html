@@ -282,6 +282,11 @@
                 <input id="raiseInput" type="number" min="2" step="1" value="4" aria-label="加注到">
                 <button id="raiseBtn" class="action-button raise-button" type="button" data-action="raise">加注 / Raise</button>
               </div>
+              <div class="quick-bet-row">
+                <button type="button" data-quick-bet="half">1/2 Pot</button>
+                <button type="button" data-quick-bet="pot">Pot</button>
+                <button type="button" data-quick-bet="allin">All-in</button>
+              </div>
             </div>
 
             <div class="hand-log">
@@ -291,6 +296,10 @@
               </div>
               <div id="logEntries" class="log-entries"></div>
             </div>
+            <details class="replay-panel">
+              <summary>本手回放 / Hand Replay</summary>
+              <div id="replayEntries" class="log-entries"></div>
+            </details>
           </div>
           <div class="table-tools-row">
             <button class="secondary-button hand-rank-open" type="button">牌型大小 / Hand Rankings</button>
@@ -317,8 +326,11 @@
                 <span>房间人数 / Seats</span>
                 <div class="setup-choice-buttons" role="group">
                   <button type="button" data-online-count="2">2</button>
+                  <button type="button" data-online-count="3">3</button>
                   <button type="button" data-online-count="4" class="active">4</button>
+                  <button type="button" data-online-count="5">5</button>
                   <button type="button" data-online-count="6">6</button>
+                  <button type="button" data-online-count="7">7</button>
                   <button type="button" data-online-count="8">8</button>
                 </div>
               </div>
@@ -389,6 +401,7 @@
             </div>
             <div class="toolbar-actions">
               <span id="onlineRoomBadge" class="online-room-badge"></span>
+              <button id="onlineAutoNextBtn" class="secondary-button" type="button">自动下一手 / Auto Next</button>
               <button id="onlineNextHandBtn" class="secondary-button" type="button" hidden>下一手 / Next Hand</button>
             </div>
           </div>
@@ -423,10 +436,31 @@
                 <input id="onlineRaiseInput" type="number" min="2" step="1" value="4" aria-label="加注到">
                 <button id="onlineRaiseBtn" class="action-button raise-button" type="button">加注 / Raise</button>
               </div>
+              <div class="quick-bet-row">
+                <button type="button" data-online-quick-bet="half">1/2 Pot</button>
+                <button type="button" data-online-quick-bet="pot">Pot</button>
+                <button type="button" data-online-quick-bet="allin">All-in</button>
+              </div>
+            </div>
+            <div id="onlineRevealPanel" class="reveal-panel" hidden>
+              <button id="onlineShowCardsBtn" class="secondary-button" type="button">亮牌 / Show</button>
+              <button id="onlineMuckCardsBtn" class="secondary-button" type="button">盖牌 / Muck</button>
             </div>
             <div class="hand-log">
               <div class="block-title"><h2>牌局记录 / Hand Log</h2><span>HAND LOG</span></div>
               <div id="onlineLogEntries" class="log-entries"></div>
+            </div>
+            <details class="replay-panel">
+              <summary>本手回放 / Hand Replay</summary>
+              <div id="onlineReplayEntries" class="log-entries"></div>
+            </details>
+            <div class="chat-panel">
+              <div class="block-title"><h2>聊天 / Chat</h2><span>CHAT</span></div>
+              <div id="onlineChatEntries" class="chat-entries"></div>
+              <div class="chat-input-row">
+                <input id="onlineChatInput" type="text" maxlength="120" placeholder="说点什么 / Say something">
+                <button id="onlineChatSendBtn" class="secondary-button" type="button">发送 / Send</button>
+              </div>
             </div>
           </div>
           <div class="table-tools-row">

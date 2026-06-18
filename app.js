@@ -283,6 +283,13 @@ const commonBotNames = [
   "Matthew", "Rachel", "Kevin", "Laura", "Andrew", "Megan",
 ];
 
+function botStyleLabel(profile) {
+  if (profile.bluff >= 0.18 && profile.aggression >= 0.58) return "LAG / 松凶";
+  if (profile.bluff <= 0.08 && profile.aggression >= 0.45) return "TAG / 紧凶";
+  if (profile.bluff >= 0.13 && profile.aggression < 0.5) return "Calling Station / 跟注站";
+  return "Balanced / 均衡";
+}
+
 function drawBotNames(count) {
   const familiar = shuffle(familiarBotNames);
   const common = shuffle(commonBotNames);
@@ -838,6 +845,7 @@ function startGame() {
       isHuman: false,
       name: names[i],
       profile: { ...profiles[i] },
+      style: botStyleLabel(profiles[i]),
       mastery: masteryLevels[i],
       chips: selectedStartingStack,
       hand: [],
@@ -1043,6 +1051,14 @@ function isActionable(player) {
 
 function remainingPlayers() {
   return game.players.map((player, index) => ({ player, index })).filter(({ player }) => !player.folded);
+}
+
+function seatOrderFromDealer(indices) {
+  return [...indices].sort((a, b) => {
+    const distanceA = (a - game.dealer + game.players.length) % game.players.length;
+    const distanceB = (b - game.dealer + game.players.length) % game.players.length;
+    return distanceA - distanceB;
+  });
 }
 
 function bettingComplete() {
@@ -1531,27 +1547,48 @@ function awardUncontested() {
 
 function showdown() {
   game.street = "showdown";
-  const contenders = remainingPlayers();
-  let best = null;
-  let winnerIndexes = [];
+  const contributions = [...new Set(
+    game.players.map((player) => player.totalBet).filter((amount) => amount > 0)
+  )].sort((a, b) => a - b);
+  let previous = 0;
+  const awards = new Map();
+  const allWinners = new Set();
+  const segments = [];
+  let displayBest = null;
 
-  contenders.forEach(({ player, index }) => {
-    const rank = evaluateBestRank([...player.hand, ...game.community]);
-    if (!best || compareRank(rank, best) > 0) {
-      best = rank;
-      winnerIndexes = [index];
-    } else if (compareRank(rank, best) === 0) {
-      winnerIndexes.push(index);
-    }
+  contributions.forEach((level) => {
+    const contributors = game.players
+      .map((player, index) => ({ player, index }))
+      .filter(({ player }) => player.totalBet >= level);
+    const potAmount = (level - previous) * contributors.length;
+    const eligible = contributors.filter(({ player }) => !player.folded);
+    previous = level;
+    if (!eligible.length || potAmount <= 0) return;
+    let best = null;
+    let winnerIndexes = [];
+    eligible.forEach(({ player, index }) => {
+      const rank = evaluateBestRank([...player.hand, ...game.community]);
+      if (!displayBest || compareRank(rank, displayBest) > 0) displayBest = rank;
+      if (!best || compareRank(rank, best) > 0) {
+        best = rank;
+        winnerIndexes = [index];
+      } else if (compareRank(rank, best) === 0) {
+        winnerIndexes.push(index);
+      }
+    });
+    const ordered = seatOrderFromDealer(winnerIndexes);
+    const share = Math.floor(potAmount / ordered.length);
+    let remainder = potAmount % ordered.length;
+    ordered.forEach((index) => {
+      const amount = share + (remainder > 0 ? 1 : 0);
+      remainder -= remainder > 0 ? 1 : 0;
+      game.players[index].chips += amount;
+      awards.set(index, (awards.get(index) || 0) + amount);
+      allWinners.add(index);
+    });
+    segments.push({ amount: potAmount, winners: ordered });
   });
-
-  const share = Math.floor(game.pot / winnerIndexes.length);
-  let remainder = game.pot - share * winnerIndexes.length;
-  winnerIndexes.forEach((index) => {
-    game.players[index].chips += share + (remainder > 0 ? 1 : 0);
-    remainder -= remainder > 0 ? 1 : 0;
-  });
-  game.winners = winnerIndexes;
+  game.winners = [...allWinners];
 
   if (game.humanOverbetThisHand && !game.players[0].folded) {
     const shownStrength = preflopStrength(game.players[0].hand);
@@ -1563,11 +1600,14 @@ function showdown() {
     }
   }
 
-  const names = winnerIndexes.map((index) => playerDisplayName(game.players[index])).join(" / ");
-  const handName = gameText(handTypes.find((type) => type.rank === best[0]).key);
-  game.message = winnerIndexes.length > 1
-    ? `${names} ${gameText("splitPot")} · ${handName}`
-    : `${names} ${gameText("wins")} · ${handName}`;
+  const names = [...awards.entries()]
+    .map(([index, amount]) => `${playerDisplayName(game.players[index])} +${formatNumber(amount)}`)
+    .join(" / ");
+  const handName = displayBest ? gameText(handTypes.find((type) => type.rank === displayBest[0]).key) : gameText("showdown");
+  const sideText = segments.length > 1
+    ? ` · Side pots ${segments.map((segment) => `${segment.amount}:${segment.winners.map((index) => playerDisplayName(game.players[index])).join("/")}`).join(" | ")}`
+    : "";
+  game.message = `${names} · ${handName}${sideText}`;
   addLog(`${game.message} · ${game.pot}`);
   finishHand();
 }
@@ -1729,6 +1769,9 @@ function renderGame() {
   document.querySelector("#logEntries").innerHTML = game.log.map((entry) =>
     `<div class="log-entry">${entry}</div>`
   ).join("");
+  document.querySelector("#replayEntries").innerHTML = game.log.map((entry, index) =>
+    `<div class="log-entry">${game.log.length - index}. ${entry}</div>`
+  ).join("");
   document.querySelector("#nextHandBtn").disabled = !game.complete || !hero || Boolean(game.matchResult);
 
   const resultNotice = document.querySelector("#matchResultNotice");
@@ -1748,6 +1791,22 @@ function renderGame() {
 
 document.querySelector("#startGameBtn").addEventListener("click", startGame);
 document.querySelector("#nextHandBtn").addEventListener("click", beginHand);
+document.querySelectorAll("[data-quick-bet]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const hero = game.players[0];
+    if (!hero) return;
+    const raiseInput = document.querySelector("#raiseInput");
+    const minimum = Number(raiseInput.min) || game.bigBlindAmount;
+    const maximum = Number(raiseInput.max) || (hero.bet + hero.chips);
+    const toCall = Math.max(0, game.currentBet - hero.bet);
+    const base = hero.bet + toCall;
+    let target = minimum;
+    if (button.dataset.quickBet === "half") target = base + Math.ceil(game.pot * 0.5);
+    if (button.dataset.quickBet === "pot") target = base + game.pot + toCall;
+    if (button.dataset.quickBet === "allin") target = maximum;
+    raiseInput.value = Math.max(minimum, Math.min(maximum, Math.round(target)));
+  });
+});
 
 function returnToSetup() {
   clearTimeout(game.timer);

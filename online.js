@@ -8,6 +8,7 @@
     maxPlayers: 4,
     startingStack: 150,
     blindInterval: 10,
+    practiceMode: 0,
     intentionalClose: false,
     shareUrl: "",
     lastRoomSnapshot: null,
@@ -35,6 +36,7 @@
     botControls: document.querySelector("#onlineBotControls"),
     addBot: document.querySelector("#addOnlineBotBtn"),
     removeBot: document.querySelector("#removeOnlineBotBtn"),
+    fillBots: document.querySelector("#fillOnlineBotsBtn"),
     startButton: document.querySelector("#startOnlineGameBtn"),
     nextButton: document.querySelector("#onlineNextHandBtn"),
     autoNext: document.querySelector("#onlineAutoNextBtn"),
@@ -49,6 +51,11 @@
     heroCards: document.querySelector("#onlineHeroCards"),
     heroName: document.querySelector("#onlineHeroName"),
     heroStack: document.querySelector("#onlineHeroStack"),
+    practicePanel: document.querySelector("#onlinePracticePanel"),
+    practiceEquity: document.querySelector("#onlinePracticeEquity"),
+    practiceRequired: document.querySelector("#onlinePracticeRequired"),
+    practiceAdvice: document.querySelector("#onlinePracticeAdvice"),
+    practiceDistribution: document.querySelector("#onlinePracticeDistribution"),
     actionPanel: document.querySelector("#onlineActionPanel"),
     fold: document.querySelector("#onlineFoldBtn"),
     call: document.querySelector("#onlineCallBtn"),
@@ -181,6 +188,7 @@
   selectButtons("[data-online-count]", "onlineCount", "maxPlayers");
   selectButtons("[data-online-stack]", "onlineStack", "startingStack");
   selectButtons("[data-online-blinds]", "onlineBlinds", "blindInterval");
+  selectButtons("[data-online-practice]", "onlinePractice", "practiceMode");
 
   document.querySelector("#createOnlineRoomBtn").addEventListener("click", () => {
     const name = playerName();
@@ -192,6 +200,7 @@
       maxPlayers: state.maxPlayers,
       startingStack: state.startingStack,
       blindInterval: state.blindInterval,
+      practiceMode: Boolean(state.practiceMode),
     });
   });
 
@@ -233,6 +242,7 @@
   elements.startButton.addEventListener("click", () => send({ type: "start" }));
   elements.addBot.addEventListener("click", () => send({ type: "addBot" }));
   elements.removeBot.addEventListener("click", () => send({ type: "removeBot" }));
+  elements.fillBots.addEventListener("click", () => send({ type: "fillBots" }));
   elements.nextButton.addEventListener("click", () => {
     send({ type: elements.nextButton.dataset.action === "takeHost" ? "takeHost" : "nextHand" });
   });
@@ -317,6 +327,7 @@
       <span><strong>${room.players.length}/${room.maxPlayers}</strong> 玩家 / Players</span>
       <span><strong>${room.startingStack}</strong> 起始筹码 / Stack</span>
       <span><strong>${blindScheduleLabel(room.blindInterval)}</strong> 涨盲 / Blinds</span>
+      <span><strong>${room.practiceMode ? "开启 / On" : "关闭 / Off"}</strong> 练习模式 / Practice</span>
     `;
     elements.lobbyPlayers.innerHTML = Array.from({ length: room.maxPlayers }, (_, index) => {
       const player = room.players[index];
@@ -339,6 +350,7 @@
     elements.startButton.disabled = room.players.length < 2;
     elements.botControls.hidden = !isHost;
     elements.addBot.disabled = room.players.length >= room.maxPlayers;
+    elements.fillBots.disabled = room.players.length >= room.maxPlayers;
     elements.removeBot.disabled = botCount <= 0;
     elements.lobbyMessage.textContent = room.players.length < 2
       ? "至少还需要一位玩家 / One more player needed"
@@ -365,6 +377,35 @@
     return large
       ? `<div class="playing-card ${card.color} ${extraClass}"><span class="rank">${card.rank}</span><span class="suit">${card.suitLabel}</span></div>`
       : `<span class="mini-card ${card.color} ${extraClass}">${card.rank}${card.suitLabel}</span>`;
+  }
+
+  function practicePercent(value) {
+    if (!Number.isFinite(value)) return "--";
+    if (value > 0 && value < 0.0001) return "<0.01%";
+    return `${(value * 100).toFixed(1)}%`;
+  }
+
+  function renderPractice(room) {
+    const analysis = room.practice;
+    elements.practicePanel.hidden = !room.practiceMode || !analysis;
+    if (!analysis) return;
+    elements.practiceEquity.textContent = practicePercent(analysis.equity);
+    elements.practiceRequired.textContent = analysis.toCall
+      ? practicePercent(analysis.requiredEquity)
+      : "0%";
+    elements.practiceAdvice.textContent = analysis.advice;
+    elements.practiceAdvice.dataset.kind = analysis.advice.includes("Call")
+      ? "call"
+      : analysis.advice.includes("Fold")
+        ? "fold"
+        : "neutral";
+    elements.practiceDistribution.innerHTML = analysis.distribution.map((item) => `
+      <div class="practice-row">
+        <span>${escapeHtml(item.label)}</span>
+        <div><i style="width:${Math.max(0, Math.min(100, item.probability * 100))}%"></i></div>
+        <strong>${practicePercent(item.probability)}</strong>
+      </div>
+    `).join("");
   }
 
   function setOnlineAnimation(phase, duration = 520) {
@@ -506,6 +547,7 @@
     )).join("");
     elements.heroName.textContent = hero.name;
     elements.heroStack.textContent = `${hero.chips} 筹码 / chips`;
+    renderPractice(room);
     const heroTurn = room.status === "playing" && room.actor === room.viewerIndex;
     elements.actionPanel.classList.toggle("waiting", !heroTurn);
     [elements.fold, elements.call, elements.raise, elements.raiseInput].forEach((control) => {
@@ -524,7 +566,10 @@
     if (Number(elements.raiseInput.value) < minimum || Number(elements.raiseInput.value) > maximum) {
       elements.raiseInput.value = Math.min(minimum, maximum);
     }
-    const canChooseReveal = room.status !== "lobby" && hero.folded && hero.hand.length > 0;
+    const uncontestedWinner = room.status === "handComplete"
+      && !room.wasShowdown
+      && room.winners.includes(room.viewerIndex);
+    const canChooseReveal = hero.hand.length > 0 && (hero.folded || uncontestedWinner);
     elements.revealPanel.hidden = !canChooseReveal;
     elements.showCards.disabled = !canChooseReveal || hero.showCards;
     elements.muckCards.disabled = !canChooseReveal || !hero.showCards;

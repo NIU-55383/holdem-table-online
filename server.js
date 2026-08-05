@@ -18,6 +18,11 @@ const COMMON_BOT_NAMES = [
   "Chris", "Anna", "Alex", "Sarah", "Ryan", "Jessica", "Matthew", "Rachel",
   "Kevin", "Laura", "Andrew", "Megan",
 ];
+const HAND_LABELS = [
+  "高牌 / High Card", "一对 / Pair", "两对 / Two Pair", "三条 / Three of a Kind",
+  "顺子 / Straight", "同花 / Flush", "葫芦 / Full House", "四条 / Four of a Kind",
+  "同花顺 / Straight Flush", "皇家同花顺 / Royal Flush",
+];
 
 const ranks = [
   ["A", 14], ["K", 13], ["Q", 12], ["J", 11], ["10", 10], ["9", 9], ["8", 8],
@@ -130,6 +135,7 @@ function makeRoom(host, config) {
     blindInterval: [0, 5, 10].includes(Number(config.blindInterval))
       ? Number(config.blindInterval)
       : 10,
+    practiceMode: Boolean(config.practiceMode),
     players: [],
     status: "lobby",
     handNumber: 0,
@@ -155,6 +161,7 @@ function makeRoom(host, config) {
     log: [],
     chat: [],
     winners: [],
+    wasShowdown: false,
     autoNext: true,
     nextHandAt: 0,
     botSerial: 0,
@@ -379,6 +386,70 @@ function estimateBotEquity(room, index, trials = 80) {
     if (!lost) share += 1 / (ties + 1);
   }
   return share / trials;
+}
+
+function practiceAnalysis(room, index, trials = 360) {
+  if (!room.practiceMode) return null;
+  const player = room.players[index];
+  if (!player || player.hand.length !== 2 || player.folded) return null;
+  const opponentCount = room.players.filter((opponent, opponentIndex) => (
+    opponentIndex !== index && !opponent.folded && opponent.hand.length === 2
+  )).length;
+  const knownIds = new Set([...player.hand, ...room.board].map((card) => card.id));
+  const unseen = fullDeck.filter((card) => !knownIds.has(card.id));
+  const distribution = Array(10).fill(0);
+  let equityShare = 0;
+
+  for (let trial = 0; trial < trials; trial += 1) {
+    const sample = shuffle(unseen);
+    let cursor = 0;
+    const missingBoard = 5 - room.board.length;
+    const board = [...room.board, ...sample.slice(cursor, cursor + missingBoard)];
+    cursor += missingBoard;
+    const heroRank = bestRank([...player.hand, ...board]);
+    distribution[heroRank[0]] += 1;
+    if (opponentCount === 0) {
+      equityShare += 1;
+      continue;
+    }
+    let lost = false;
+    let ties = 0;
+    for (let opponent = 0; opponent < opponentCount; opponent += 1) {
+      const opponentHand = sample.slice(cursor, cursor + 2);
+      cursor += 2;
+      const comparison = compareRank(heroRank, bestRank([...opponentHand, ...board]));
+      if (comparison < 0) {
+        lost = true;
+        break;
+      }
+      if (comparison === 0) ties += 1;
+    }
+    if (!lost) equityShare += 1 / (ties + 1);
+  }
+
+  const toCall = Math.max(0, room.currentBet - player.bet);
+  const requiredEquity = toCall / Math.max(room.pot + toCall, 1);
+  const equity = equityShare / trials;
+  let advice = "无需跟注 / No call needed";
+  if (toCall > 0) {
+    advice = equity >= requiredEquity + 0.025
+      ? "建议跟注 / Call"
+      : equity >= requiredEquity - 0.025
+        ? "接近临界 / Marginal"
+        : "建议弃牌 / Fold";
+  }
+  return {
+    equity,
+    requiredEquity,
+    toCall,
+    advice,
+    trials,
+    distribution: distribution.map((count, rank) => ({
+      rank,
+      label: HAND_LABELS[rank],
+      probability: count / trials,
+    })).reverse(),
+  };
 }
 
 function preflopPositionScore(room, index) {
@@ -710,6 +781,7 @@ function beginHand(room) {
   room.actor = -1;
   room.acted = new Set();
   room.winners = [];
+  room.wasShowdown = false;
   room.log = [];
   addLog(room, `Hand ${room.handNumber} begins / 第 ${room.handNumber} 手开始`);
   room.players.forEach((player) => {
@@ -877,6 +949,7 @@ function awardUncontested(room) {
   const amount = room.pot;
   winner.player.chips += amount;
   room.winners = [winner.index];
+  room.wasShowdown = false;
   room.status = "handComplete";
   room.actor = -1;
   room.message = `${winner.player.name} 赢得底池 ${amount} / wins the pot`;
@@ -894,6 +967,7 @@ function seatOrderFromDealer(room, indices) {
 }
 
 function showdown(room) {
+  room.wasShowdown = true;
   const contributions = [...new Set(
     room.players.map((player) => player.totalBet).filter((amount) => amount > 0)
   )].sort((a, b) => a - b);
@@ -977,7 +1051,7 @@ function skipDisconnectedActor(room) {
 
 function publicState(room, clientId) {
   const viewerIndex = room.players.findIndex((player) => player.clientId === clientId);
-  const showdownVisible = room.status === "handComplete" && room.board.length === 5;
+  const showdownVisible = room.status === "handComplete" && room.wasShowdown;
   return {
     type: "state",
     room: {
@@ -987,6 +1061,7 @@ function publicState(room, clientId) {
       maxPlayers: room.maxPlayers,
       startingStack: room.startingStack,
       blindInterval: room.blindInterval,
+      practiceMode: room.practiceMode,
       status: room.status,
       handNumber: room.handNumber,
       dealer: room.dealer,
@@ -1004,10 +1079,12 @@ function publicState(room, clientId) {
       log: room.log,
       chat: room.chat,
       winners: room.winners,
+      wasShowdown: room.wasShowdown,
       autoNext: room.autoNext,
       nextHandAt: room.nextHandAt,
       hostConnected: room.players.some((player) => player.clientId === room.hostId && player.connected),
       canManage: canManageRoom(room, clientId),
+      practice: practiceAnalysis(room, viewerIndex),
       viewerIndex,
       players: room.players.map((player, index) => ({
         clientId: player.clientId,
@@ -1112,6 +1189,10 @@ function handleMessage(client, message) {
     if (!canManageRoom(room, client.clientId)) throw new Error("Host only / 只有房主可以移除机器人");
     removeBot(room);
     broadcast(room);
+  } else if (data.type === "fillBots") {
+    if (!canManageRoom(room, client.clientId)) throw new Error("Host only / 只有房主可以添加机器人");
+    while (room.players.length < room.maxPlayers) addBot(room);
+    broadcast(room);
   } else if (data.type === "takeHost") {
     const host = room.players.find((player) => player.clientId === room.hostId);
     if (host && host.connected && room.hostId !== client.clientId) {
@@ -1139,8 +1220,11 @@ function handleMessage(client, message) {
     performAction(room, playerIndex, data.action, data.target);
   } else if (data.type === "showCards") {
     const player = room.players[playerIndex];
-    if (!player.folded || !player.hand.length) {
-      throw new Error("只有弃牌后可以选择亮牌 / You can reveal only after folding");
+    const uncontestedWinner = room.status === "handComplete"
+      && !room.wasShowdown
+      && room.winners.includes(playerIndex);
+    if ((!player.folded && !uncontestedWinner) || !player.hand.length) {
+      throw new Error("只有弃牌后或无人跟注获胜后可以选择亮牌 / Reveal after folding or an uncontested win");
     }
     player.showCards = Boolean(data.show);
     addLog(room, `${player.name} ${player.showCards ? "亮牌 / shows" : "盖牌 / mucks"}`);

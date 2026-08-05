@@ -211,7 +211,7 @@ h1 {
 
 .mode-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   margin-top: 38px;
 }
@@ -946,7 +946,7 @@ input {
 
 .online-bot-controls {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
@@ -993,6 +993,12 @@ input {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
+}
+
+.setup-note {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
 }
 
 .count-buttons {
@@ -1740,11 +1746,86 @@ input {
 .reveal-panel,
 .hand-log,
 .replay-panel,
-.chat-panel {
+.chat-panel,
+.practice-panel {
   min-height: 116px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
+}
+
+.practice-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.practice-panel[hidden] {
+  display: none !important;
+}
+
+.practice-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.practice-summary span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-soft);
+}
+
+.practice-summary small {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.practice-summary strong {
+  color: var(--green-dark);
+  font-size: 15px;
+}
+
+#onlinePracticeAdvice[data-kind="fold"] {
+  color: var(--red);
+}
+
+.practice-distribution {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 14px;
+}
+
+.practice-row {
+  display: grid;
+  grid-template-columns: minmax(108px, 1fr) minmax(60px, 1.2fr) 46px;
+  align-items: center;
+  gap: 7px;
+  font-size: 9px;
+}
+
+.practice-row > div {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--surface-soft);
+}
+
+.practice-row i {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
+
+.practice-row strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .hero-status {
@@ -2023,6 +2104,16 @@ input {
 }
 
 @media (max-width: 520px) {
+  .online-bot-controls,
+  .practice-summary,
+  .practice-distribution {
+    grid-template-columns: 1fr;
+  }
+
+  .practice-row {
+    grid-template-columns: minmax(102px, 1fr) minmax(54px, 1fr) 44px;
+  }
+
   .table-toolbar {
     flex-wrap: wrap;
   }

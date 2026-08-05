@@ -102,12 +102,14 @@ async function waitForRoom(client, predicate, after = 0, label = "room condition
       maxPlayers: 5,
       startingStack: 200,
       blindInterval: 5,
+      practiceMode: true,
     });
     const created = await alice.next();
     const code = created.room.code;
     assert(created.room.maxPlayers === 5, "Odd player room size was not applied");
     assert(created.room.startingStack === 200, "Starting stack was not applied");
     assert(created.room.blindInterval === 5, "Blind interval was not applied");
+    assert(created.room.practiceMode === true, "Practice mode was not applied");
 
     const aliceBeforeJoin = alice.messages.length;
     bob.send({ type: "join", name: "Bob", code });
@@ -126,6 +128,11 @@ async function waitForRoom(client, predicate, after = 0, label = "room condition
     assert(bobGame.room.players[1].hand.length === 2, "Bob cannot see his hand");
     assert(bobGame.room.players[0].hand.length === 0, "Bob can see Alice's private hand");
     assert(aliceGame.room.pot === 3, "Blinds were not posted correctly");
+    assert(aliceGame.room.practice, "Practice analysis was not returned");
+    assert(aliceGame.room.practice.distribution.length === 10, "Practice hand distribution is incomplete");
+    const distributionTotal = aliceGame.room.practice.distribution
+      .reduce((total, item) => total + item.probability, 0);
+    assert(Math.abs(distributionTotal - 1) < 0.001, "Practice distribution does not total 100%");
 
     const actor = aliceGame.room.actor;
     const actorClient = actor === 0 ? alice : bob;
@@ -158,7 +165,13 @@ async function waitForRoom(client, predicate, after = 0, label = "room condition
     const revealObserver = foldActor === 0 ? bob : alice;
     const beforeFold = revealObserver.messages.length;
     foldClient.send({ type: "action", action: "fold" });
-    await waitForRoom(revealObserver, (room) => room.status === "handComplete", beforeFold, "fold hand complete");
+    const foldedState = await waitForRoom(
+      revealObserver,
+      (room) => room.status === "handComplete",
+      beforeFold,
+      "fold hand complete"
+    );
+    assert(foldedState.room.wasShowdown === false, "Uncontested hand was marked as showdown");
     const beforeShow = revealObserver.messages.length;
     foldClient.send({ type: "showCards", show: true });
     const shown = await waitForRoom(
@@ -178,6 +191,28 @@ async function waitForRoom(client, predicate, after = 0, label = "room condition
     );
     assert(mucked.room.players[foldActor].showCards === false, "Folded muck flag was not cleared");
 
+    const winnerIndex = mucked.room.winners[0];
+    const winnerClient = winnerIndex === 0 ? alice : bob;
+    const winnerObserver = winnerIndex === 0 ? bob : alice;
+    const beforeWinnerShow = winnerObserver.messages.length;
+    winnerClient.send({ type: "showCards", show: true });
+    const winnerShown = await waitForRoom(
+      winnerObserver,
+      (room) => room.players[winnerIndex].hand.length === 2,
+      beforeWinnerShow,
+      "uncontested winner reveal"
+    );
+    assert(winnerShown.room.players[winnerIndex].showCards === true, "Winner reveal flag was not set");
+    const beforeWinnerMuck = winnerObserver.messages.length;
+    winnerClient.send({ type: "showCards", show: false });
+    const winnerMucked = await waitForRoom(
+      winnerObserver,
+      (room) => room.players[winnerIndex].hand.length === 0,
+      beforeWinnerMuck,
+      "uncontested winner muck"
+    );
+    assert(winnerMucked.room.players[winnerIndex].showCards === false, "Winner muck flag was not cleared");
+
     console.log(`PASS room=${code} actor=${actor} board=${acted.room.board.length} chips=400`);
     alice.socket.close();
     bob.socket.close();
@@ -187,17 +222,17 @@ async function waitForRoom(client, predicate, after = 0, label = "room condition
     host.send({
       type: "create",
       name: "Host",
-      maxPlayers: 4,
+      maxPlayers: 2,
       startingStack: 150,
       blindInterval: 10,
     });
     const botRoomCreated = await host.next();
-    host.send({ type: "addBot" });
+    host.send({ type: "fillBots" });
     const withBot = await waitForRoom(
       host,
       (room) => room.players.length === 2 && room.players.some((player) => player.isBot),
       botRoomCreated ? host.messages.length - 1 : 0,
-      "bot added"
+      "bots filled"
     );
     assert(withBot.room.players.filter((player) => player.isBot).length === 1, "Bot was not added");
     const beforeBotStart = host.messages.length;

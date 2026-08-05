@@ -20,8 +20,7 @@
       <nav class="view-tabs" aria-label="功能导航">
         <button type="button" data-view-target="home" class="active" data-i18n="home">主页</button>
         <button type="button" data-view-target="calculator" data-i18n="calculator">概率计算</button>
-        <button type="button" data-view-target="game" data-i18n="soloGame">单机对局</button>
-        <button type="button" data-view-target="online">多人联机 / Online</button>
+        <button type="button" data-view-target="online">开始游戏 / Start Game</button>
       </nav>
 
       <div class="language-toggle" role="group" aria-label="Language">
@@ -48,20 +47,11 @@
             <span class="mode-arrow" aria-hidden="true">→</span>
           </button>
 
-          <button class="mode-card game-card" type="button" data-open-view="game">
-            <span class="mode-icon">♠</span>
-            <span class="mode-copy">
-              <strong>单机对局 <span>/ Solo Game</span></strong>
-              <small>选择人数，与打法各不相同的机器人进行完整牌局。<span class="en-line">Choose a table size and play a full game against bots with distinct styles.</span></small>
-            </span>
-            <span class="mode-arrow" aria-hidden="true">→</span>
-          </button>
-
           <button class="mode-card online-card" type="button" data-open-view="online">
             <span class="mode-icon">◎</span>
             <span class="mode-copy">
-              <strong>多人联机 <span>/ Online Table</span></strong>
-              <small>创建房间码，邀请 2–8 位朋友实时对局。<span class="en-line">Create a room code and play live with 2–8 friends.</span></small>
+              <strong>开始游戏 <span>/ Start Game</span></strong>
+              <small>邀请真人，或用机器人填满座位开始单人游戏。<span class="en-line">Invite friends, or fill the table with bots for a solo game.</span></small>
             </span>
             <span class="mode-arrow" aria-hidden="true">→</span>
           </button>
@@ -310,9 +300,9 @@
       <section id="onlineView" class="view online-view">
         <div id="onlineSetup" class="online-setup">
           <div class="setup-copy">
-            <p class="eyebrow">ONLINE TABLE</p>
-            <h1>多人联机对局 <span class="en-inline">/ Multiplayer</span></h1>
-            <p>创建房间或输入房间码加入。牌局由服务器洗牌、发牌和结算。<span class="en-line">Create or join a room. The server securely deals and settles every hand.</span></p>
+            <p class="eyebrow">START GAME</p>
+            <h1>开始游戏 <span class="en-inline">/ Start Game</span></h1>
+            <p>创建房间后邀请真人，或用机器人填满空位作为单人游戏。<span class="en-line">Invite friends after creating a room, or fill empty seats with bots for solo play.</span></p>
             <div id="onlineConnectionStatus" class="connection-status">正在连接 / Connecting</div>
           </div>
 
@@ -350,6 +340,14 @@
                   <button type="button" data-online-blinds="10" class="active">10 手</button>
                 </div>
               </div>
+              <div class="setup-option">
+                <span>练习模式 / Practice Mode</span>
+                <div class="setup-choice-buttons" role="group" aria-label="练习模式 / Practice Mode">
+                  <button type="button" data-online-practice="0" class="active">关闭 / Off</button>
+                  <button type="button" data-online-practice="1">开启 / On</button>
+                </div>
+                <small class="setup-note">显示你的牌型概率、实时胜率与跟注建议 / Show your hand odds, equity and call advice</small>
+              </div>
               <button id="createOnlineRoomBtn" class="primary-button large-button" type="button">创建房间 / Create Room</button>
             </div>
             <div class="join-divider"><span>或 / OR</span></div>
@@ -383,6 +381,7 @@
               <div id="onlineBotControls" class="online-bot-controls">
                 <button id="addOnlineBotBtn" class="secondary-button" type="button">加机器人 / Add Bot</button>
                 <button id="removeOnlineBotBtn" class="secondary-button" type="button">移除机器人 / Remove Bot</button>
+                <button id="fillOnlineBotsBtn" class="secondary-button" type="button">填满机器人 / Fill Bots</button>
               </div>
               <button id="startOnlineGameBtn" class="primary-button large-button" type="button">开始牌局 / Start Game</button>
             </div>
@@ -429,6 +428,14 @@
               <div id="onlineHeroCards" class="hero-cards"></div>
               <div><strong id="onlineHeroName">--</strong><span id="onlineHeroStack">0 筹码 / chips</span></div>
             </div>
+            <section id="onlinePracticePanel" class="practice-panel" hidden>
+              <div class="practice-summary">
+                <span><small>胜率 / Equity</small><strong id="onlinePracticeEquity">--</strong></span>
+                <span><small>需要胜率 / Required</small><strong id="onlinePracticeRequired">--</strong></span>
+                <span><small>建议 / Advice</small><strong id="onlinePracticeAdvice">--</strong></span>
+              </div>
+              <div id="onlinePracticeDistribution" class="practice-distribution"></div>
+            </section>
             <div id="onlineActionPanel" class="action-panel waiting">
               <button id="onlineFoldBtn" class="action-button fold-button" type="button">弃牌 / Fold</button>
               <button id="onlineCallBtn" class="action-button call-button" type="button">过牌 / Check</button>

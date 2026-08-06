@@ -117,6 +117,17 @@ async function waitForRoom(client, predicate, after = 0, label = "room condition
     await alice.next("state", aliceBeforeJoin);
     assert(joined.room.players.length === 2, "Second player did not join");
 
+    const bobBeforeChat = bob.messages.length;
+    alice.send({ type: "chat", text: "hello table" });
+    const chatted = await waitForRoom(
+      bob,
+      (room) => room.chat.some((entry) => entry.text === "hello table"),
+      bobBeforeChat,
+      "chat broadcast"
+    );
+    const chatEntry = chatted.room.chat.find((entry) => entry.text === "hello table");
+    assert(chatEntry.clientId === "alice-test", "Chat message was not linked to its seat");
+
     const aliceBeforeStart = alice.messages.length;
     const bobBeforeStart = bob.messages.length;
     alice.send({ type: "start" });
@@ -133,6 +144,19 @@ async function waitForRoom(client, predicate, after = 0, label = "room condition
     const distributionTotal = aliceGame.room.practice.distribution
       .reduce((total, item) => total + item.probability, 0);
     assert(Math.abs(distributionTotal - 1) < 0.001, "Practice distribution does not total 100%");
+    const aliceBeforePracticeChat = alice.messages.length;
+    const equityBeforeChat = aliceGame.room.practice.equity;
+    alice.send({ type: "chat", text: "practice stays stable" });
+    const practiceAfterChat = await waitForRoom(
+      alice,
+      (room) => room.chat.some((entry) => entry.text === "practice stays stable"),
+      aliceBeforePracticeChat,
+      "practice stability after chat"
+    );
+    assert(
+      practiceAfterChat.room.practice.equity === equityBeforeChat,
+      "Practice equity changed when only chat changed"
+    );
 
     const actor = aliceGame.room.actor;
     const actorClient = actor === 0 ? alice : bob;
@@ -181,6 +205,7 @@ async function waitForRoom(client, predicate, after = 0, label = "room condition
       "folded player reveal"
     );
     assert(shown.room.players[foldActor].showCards === true, "Folded reveal flag was not set");
+    assert(shown.room.practice.knownDeadCards === 2, "Revealed folded cards were not treated as known dead cards");
     const beforeMuck = revealObserver.messages.length;
     foldClient.send({ type: "showCards", show: false });
     const mucked = await waitForRoom(
@@ -190,6 +215,7 @@ async function waitForRoom(client, predicate, after = 0, label = "room condition
       "folded player muck"
     );
     assert(mucked.room.players[foldActor].showCards === false, "Folded muck flag was not cleared");
+    assert(mucked.room.practice.knownDeadCards === 0, "Mucked cards were not returned to the unknown pool");
 
     const winnerIndex = mucked.room.winners[0];
     const winnerClient = winnerIndex === 0 ? alice : bob;

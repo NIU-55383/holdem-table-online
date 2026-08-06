@@ -110,6 +110,30 @@ function shuffle(items) {
   return copy;
 }
 
+function seededRandom(seedText) {
+  let seed = 2166136261;
+  for (const character of String(seedText)) {
+    seed ^= character.charCodeAt(0);
+    seed = Math.imul(seed, 16777619);
+  }
+  return () => {
+    seed = (seed + 0x6d2b79f5) >>> 0;
+    let value = seed;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function seededShuffle(items, random) {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 function cleanName(value) {
   return String(value || "").trim().replace(/\s+/g, " ").slice(0, 18);
 }
@@ -319,8 +343,9 @@ function addLog(room, text) {
   room.log = room.log.slice(0, 18);
 }
 
-function addChat(room, name, text) {
+function addChat(room, clientId, name, text) {
   room.chat.push({
+    clientId,
     name,
     text: String(text || "").trim().slice(0, 120),
     time: Date.now(),
@@ -392,29 +417,62 @@ function practiceAnalysis(room, index, trials = 360) {
   if (!room.practiceMode) return null;
   const player = room.players[index];
   if (!player || player.hand.length !== 2 || player.folded) return null;
-  const opponentCount = room.players.filter((opponent, opponentIndex) => (
+  const visibleOthers = room.players.filter((opponent, opponentIndex) => (
+    opponentIndex !== index
+    && opponent.hand.length === 2
+    && (opponent.showCards || (room.wasShowdown && !opponent.folded))
+  ));
+  const knownActiveHands = visibleOthers
+    .filter((opponent) => !opponent.folded)
+    .map((opponent) => opponent.hand);
+  const activeOpponentCount = room.players.filter((opponent, opponentIndex) => (
     opponentIndex !== index && !opponent.folded && opponent.hand.length === 2
   )).length;
-  const knownIds = new Set([...player.hand, ...room.board].map((card) => card.id));
+  const unknownOpponentCount = Math.max(0, activeOpponentCount - knownActiveHands.length);
+  const knownDeadCards = visibleOthers.flatMap((opponent) => opponent.hand);
+  const knownIds = new Set(
+    [...player.hand, ...room.board, ...knownDeadCards].map((card) => card.id)
+  );
   const unseen = fullDeck.filter((card) => !knownIds.has(card.id));
+  const simulationKey = [
+    room.code,
+    room.handNumber,
+    room.street,
+    room.pot,
+    room.currentBet,
+    player.bet,
+    ...player.hand.map((card) => card.id),
+    ...room.board.map((card) => card.id),
+    ...visibleOthers.flatMap((opponent) => opponent.hand.map((card) => card.id)).sort(),
+    ...room.players.map((opponent) => `${opponent.folded ? 1 : 0}:${opponent.showCards ? 1 : 0}:${opponent.bet}`),
+  ].join("|");
+  const random = seededRandom(simulationKey);
   const distribution = Array(10).fill(0);
   let equityShare = 0;
 
   for (let trial = 0; trial < trials; trial += 1) {
-    const sample = shuffle(unseen);
+    const sample = seededShuffle(unseen, random);
     let cursor = 0;
     const missingBoard = 5 - room.board.length;
     const board = [...room.board, ...sample.slice(cursor, cursor + missingBoard)];
     cursor += missingBoard;
     const heroRank = bestRank([...player.hand, ...board]);
     distribution[heroRank[0]] += 1;
-    if (opponentCount === 0) {
+    if (activeOpponentCount === 0) {
       equityShare += 1;
       continue;
     }
     let lost = false;
     let ties = 0;
-    for (let opponent = 0; opponent < opponentCount; opponent += 1) {
+    for (const opponentHand of knownActiveHands) {
+      const comparison = compareRank(heroRank, bestRank([...opponentHand, ...board]));
+      if (comparison < 0) {
+        lost = true;
+        break;
+      }
+      if (comparison === 0) ties += 1;
+    }
+    for (let opponent = 0; !lost && opponent < unknownOpponentCount; opponent += 1) {
       const opponentHand = sample.slice(cursor, cursor + 2);
       cursor += 2;
       const comparison = compareRank(heroRank, bestRank([...opponentHand, ...board]));
@@ -433,10 +491,10 @@ function practiceAnalysis(room, index, trials = 360) {
   let advice = "无需跟注 / No call needed";
   if (toCall > 0) {
     advice = equity >= requiredEquity + 0.025
-      ? "建议跟注 / Call"
+      ? "数学上可跟 / Math call"
       : equity >= requiredEquity - 0.025
         ? "接近临界 / Marginal"
-        : "建议弃牌 / Fold";
+        : "纯赔率偏弃 / Math fold";
   }
   return {
     equity,
@@ -444,6 +502,7 @@ function practiceAnalysis(room, index, trials = 360) {
     toCall,
     advice,
     trials,
+    knownDeadCards: knownDeadCards.length,
     distribution: distribution.map((count, rank) => ({
       rank,
       label: HAND_LABELS[rank],
@@ -1214,7 +1273,7 @@ function handleMessage(client, message) {
   } else if (data.type === "chat") {
     const text = String(data.text || "").trim();
     if (!text) return;
-    addChat(room, room.players[playerIndex].name, text);
+    addChat(room, room.players[playerIndex].clientId, room.players[playerIndex].name, text);
     broadcast(room);
   } else if (data.type === "action") {
     performAction(room, playerIndex, data.action, data.target);

@@ -286,10 +286,6 @@
               </div>
               <div id="logEntries" class="log-entries"></div>
             </div>
-            <details class="replay-panel">
-              <summary>本手回放 / Hand Replay</summary>
-              <div id="replayEntries" class="log-entries"></div>
-            </details>
           </div>
           <div class="table-tools-row">
             <button class="secondary-button hand-rank-open" type="button">牌型大小 / Hand Rankings</button>
@@ -428,14 +424,6 @@
               <div id="onlineHeroCards" class="hero-cards"></div>
               <div><strong id="onlineHeroName">--</strong><span id="onlineHeroStack">0 筹码 / chips</span></div>
             </div>
-            <section id="onlinePracticePanel" class="practice-panel" hidden>
-              <div class="practice-summary">
-                <span><small>胜率 / Equity</small><strong id="onlinePracticeEquity">--</strong></span>
-                <span><small>需要胜率 / Required</small><strong id="onlinePracticeRequired">--</strong></span>
-                <span><small>建议 / Advice</small><strong id="onlinePracticeAdvice">--</strong></span>
-              </div>
-              <div id="onlinePracticeDistribution" class="practice-distribution"></div>
-            </section>
             <div id="onlineActionPanel" class="action-panel waiting">
               <button id="onlineFoldBtn" class="action-button fold-button" type="button">弃牌 / Fold</button>
               <button id="onlineCallBtn" class="action-button call-button" type="button">过牌 / Check</button>
@@ -453,14 +441,17 @@
               <button id="onlineShowCardsBtn" class="secondary-button" type="button">亮牌 / Show</button>
               <button id="onlineMuckCardsBtn" class="secondary-button" type="button">盖牌 / Muck</button>
             </div>
-            <div class="hand-log">
-              <div class="block-title"><h2>牌局记录 / Hand Log</h2><span>HAND LOG</span></div>
-              <div id="onlineLogEntries" class="log-entries"></div>
+            <div id="onlinePracticeShell" class="practice-shell" hidden>
+              <button id="onlinePracticeToggleBtn" class="secondary-button practice-toggle" type="button">查看概率 / Show Odds</button>
+              <section id="onlinePracticePanel" class="practice-panel" hidden>
+                <div class="practice-summary">
+                  <span><small>胜率 / Equity</small><strong id="onlinePracticeEquity">--</strong></span>
+                  <span><small>即时跟注门槛 / Immediate Required</small><strong id="onlinePracticeRequired">--</strong></span>
+                  <span><small>数学建议 / Math Advice</small><strong id="onlinePracticeAdvice">--</strong></span>
+                </div>
+                <div id="onlinePracticeDistribution" class="practice-distribution"></div>
+              </section>
             </div>
-            <details class="replay-panel">
-              <summary>本手回放 / Hand Replay</summary>
-              <div id="onlineReplayEntries" class="log-entries"></div>
-            </details>
             <div class="chat-panel">
               <div class="block-title"><h2>聊天 / Chat</h2><span>CHAT</span></div>
               <div id="onlineChatEntries" class="chat-entries"></div>
@@ -468,6 +459,10 @@
                 <input id="onlineChatInput" type="text" maxlength="120" placeholder="说点什么 / Say something">
                 <button id="onlineChatSendBtn" class="secondary-button" type="button">发送 / Send</button>
               </div>
+            </div>
+            <div class="hand-log">
+              <div class="block-title"><h2>牌局记录 / Hand Log</h2><span>HAND LOG</span></div>
+              <div id="onlineLogEntries" class="log-entries"></div>
             </div>
           </div>
           <div class="table-tools-row">

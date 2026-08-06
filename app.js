@@ -1769,9 +1769,6 @@ function renderGame() {
   document.querySelector("#logEntries").innerHTML = game.log.map((entry) =>
     `<div class="log-entry">${entry}</div>`
   ).join("");
-  document.querySelector("#replayEntries").innerHTML = game.log.map((entry, index) =>
-    `<div class="log-entry">${game.log.length - index}. ${entry}</div>`
-  ).join("");
   document.querySelector("#nextHandBtn").disabled = !game.complete || !hero || Boolean(game.matchResult);
 
   const resultNotice = document.querySelector("#matchResultNotice");

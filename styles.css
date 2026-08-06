@@ -1387,6 +1387,45 @@ input {
   font-weight: 850;
 }
 
+.seat-chat-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  z-index: 12;
+  width: max-content;
+  max-width: 170px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 7px;
+  padding: 7px 9px;
+  background: #fff;
+  color: #17201c;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.24);
+  animation: chat-bubble-in 180ms ease-out both;
+}
+
+.seat-chat-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  border-right: 1px solid rgba(255, 255, 255, 0.72);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.72);
+  background: #fff;
+}
+
+@keyframes chat-bubble-in {
+  from { opacity: 0; transform: translate(-50%, 5px) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
 .seat-cards {
   display: flex;
   gap: 3px;
@@ -1745,13 +1784,26 @@ input {
 .action-panel,
 .reveal-panel,
 .hand-log,
-.replay-panel,
 .chat-panel,
 .practice-panel {
   min-height: 116px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
+}
+
+.practice-shell {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+}
+
+.practice-shell[hidden] {
+  display: none !important;
+}
+
+.practice-toggle {
+  justify-self: start;
 }
 
 .practice-panel {
@@ -1924,15 +1976,9 @@ input {
 }
 
 .hand-log,
-.replay-panel,
 .chat-panel {
+  grid-column: 1 / -1;
   padding: 11px;
-}
-
-.replay-panel summary {
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 900;
 }
 
 .log-entries {
@@ -2112,6 +2158,15 @@ input {
 
   .practice-row {
     grid-template-columns: minmax(102px, 1fr) minmax(54px, 1fr) 44px;
+  }
+
+  .practice-toggle {
+    width: 100%;
+  }
+
+  .seat-chat-bubble {
+    max-width: 120px;
+    font-size: 9px;
   }
 
   .table-toolbar {

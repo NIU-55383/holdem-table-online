@@ -18,6 +18,8 @@
     pulseBoard: new Set(),
     pulseTimer: null,
     countdownTimer: null,
+    chatBubbleTimer: null,
+    practiceExpanded: false,
   };
   localStorage.setItem("holdem-online-client", state.clientId);
 
@@ -51,6 +53,8 @@
     heroCards: document.querySelector("#onlineHeroCards"),
     heroName: document.querySelector("#onlineHeroName"),
     heroStack: document.querySelector("#onlineHeroStack"),
+    practiceShell: document.querySelector("#onlinePracticeShell"),
+    practiceToggle: document.querySelector("#onlinePracticeToggleBtn"),
     practicePanel: document.querySelector("#onlinePracticePanel"),
     practiceEquity: document.querySelector("#onlinePracticeEquity"),
     practiceRequired: document.querySelector("#onlinePracticeRequired"),
@@ -65,7 +69,6 @@
     showCards: document.querySelector("#onlineShowCardsBtn"),
     muckCards: document.querySelector("#onlineMuckCardsBtn"),
     log: document.querySelector("#onlineLogEntries"),
-    replay: document.querySelector("#onlineReplayEntries"),
     chatEntries: document.querySelector("#onlineChatEntries"),
     chatInput: document.querySelector("#onlineChatInput"),
     chatSend: document.querySelector("#onlineChatSendBtn"),
@@ -259,6 +262,10 @@
   }));
   elements.showCards.addEventListener("click", () => send({ type: "showCards", show: true }));
   elements.muckCards.addEventListener("click", () => send({ type: "showCards", show: false }));
+  elements.practiceToggle.addEventListener("click", () => {
+    state.practiceExpanded = !state.practiceExpanded;
+    render();
+  });
   elements.chatSend.addEventListener("click", sendChat);
   elements.chatInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") sendChat();
@@ -278,10 +285,12 @@
   function resetToSetup() {
     clearTimeout(state.animationTimer);
     clearTimeout(state.pulseTimer);
+    clearTimeout(state.chatBubbleTimer);
     clearInterval(state.countdownTimer);
     state.animationPhase = "";
     state.pulseSeats = false;
     state.pulseBoard = new Set();
+    state.practiceExpanded = false;
     state.lastRoomSnapshot = null;
     state.room = null;
     state.desiredRoom = "";
@@ -387,16 +396,21 @@
 
   function renderPractice(room) {
     const analysis = room.practice;
-    elements.practicePanel.hidden = !room.practiceMode || !analysis;
+    elements.practiceShell.hidden = !room.practiceMode || !analysis;
+    elements.practicePanel.hidden = !state.practiceExpanded || !analysis;
+    elements.practiceToggle.textContent = state.practiceExpanded
+      ? "隐藏概率 / Hide Odds"
+      : "查看概率 / Show Odds";
     if (!analysis) return;
     elements.practiceEquity.textContent = practicePercent(analysis.equity);
     elements.practiceRequired.textContent = analysis.toCall
       ? practicePercent(analysis.requiredEquity)
       : "0%";
     elements.practiceAdvice.textContent = analysis.advice;
-    elements.practiceAdvice.dataset.kind = analysis.advice.includes("Call")
+    const adviceText = analysis.advice.toLowerCase();
+    elements.practiceAdvice.dataset.kind = adviceText.includes("call")
       ? "call"
-      : analysis.advice.includes("Fold")
+      : adviceText.includes("fold")
         ? "fold"
         : "neutral";
     elements.practiceDistribution.innerHTML = analysis.distribution.map((item) => `
@@ -446,6 +460,7 @@
   function updateOnlineAnimation(room) {
     const previous = state.lastRoomSnapshot;
     if (!previous && room.status === "playing") {
+      state.practiceExpanded = false;
       setOnlineAnimation("shuffle", 620);
       setTimeout(() => {
         setOnlineAnimation("deal", 560);
@@ -453,6 +468,7 @@
       }, 640);
     } else if (previous) {
       if (room.status === "playing" && room.handNumber !== previous.handNumber) {
+        state.practiceExpanded = false;
         setOnlineAnimation("shuffle", 620);
         setTimeout(() => {
           setOnlineAnimation("deal", 560);
@@ -506,9 +522,13 @@
         room.winners.includes(index) ? "winner" : "",
         !player.connected ? "offline" : "",
       ].filter(Boolean).join(" ");
+      const latestChat = [...(room.chat || [])].reverse().find((entry) => (
+        entry.clientId === player.clientId && Date.now() - entry.time < 8000
+      ));
       return `
         <div class="${classes}" style="left:${left}%;top:${top}%">
           <div class="seat-head"><span class="seat-name">${escapeHtml(player.name)}</span></div>
+          ${latestChat ? `<div class="seat-chat-bubble">${escapeHtml(latestChat.text)}</div>` : ""}
           <span class="seat-badges">${player.isBot ? `<span class="bot-button">BOT · 机器人</span>` : ""}${badges}</span>
           <div class="seat-cards">${cards}</div>
           <div class="seat-foot">
@@ -530,11 +550,16 @@
     elements.blind.textContent = `盲注 / Blinds ${room.smallBlindAmount} / ${room.bigBlindAmount}`;
     elements.roomBadge.textContent = `房间 / Room ${room.code}`;
     elements.log.innerHTML = room.log.map((entry) => `<div class="log-entry">${escapeHtml(entry)}</div>`).join("");
-    elements.replay.innerHTML = room.log.map((entry, index) => `<div class="log-entry">${room.log.length - index}. ${escapeHtml(entry)}</div>`).join("");
     elements.chatEntries.innerHTML = (room.chat || []).map((entry) => (
       `<div class="chat-line"><strong>${escapeHtml(entry.name)}:</strong> ${escapeHtml(entry.text)}</div>`
     )).join("");
     elements.chatEntries.scrollTop = elements.chatEntries.scrollHeight;
+    clearTimeout(state.chatBubbleTimer);
+    const chatMessages = room.chat || [];
+    const newestChat = chatMessages[chatMessages.length - 1];
+    if (newestChat && Date.now() - newestChat.time < 8000) {
+      state.chatBubbleTimer = setTimeout(render, Math.max(50, 8050 - (Date.now() - newestChat.time)));
+    }
     renderOnlineAnimation();
 
     const hero = room.players[room.viewerIndex];

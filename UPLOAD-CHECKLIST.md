@@ -82,6 +82,10 @@ Render 的构建命令仍用 `npm install`，启动命令用 `npm start`。不�
 
 本次完整包共 66 个文件，包含此前各轮更新。`vendor` 是必须上传的运行目录，不能省略，也不要把里面的文件移动到根目录。提交后需要 Render 重新部署服务器，单独刷新旧服务器页面不会启用新地图、皮肤及全游戏头像互动。
 
+加载与同步优化（不改变当前外观）：卡坦岛直接使用页面内嵌的原有 SVG 图案，减少图形文件请求失败导致资源卡、建筑和棋子消失的问题；棋盘无变化的聊天和在线状态同步不再重建棋盘，卡坦岛大状态消息启用 WebSocket 压缩。运行文件必须一起更新 `catan.html`、`catan-board.js`、`catan.js`、`game-ui.js`、`catan-server.js`，保留 `catan-art.svg`；测试与说明同步 `ui-test.js`、`catan-test.js`、`README.md` 和本清单。需要重新部署服务器；这不会自动修改已经在线的 Render 网站。
+
+手机规则弹窗修复也包含在包内：基础规则、航海规则和全部地图规则随手机屏幕宽高调整，文字换行、正文独立滚动、关闭和已阅读按钮固定可见。相关运行文件为 `catan.css` 和 `catan.html`，测试为 `seafarers-ui-test.js`。若没有上传上一轮修复，这些文件也必须更新。不确定之前上传到了哪一版时，直接用本次完整包覆盖。
+
 道路卡撤回更新：在第一条道路或第一艘船放下前可以取消，归还原卡并恢复发展卡使用机会，基础版和航海家都生效，手机版仍可切换道路/船。若此前完整包已上传，运行文件覆盖 `catan-engine.js`、`catan.js`、`catan.css`；同时同步 `catan-test.js`、`seafarers-test.js`、`seafarers-expansion-test.js`、`ui-test.js`、`seafarers-ui-test.js`、`README.md` 和本清单。需要 Render 重新部署后才能使用。
 
 ## 本次航海家更新

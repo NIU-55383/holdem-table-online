@@ -12,7 +12,7 @@
   catch { state.skins = window.GameSocialData.normalizeSkins(); }
   const social = window.BoardGameUI.mountInteractions(() => state.room && ({ code: state.room.code, players: state.room.seats, you: state.room.seats[state.room.you]?.socialId, connected: state.socket?.readyState === WebSocket.OPEN }), send);
   function renderSkins() {
-    $("pieceSkins").innerHTML = Object.entries(window.GameSocialData.skins).map(([kind, choices]) => `<fieldset ${kind === "pirate" && state.mapId === "base" ? "hidden" : ""}><legend>${kind === "robber" ? "恶魔（强盗）/ Robber" : "海盗 / Pirate"}</legend><div class="skin-options">${choices.map((s) => `<button type="button" data-skin-kind="${kind}" data-skin="${s.id}" title="${s.label}" aria-label="${s.label}" aria-pressed="${state.skins[kind] === s.id}">${s.emoji || `<svg viewBox="0 0 48 48" aria-hidden="true"><use href="catan-art.svg#${s.art}"/></svg>`}</button>`).join("")}</div></fieldset>`).join("");
+    $("pieceSkins").innerHTML = Object.entries(window.GameSocialData.skins).map(([kind, choices]) => `<fieldset ${kind === "pirate" && state.mapId === "base" ? "hidden" : ""}><legend>${kind === "robber" ? "恶魔（强盗）/ Robber" : "海盗 / Pirate"}</legend><div class="skin-options">${choices.map((s) => `<button type="button" data-skin-kind="${kind}" data-skin="${s.id}" title="${s.label}" aria-label="${s.label}" aria-pressed="${state.skins[kind] === s.id}">${s.emoji || `<svg viewBox="0 0 48 48" aria-hidden="true">${B.icon(s.art)}</svg>`}</button>`).join("")}</div></fieldset>`).join("");
   }
   $("pieceSkins").onclick = (event) => {
     const button = event.target.closest("[data-skin]"); if (!button) return;
@@ -98,7 +98,7 @@
   let goldDraft = [0, 0, 0, 0, 0];
   const chatBubbles = new Map();
   let chatRoomKey = "", seenChat = new Set(), chatBubbleTimer = null;
-  const icon = (kind, cls = "") => `<svg class="${cls}" viewBox="0 0 48 48" aria-hidden="true">${["robber", "pirate"].includes(kind) ? B.piece(kind, 0, 0, 48, state.room?.skins || state.skins) : `<use href="catan-art.svg#${kind}"/>`}</svg>`;
+  const icon = (kind, cls = "") => `<svg class="${cls}" viewBox="0 0 48 48" aria-hidden="true">${["robber", "pirate"].includes(kind) ? B.piece(kind, 0, 0, 48, state.room?.skins || state.skins) : B.icon(kind)}</svg>`;
   const me = () => state.room?.game?.players[state.room.you];
   const seatConnected = (id) => {
     const seat = state.room?.seats[id];
@@ -323,7 +323,12 @@
     const g = state.room?.game; if (!g) return;
     if (state.moveFrom !== null && !g.legal.moveShips?.includes(state.moveFrom)) state.moveFrom = null;
     $("boardViewport").style.aspectRatio = g.board.bounds ? `${g.board.bounds[2]} / ${g.board.bounds[3]}` : "620 / 570";
-    $("board").innerHTML = B.render(g.board, { legal: g.legal, mode: state.mode, selected: state.selected, dice: g.dice, moveFrom: state.moveFrom, thief: g.thief });
+    const options = { legal: g.legal, mode: state.mode, selected: state.selected, dice: g.dice, moveFrom: state.moveFrom, thief: g.thief };
+    const boardKey = JSON.stringify([state.room.code, state.room.you, g.board, options]);
+    // Chat, presence and resource-only changes must not rebuild the SVG scene.
+    if (state.boardRenderKey !== boardKey) {
+      $("board").innerHTML = B.render(g.board, options); state.boardRenderKey = boardKey;
+    }
     $("selection").hidden = !state.selected;
     const label = { road: "修建道路 / Build road", ship: "建造船只 / Build ship", settlement: "建造村庄 / Build settlement", city: "升级城市 / Upgrade city", robber: "移动强盗 / Move robber", pirate: "移动海盗 / Move pirate" }[state.mode];
     $("selectionLabel").textContent = state.selected ? `${label} · ${state.selected.id + 1}` : "";

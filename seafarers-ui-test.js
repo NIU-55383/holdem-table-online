@@ -27,6 +27,82 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
     });
     const page = await context.newPage(), errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
+    async function checkRuleDialog(p, id, label) {
+      const contentId = id === "helpDialog" ? "helpContent" : "sailingContent";
+      const footerId = id === "helpDialog" ? "helpAcknowledge" : "sailingAcknowledge";
+      const dialog = p.locator(`#${id}`), content = p.locator(`#${contentId}`);
+      await dialog.waitFor();
+      await content.evaluate((el) => { el.scrollTop = 0; });
+      const layout = await dialog.evaluate((modal, { contentId, footerId }) => {
+        const content = document.getElementById(contentId), box = modal.getBoundingClientRect(), body = content.getBoundingClientRect();
+        const heading = modal.querySelector(".dialog-heading").getBoundingClientRect(), footer = document.getElementById(footerId).getBoundingClientRect();
+        const close = modal.querySelector("[data-close]").getBoundingClientRect();
+        const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+        let node, clippedText = false;
+        while ((node = walker.nextNode())) {
+          if (!node.textContent.trim()) continue;
+          const range = document.createRange(); range.selectNodeContents(node);
+          if ([...range.getClientRects()].some((r) => r.width && (r.left < body.left - 1 || r.right > body.right + 1))) clippedText = true;
+        }
+        return {
+          fits: box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight,
+          ordered: heading.bottom <= body.top && body.bottom <= footer.top && footer.bottom <= box.bottom,
+          overflow: content.scrollWidth > content.clientWidth || modal.scrollWidth > modal.clientWidth,
+          controls: close.width >= 43.99 && close.height >= 43.99 && footer.height >= 43.99 && close.right <= box.right,
+          clippedText, bodyHeight: body.height
+        };
+      }, { contentId, footerId });
+      assert.equal(layout.fits, true, `${label}: whole rules dialog stays within the phone viewport`);
+      assert.equal(layout.ordered, true, `${label}: heading, scroll area and footer must not overlap`);
+      assert.equal(layout.overflow, false, `${label}: no horizontal clipping or scrolling`);
+      assert.equal(layout.clippedText, false, `${label}: every bilingual text line wraps within the scroll area`);
+      assert.equal(layout.controls, true, `${label}: touch controls remain at least 44px`); assert.ok(layout.bodyHeight >= 40);
+      await p.screenshot({ path: `test-results/rules-${label}-top.png` });
+      await content.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+      assert.equal(await content.evaluate((el) => {
+        const body = el.getBoundingClientRect(), last = el.lastElementChild.getBoundingClientRect();
+        return last.top >= body.top && last.bottom <= body.bottom + 1;
+      }), true, `${label}: the final rulebook link can be scrolled fully into view`);
+      await p.screenshot({ path: `test-results/rules-${label}-bottom.png` });
+      await content.evaluate((el) => { el.scrollTop = 0; });
+    }
+    // Real mobile emulation catches fixed-width dialogs that desktop resize checks miss.
+    const phoneContext = await browser.newContext({ viewport: { width: 393, height: 735 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
+    const phone = await phoneContext.newPage(); phone.on("pageerror", (e) => errors.push(e.message));
+    await phone.goto(`http://127.0.0.1:${server.address().port}/catan.html?edition=seafarers`);
+    await phone.locator("#sailingDialog").waitFor();
+    for (const [width, height] of [[393,735], [320,568], [844,390], [1440,1000]]) {
+      await phone.setViewportSize({ width, height });
+      await checkRuleDialog(phone, "sailingDialog", `seafarers-${width}`);
+    }
+    await phone.setViewportSize({ width: 393, height: 735 });
+    const body = await phone.locator("#sailingContent").boundingBox(), touch = await phoneContext.newCDPSession(phone);
+    const x = body.x + body.width / 2, y = body.y + body.height - 25;
+    await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+    for (let n = 1; n <= 10; n++) await touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y - n * 12 }] });
+    await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await phone.waitForFunction(() => document.getElementById("sailingContent").scrollTop > 0);
+    await touch.detach();
+    await phone.locator("#sailingAcknowledge").click();
+    await phone.locator("#sailingContent .map-rules-preview svg").waitFor();
+    await phone.locator("#sailingAcknowledge").click();
+    for (const map of Maps.maps) {
+      await phone.locator("#mapChoice").selectOption(map.id);
+      await phone.locator("#sailingContent .map-rules-preview svg").waitFor();
+      for (const [width, height] of [[320,568], [393,735], [844,390]]) {
+        await phone.setViewportSize({ width, height });
+        await checkRuleDialog(phone, "sailingDialog", `${map.id}-${width}`);
+      }
+      await phone.locator("#sailingAcknowledge").click();
+    }
+    await phone.locator('[data-edition="base"]').click();
+    for (const [width, height] of [[320,568], [393,735], [844,390]]) {
+      await phone.setViewportSize({ width, height });
+      await checkRuleDialog(phone, "helpDialog", `base-${width}`);
+    }
+    await phone.locator('[data-close="helpDialog"]').click();
+    assert.equal(await phone.locator("#helpDialog").isVisible(), false);
+    await phoneContext.close();
     async function checkRuleToolbar(p, expected, name, width) {
       assert.deepEqual(await p.locator(".game-rule-links button:visible").evaluateAll((buttons) => buttons.map((b) => b.id)), expected);
       assert.equal(await p.locator(".game-topbar").evaluate((bar) => {
@@ -429,7 +505,7 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
       await p.close();clearTimeout(newRoom.timer);
     }
     assert.deepEqual(errors, []);
-    console.log("CATAN browser checks passed: first-seat setup after rules and room changes without reloading, base rules, eight Seafarers maps in both layouts at 320/390/1440px, ships, pirate, gold, reconnect.");
+    console.log("CATAN browser checks passed: mobile rules wrap and touch-scroll to the end with fixed controls, all eight map rules in portrait/landscape, first-seat setup, both map layouts, ships, pirate, gold, reconnect.");
     await context.close();
   } finally { await browser?.close(); catan.rooms.forEach((r) => clearTimeout(r.timer)); server.close(); server.emit("close"); }
 })().catch((e) => { console.error(e); process.exitCode = 1; });

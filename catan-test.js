@@ -477,6 +477,40 @@ test("twenty seeded full bot games finish legally and conserve all cards", () =>
   }
 });
 
+test("Catan snapshots negotiate compression and still support uncompressed clients", { timeout: 15000 }, async (t) => {
+  const http = require("node:http"), { once } = require("node:events"), { WebSocket: Socket } = require("ws");
+  const server = http.createServer(), catan = require("./catan-server").attachCatan(server), sockets = [];
+  server.on("upgrade", (request, socket, head) => catan.upgrade(request, socket, head));
+  server.listen(0, "127.0.0.1"); await once(server, "listening");
+  try {
+    for (const compressed of [true, false]) {
+      const ws = new Socket(`ws://127.0.0.1:${server.address().port}/catan-ws`, { perMessageDeflate: compressed });
+      sockets.push(ws); await once(ws, "open");
+      assert.equal(ws.extensions.includes("permessage-deflate"), compressed);
+      const request = async (data) => {
+        const before = ws._socket.bytesRead, received = once(ws, "message");
+        ws.send(JSON.stringify(data));
+        const [raw] = await received;
+        return { data: JSON.parse(raw), decoded: raw.length, wire: ws._socket.bytesRead - before };
+      };
+      assert.equal((await request({ type: "hello" })).data.type, "welcome");
+      assert.equal((await request({ type: "create", name: "Alice", mapId: "shores-2" })).data.type, "state");
+      await request({ type: "fillBots" });
+      const snapshot = await request({ type: "start" });
+      assert.equal(snapshot.data.game.phase, "setupSettlement");
+      assert.equal(snapshot.data.game.players[1].resources, null, "Compression preserves private-hand filtering");
+      assert.ok(snapshot.decoded > 10000, "Exercise a complete island board snapshot");
+      if (compressed) assert.ok(snapshot.wire < snapshot.decoded / 2, "Large snapshots use less than half the wire bytes");
+      else assert.ok(snapshot.wire >= snapshot.decoded, "Legacy clients still receive the complete JSON state");
+      t.diagnostic(`${compressed ? "compressed" : "plain"} snapshot: ${snapshot.decoded} JSON bytes, ${snapshot.wire} wire bytes`);
+      assert.equal((await request({ type: "chat", text: "hello" })).data.chat.at(-1).text, "hello");
+    }
+  } finally {
+    for (const ws of sockets) ws.terminate();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("live targeted trades reject bystanders and schedule only the selected bot", { timeout: 15000 }, async () => {
   const http = require("node:http"), { once } = require("node:events"), { WebSocket } = require("ws");
   const { attachCatan } = require("./catan-server");

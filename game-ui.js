@@ -14,7 +14,7 @@
     const initial = `<span class="avatar-initial">${escape(A.firstLetter(player?.name))}</span>`;
     const content = !value ? initial : value.kind === "photo" ? `${initial}<img class="avatar-photo" src="${value.value}" alt="">`
       : value.kind === "emoji" ? `<span class="avatar-emoji">${escape(value.value)}</span>`
-        : `<svg viewBox="0 0 48 48" aria-hidden="true"><use href="catan-art.svg#${value.value}"/></svg>`;
+        : `<svg viewBox="0 0 48 48" aria-hidden="true"><use href="${document.getElementById(`catan-art-${value.value}`) ? `#catan-art-${value.value}` : `catan-art.svg#${value.value}`}"/></svg>`;
     return `<span class="avatar-face" aria-hidden="true">${content}</span>`;
   }
   function avatar(player, connected, className = "seat-avatar", editable = false) {

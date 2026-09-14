@@ -109,6 +109,8 @@ const server = spawn(process.execPath, [path.join(__dirname, "server.js")], { en
     }
     await page.goto(`http://127.0.0.1:${port}/index.html`);
     await page.locator("#clubIsland polygon").first().waitFor();
+    await page.waitForFunction(() => [...document.querySelectorAll("#clubIsland use")].every((icon) => icon.getBBox().width > 0));
+    assert.match(await page.locator("#clubIsland use").first().getAttribute("href"), /^catan-art\.svg#/, "The lobby retains external-sprite compatibility");
     await page.screenshot({ path: "test-results/club-desktop.png", fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: "test-results/club-mobile.png", fullPage: true });
@@ -142,9 +144,28 @@ const server = spawn(process.execPath, [path.join(__dirname, "server.js")], { en
     await page.locator('[data-view-target="home"]').click();
     assert.equal(await page.locator("#pokerSectionNav").isVisible(), false);
     await page.setViewportSize({ width: 390, height: 844 });
+    let externalSpriteRequests = 0;
+    await page.route("**/catan-art.svg", (route) => { externalSpriteRequests++; return route.abort(); });
     await page.locator(".catan-game").click();
     await page.getByText("已连接 / Connected", { exact: true }).waitFor();
     await page.locator("#previewBoard polygon").first().waitFor();
+    const sourceArt = fs.readFileSync(path.join(__dirname, "catan-art.svg"), "utf8");
+    assert.equal(await page.evaluate((source) => {
+      const xml = new DOMParser().parseFromString(source, "image/svg+xml");
+      const clean = (node) => {
+        for (const child of [...node.childNodes]) {
+          if (child.nodeType === Node.TEXT_NODE && !child.textContent.trim()) child.remove();
+          else clean(child);
+        }
+        return node;
+      };
+      return [...xml.querySelectorAll("symbol")].every((symbol) => {
+        const id = `catan-art-${symbol.id}`, local = document.getElementById(id);
+        symbol.setAttribute("id", id);
+        return local && clean(symbol).isEqualNode(clean(local.cloneNode(true)));
+      });
+    }, sourceArt), true, "Embedded illustrations must match every original shape, color and viewBox");
+    assert.equal(await page.locator("#previewBoard use").evaluateAll((icons) => icons.every((icon) => icon.getBBox().width > 0)), true, "Resource art renders even if the external sprite request is blocked");
     await page.screenshot({ path: "test-results/catan-setup-mobile.png", fullPage: true });
     for (const viewport of [{ width: 320, height: 640 }, { width: 375, height: 667 }, { width: 390, height: 844 }]) {
       await page.setViewportSize(viewport);
@@ -333,7 +354,7 @@ const server = spawn(process.execPath, [path.join(__dirname, "server.js")], { en
     }, stealState);
     assert.equal(await page.locator("#special").isVisible(), false, "No name buttons for choosing a victim");
     assert.deepEqual(await page.locator("#board [data-victim]").evaluateAll((nodes) => nodes.map((n) => Number(n.dataset.victim))), [1, 2]);
-    assert.equal(await page.locator('#board [data-victim="2"] use').getAttribute("href"), "catan-art.svg#city");
+    assert.equal(await page.locator('#board [data-victim="2"] use').getAttribute("href"), "#catan-art-city");
     assert.match(await page.locator("#turnPrompt").textContent(), /点击发光的房子.*glowing building/);
     for (const viewport of [{ width: 320, height: 640 }, { width: 390, height: 844 }, { width: 1440, height: 1000 }]) {
       await page.setViewportSize(viewport); await page.mouse.move(0, 0); await page.evaluate(() => window.scrollTo(0, 0));
@@ -386,6 +407,16 @@ const server = spawn(process.execPath, [path.join(__dirname, "server.js")], { en
       return snapshot;
     }
     const deliverFeedback = (snapshot) => page.evaluate((data) => window.testCatanSocket.dispatchEvent(new MessageEvent("message", { data: JSON.stringify(data) })), snapshot);
+    await deliverFeedback(structuredClone(actualState));
+    await page.evaluate(() => { window.testBoardNode = document.querySelector("#board svg"); });
+    await deliverFeedback(structuredClone(actualState));
+    assert.equal(await page.evaluate(() => window.testBoardNode === document.querySelector("#board svg")), true, "Identical snapshots retain the existing board DOM");
+    const chatOnly = structuredClone(actualState);
+    chatOnly.chat.push({ id: "render-cache-chat", playerId: 0, name: "Alice", text: "hello", time: Date.now() });
+    chatOnly.seats[1].connected = false;
+    await deliverFeedback(chatOnly);
+    assert.equal(await page.evaluate(() => window.testBoardNode === document.querySelector("#board svg")), true, "Chat and presence update without rebuilding the board");
+    await deliverFeedback(structuredClone(actualState));
     const deltas = () => page.locator("[data-card-change]").evaluateAll((nodes) => Object.fromEntries(nodes.filter((n) => n.textContent).map((n) => [n.dataset.cardChange, n.textContent])));
     feedback.game.trade = { id: 500, from: 0, to: null, give: [1, 0, 0, 0, 0], want: [0, 1, 0, 0, 0], rejected: [] };
     await deliverFeedback(feedbackSnapshot());
@@ -649,7 +680,7 @@ const server = spawn(process.execPath, [path.join(__dirname, "server.js")], { en
     const art = await page.locator("#development .development-card > svg use").evaluateAll((icons) => icons.map((icon) => icon.getAttribute("href")));
     assert.equal(new Set(art).size, 5, "Every development card has its own illustration");
     const sprite = await (await fetch(`http://127.0.0.1:${port}/catan-art.svg`)).text();
-    for (const href of art) assert.ok(sprite.includes(`id="${href.split("#")[1]}"`), "Each card illustration exists in the shared sprite");
+    for (const href of art) assert.ok(sprite.includes(`id="${href.replace("#catan-art-", "")}"`), "Each card illustration exists in the shared sprite");
     assert.equal(await page.locator('[data-dev="vp"]').isDisabled(), true);
     assert.equal(await page.locator('[data-dev="vp"]').evaluate((card) => getComputedStyle(card).opacity), "1", "Victory points stay readable even though they cannot be played");
     for (const viewport of [{ width: 320, height: 640 }, { width: 390, height: 844 }, { width: 1440, height: 1000 }]) {
@@ -698,6 +729,7 @@ const server = spawn(process.execPath, [path.join(__dirname, "server.js")], { en
     await applyDevelopmentAction({ type: "plenty", resources: [0, 0, 0, 0, 2] });
     assert.equal(await page.locator("[data-cancel-development]").count(), 0);
     assert.equal(devGame.developmentPlayed, true);
+    assert.equal(externalSpriteRequests, 0, "CATAN must not request the fragile external sprite during a game");
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate((snapshot) => {
       window.testCatanSocket.send = window.testOriginalSend;

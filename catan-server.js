@@ -8,7 +8,9 @@ const AvatarData = require("./avatar-data");
 const Social = require("./game-social"), SocialData = require("./social-data");
 
 function attachCatan(server) {
-  const wss = new WebSocketServer({ noServer: true, maxPayload: 32768 });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 32768,
+    perMessageDeflate: { serverNoContextTakeover: true, clientNoContextTakeover: true,
+      threshold: 1024, concurrencyLimit: 4, zlibDeflateOptions: { level: 3 } } });
   const rooms = new Map(), sessions = new Map();
   const familiar = ["Connie", "Colin", "Angela", "Stephan", "Zoey", "William", "Tim", "Gary", "Alison"];
   const common = ["Emma", "James", "Olivia", "Daniel", "David", "Sophia", "Michael", "Emily", "Alex", "Sarah", "Ryan", "Anna", "Chris", "Laura"];

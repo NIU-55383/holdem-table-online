@@ -4,7 +4,8 @@ window.CatanBoard = (() => {
   const RES = ["wood", "brick", "wool", "grain", "ore", "desert", "sea", "gold", "fog"];
   const FILL = ["#249b63", "#dd7650", "#a8c847", "#edc448", "#a0b8b8", "#dece96", "#197c9e", "#d6b457", "#a3c6ca"];
   const names = ["森林 / Forest", "丘陵 / Hills", "牧场 / Pasture", "麦田 / Fields", "山地 / Mountains", "沙漠 / Desert", "海洋 / Sea", "金矿 / Gold fields", "未知海域 / Unexplored"];
-  const icon = (kind, x, y, size = 36, color = "") => `<use href="catan-art.svg#${kind}" x="${x}" y="${y}" width="${size}" height="${size}"${color ? ` style="color:${color}"` : ""}/>`;
+  const sprite = document.getElementById("catanSprite") ? "#catan-art-" : "catan-art.svg#";
+  const icon = (kind, x = 0, y = 0, size = 48, color = "") => `<use href="${sprite}${kind}" x="${x}" y="${y}" width="${size}" height="${size}"${color ? ` style="color:${color}"` : ""}/>`;
   const escape = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   function piece(kind, x, y, size, skins) {
     const choice = window.GameSocialData?.skin(kind, skins?.[kind]);

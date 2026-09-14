@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#10648b">
+  <title>卡坦岛 CATAN · 桌游小馆</title>
+  <link rel="stylesheet" href="catan.css">
+  <link rel="stylesheet" href="game-ui.css">
+</head>
+<body>
+  <header class="island-header">
+    <a class="back-link" href="index.html" title="返回桌游大厅 / Back to lobby" aria-label="返回桌游大厅 / Back to lobby">←</a>
+    <a class="island-brand" href="catan.html"><span class="hex-logo">C</span><span>卡坦岛 <small>CATAN</small></span></a>
+    <span id="connection" class="connection" role="status">连接中 / Connecting</span>
+    <button class="icon-button" id="helpButton" title="规则 / Rules" aria-label="规则 / Rules">?</button>
+  </header>
+  <main>
+    <div id="notice" role="alert" hidden></div>
+    <section id="setup" class="setup-layout">
+      <div class="setup-island"><div class="setup-title"><span class="eyebrow">BOARD GAME 02</span><h1 id="editionTitle">卡坦岛 <small>CATAN</small></h1><p id="mapSummary">3–4 玩家 / Players <span>10 分 / Victory Points</span></p></div><div id="previewBoard"></div></div>
+      <div class="setup-form">
+        <div class="setup-heading"><h2>一起登岛 <small>Join the island</small></h2><div id="baseSetup"><button class="quiet" id="baseRules" title="基础版规则 / Base Game Rules">基础规则 / Rules</button></div></div>
+        <div class="segments" id="editionChoice"><button class="selected" data-edition="base">基础版 / Base</button><button data-edition="seafarers">航海家 / Seafarers</button></div>
+        <div id="seafarerSetup" hidden><label>地图 / Map<select id="mapChoice"></select></label><div class="segments map-layout" id="layoutChoice" role="group" aria-label="地图布局 / Map layout"><button type="button" data-layout="default" class="selected" aria-pressed="true">默认地图<small>Default</small></button><button type="button" data-layout="random" aria-pressed="false">随机地图<small>Random</small></button></div><div class="map-rule-links"><button class="quiet" id="seafarerRules">航海规则 / Sailing Rules</button><button class="quiet" id="mapRules">本图规则 / Map Rules</button></div></div>
+        <div class="player-profile-fields"><label>你的名字 / Your name<input id="name" maxlength="18" autocomplete="nickname" placeholder="Player" required></label><div id="catanAvatarPicker"></div></div>
+        <fieldset id="playerCountChoice"><legend>玩家人数 / Players</legend><div class="segments" id="seatChoice"><button data-seats="3">3 人 / Players</button><button class="selected" data-seats="4">4 人 / Players</button></div></fieldset>
+        <details class="piece-skin-settings"><summary>棋子外观 / Piece skins</summary><div id="pieceSkins" class="piece-skins"></div></details>
+        <button class="primary wide" id="create">创建房间 / Create Room <span>→</span></button>
+        <div class="form-divider"><span>加入好友 / Join friends</span></div>
+        <label>房间号 / Room code<input id="code" maxlength="5" autocapitalize="characters" placeholder="C1234" spellcheck="false"></label>
+        <button class="secondary wide" id="join">加入房间 / Join Room</button>
+      </div>
+    </section>
+    <section id="lobby" class="room-lobby" hidden>
+      <div class="room-heading"><div><span class="eyebrow">PRIVATE ISLAND</span><h1>等待登岛 <small>Waiting for players</small></h1></div><button class="secondary" data-leave>离开 / Leave</button></div>
+      <div class="room-invite"><span>房间号 / Room</span><button id="copyCode" title="复制邀请 / Copy invitation"></button><span id="lobbyCount"></span></div>
+      <div class="lobby-map"><span id="lobbyMapName"></span><button class="quiet" id="lobbyMapRules" hidden>本图规则 / Map Rules</button></div>
+      <div id="lobbySeats" class="lobby-seats"></div>
+      <div id="seatSwap" class="seat-swap" aria-live="polite" hidden></div>
+      <div class="lobby-actions"><button class="secondary" id="addBot">+ 机器人 / Add Bot</button><button class="secondary" id="removeBot">− 机器人 / Remove Bot</button><button class="secondary" id="fillBots">填满机器人 / Fill Bots</button><button class="primary" id="start">开始游戏 / Start Game →</button></div>
+    </section>
+    <section id="game" hidden>
+      <div class="game-topbar">
+        <div class="game-room-meta"><span id="roomLabel"></span><span id="turnLabel"></span></div>
+        <div class="game-rule-links" role="group" aria-label="规则 / Rules">
+          <button class="quiet" id="gameMapRules" hidden>地图 <small>Map</small></button>
+          <button class="quiet" id="gameBaseRules">基础规则 <small>Base Rules</small></button>
+          <button class="quiet" id="gameSailingRules" hidden>航海规则 <small>Sailing Rules</small></button>
+        </div>
+        <button class="quiet" id="autoButton">托管 / Auto</button><button class="quiet" data-leave>离开 / Leave</button>
+      </div>
+      <div id="victory" class="victory" hidden><h1 id="winnerText"></h1><button class="primary" id="rematch">再来一局 / Play Again</button></div>
+      <div class="game-layout">
+        <section class="board-section">
+          <div class="board-toolbar"><span id="phaseLabel"></span></div>
+          <div class="board-viewport" id="boardViewport" tabindex="0" role="region" aria-label="卡坦岛棋盘，双指缩放；键盘加减号缩放，0 复位 / Catan board: pinch to zoom; keyboard plus/minus to zoom, 0 to reset"><div id="board"></div></div>
+          <div class="turn-banner"><div class="numbered-avatar" id="turnAvatar"></div><div id="turnPrompt" aria-live="polite"></div><div id="dice" class="dice-pair"></div></div>
+          <div id="selection" class="selection" hidden><span id="selectionLabel"></span><button class="primary" id="confirmBuild">确认 / Confirm</button><button class="icon-button" id="cancelBuild" title="取消 / Cancel" aria-label="取消 / Cancel">×</button></div>
+        </section>
+        <aside class="play-sidebar">
+          <section class="hand-section"><h2>你的资源 <small>Your Resources</small><span id="handTotal" hidden></span></h2><div id="resources" class="resource-hand"></div><div id="development" class="development-hand"></div></section>
+          <div class="action-grid" id="actions"></div>
+          <div id="special" class="special-actions" hidden></div>
+          <div id="tradeOffer" class="trade-offer" hidden></div>
+          <section class="player-overview" aria-label="玩家概况 / Player overview">
+            <table class="player-summary"><thead><tr>
+              <th scope="col">玩家<small>Player</small></th>
+              <th scope="col" id="islandPointsHeading" title="登岛奖励分 / Island bonus victory points" hidden>登岛<br>奖励<small>Island VP</small></th>
+              <th scope="col">资源卡<small>Resource<br>cards</small></th>
+              <th scope="col">发展卡<small>Dev<br>cards</small></th>
+              <th scope="col">骑士<small>Knights</small></th>
+              <th scope="col" id="routeCountHeading">已建<br>道路<small>Built</small></th>
+              <th scope="col" id="longestRouteHeading">最长<br>道路<small>Longest</small></th>
+            </tr></thead><tbody id="players"></tbody></table>
+          </section>
+          <details id="supplyDetails" class="bank-section table-detail" open><summary><span>银行 <small>Supply</small></span><span id="devSupply"></span></summary><div class="detail-content"><div id="bank" class="bank-resources"></div><div id="awards" class="awards"></div></div></details>
+          <details id="chatDetails" class="chat-section table-detail" open><summary><span>聊天 <small>Chat</small></span><span id="chatUnread" class="unread" hidden>新消息 / New</span></summary><div class="detail-content"><div id="chatMessages" class="chat-messages"></div><form id="chatForm"><input id="chatInput" maxlength="160" aria-label="聊天消息 / Chat message" placeholder="说点什么 / Say something"><button class="icon-button" title="发送 / Send" aria-label="发送 / Send">↑</button></form></div></details>
+          <details id="logDetails" class="log-section table-detail" open><summary><span>对局记录 <small>Game Log</small></span></summary><div class="detail-content"><div id="gameLog" class="game-log"></div></div></details>
+        </aside>
+      </div>
+    </section>
+  </main>
+  <dialog id="tradeDialog" aria-labelledby="tradeTitle">
+    <div class="dialog-heading"><h2 id="tradeTitle">资源交易 <small>Resource Trade</small></h2><button class="icon-button" data-close="tradeDialog" aria-label="关闭 / Close">×</button></div>
+    <div class="segments"><button class="selected" data-trade-mode="bank">银行 / Harbor</button><button data-trade-mode="players">玩家 / Players</button></div>
+    <div class="trade-dialog-body">
+      <div id="bankTradeFields" class="trade-fields"><label>付出 / Give<select id="tradeGive"></select></label><span>→</span><label>获得 / Receive<select id="tradeGet"></select></label></div><p id="tradeRate"></p>
+      <div id="playerTradeFields" hidden>
+        <label class="trade-target-label">交易对象 / Trade with<select id="tradeTarget"><option value="all">所有玩家 / All players</option></select></label>
+        <section class="trade-picker-section" aria-labelledby="offerGiveLabel"><h3 id="offerGiveLabel">付出 <small>Give</small></h3><div id="offerGive" class="trade-resource-picker"></div></section>
+        <section class="trade-picker-section" aria-labelledby="offerWantLabel"><h3 id="offerWantLabel">换取 <small>Receive</small></h3><div id="offerWant" class="trade-resource-picker"></div></section>
+        <div id="tradeDraft" class="trade-card-summary">
+          <section aria-labelledby="draftGiveLabel"><h3 id="draftGiveLabel">付出 <small>Give</small></h3><div id="draftGive" class="trade-card-list"></div></section>
+          <span class="trade-arrow" aria-hidden="true">→</span>
+          <section aria-labelledby="draftWantLabel"><h3 id="draftWantLabel">换取 <small>Receive</small></h3><div id="draftWant" class="trade-card-list"></div></section>
+        </div>
+      </div>
+    </div>
+    <p id="tradeError" class="dialog-error" role="alert"></p><button class="primary wide" id="confirmTrade">确认交易 / Trade</button>
+  </dialog>
+  <dialog id="resourceDialog" aria-labelledby="resourceTitle">
+    <div class="dialog-heading"><h2 id="resourceTitle"></h2><button class="icon-button" data-close="resourceDialog" aria-label="关闭 / Close">×</button></div>
+    <div id="resourceChoices" class="resource-inputs"></div>
+    <div id="goldChoices" hidden>
+      <section class="trade-picker-section" aria-labelledby="goldSupplyLabel"><h3 id="goldSupplyLabel">选择资源 <small>Choose Resources</small></h3><div id="goldSupply" class="trade-resource-picker"></div></section>
+      <section class="trade-picker-section" aria-labelledby="goldSelectedLabel"><h3 id="goldSelectedLabel">已选资源 <small>Selected Resources</small></h3><div id="goldSelected" class="trade-card-list"></div></section>
+    </div>
+    <div id="discardChoices" hidden>
+      <section aria-labelledby="discardHandLabel"><h3 id="discardHandLabel">保留手牌 <small>Keep</small></h3><div id="discardHand" class="discard-hand"></div></section>
+      <section aria-labelledby="discardSelectedLabel"><h3 id="discardSelectedLabel">待弃牌 <small>To Discard</small></h3><div id="discardSelected" class="discard-hand"></div></section>
+    </div>
+    <p id="resourceHint" aria-live="polite"></p><p id="resourceError" class="dialog-error" role="alert"></p><button class="primary wide" id="confirmResources">确认 / Confirm</button>
+    <button class="secondary wide cancel-development" id="cancelDevelopment" hidden><span aria-hidden="true">↶</span> 撤回丰收卡 / Cancel card</button>
+  </dialog>
+  <dialog id="helpDialog" aria-labelledby="helpTitle">
+    <div class="dialog-heading"><h2 id="helpTitle">基础版规则 <small>Base Game Rules</small></h2><button class="icon-button" data-close="helpDialog" aria-label="关闭 / Close">×</button></div>
+    <div id="helpContent" class="rules-content" tabindex="0" role="region" aria-label="游戏规则 / Game rules">
+      <section class="rule-section">
+        <h3>获胜目标 <small>Victory</small></h3>
+        <p id="rulesVictory"></p>
+      </section>
+      <section class="rule-section">
+        <h3>起始放置 <small>Initial Placement</small></h3>
+        <p>先按座位顺序各放一座村庄和一条道路，再逆序放第二组。第二座村庄从每个相邻资源地块各获得一张资源。<small>Place one settlement and road in seat order, then a second pair in reverse order. Your second settlement gives you one resource from each adjacent resource-producing hex.</small></p>
+        <p>任何两座村庄或城市之间至少空出一个路口。开始游戏后，新道路须连接自己的路网或建筑，新村庄须连接自己的道路；城市只能升级自己的村庄。<small>Leave at least one empty intersection between any two settlements or cities. During play, new roads must connect to your network or buildings, new settlements to your roads, and cities must replace your own settlements.</small></p>
+      </section>
+      <section class="rule-section">
+        <h3>回合与资源 <small>Turns &amp; Resources</small></h3>
+        <p>每回合掷两颗骰子。对应数字的地块给所有相邻村庄一张资源、城市两张；之后可交替交易、建造，最后结束回合。沙漠和强盗所在的地块不生产资源。<small>Roll two dice each turn. Matching hexes produce one resource for each adjacent settlement and two for each city, for all players. Then trade and build in any order before ending your turn. The desert and the robber's hex produce nothing.</small></p>
+      </section>
+      <section class="rule-section">
+        <h3>建造费用与上限 <small>Building Costs &amp; Limits</small></h3>
+        <div id="buildingCosts" class="building-costs"></div>
+        <p>每人最多有 15 条道路、5 座村庄和 4 座城市。升级城市会收回村庄棋子，之后可再次建造。<small>Each player has 15 roads, 5 settlements and 4 cities. Upgrading to a city returns the settlement piece to your supply for reuse.</small></p>
+        <p id="rulesShipSupply" hidden>航海家另外每人有 15 艘船，船和道路分别计算上限。<small>Seafarers adds 15 ships per player, with a separate limit from roads.</small></p>
+      </section>
+      <section class="rule-section">
+        <h3>七点与强盗 <small>Seven &amp; the Robber</small></h3>
+        <p>掷出 7 不生产资源。资源卡超过 7 张的玩家须弃掉一半，向下取整；发展卡不计入。全部弃牌完成后，当前玩家将强盗移到另一块陆地，并从该地块旁有建筑且有资源的对手中选择一人，随机偷一张资源。<small>A roll of 7 produces no resources. Players holding more than 7 resource cards discard half, rounded down; development cards do not count. Once all discards are complete, move the robber to a different land hex and steal one random resource from an opponent with a building there and at least one resource.</small></p>
+      </section>
+      <section class="rule-section">
+        <h3>交易 <small>Trading</small></h3>
+        <p>行动阶段可向指定玩家或所有玩家报价，双方同意才交换资源；其他玩家只能与当前回合的玩家交易。发展卡不能交易。<small>During the action phase, offer a trade to one player or everyone. Resources change hands only by mutual agreement. Other players may trade only with the active player. Development cards cannot be traded.</small></p>
+        <p>银行用四张同种资源换一张；自己的村庄或城市连接普通港口时为 3:1，连接专用港口时，对应资源为 2:1。<small>The bank exchanges four identical resources for one. A settlement or city at a generic port gives a 3:1 rate; a matching resource port gives a 2:1 rate for that resource.</small></p>
+      </section>
+      <section class="rule-section">
+        <h3>发展卡 <small>Development Cards</small></h3>
+        <p>骑士（恶魔）、道路建设、丰收和垄断：购买当回合不能使用，从下一个自己的回合起，掷骰前或掷骰后均可使用，每回合合计最多一张。先完成卡牌效果，再继续回合；掷骰前用牌后仍须掷骰。<small>Knight, Road Building, Year of Plenty and Monopoly are playable on a later turn of your own, before or after rolling. Use only one in total per turn. Resolve its effect first; playing before the roll does not replace the roll.</small></p>
+        <dl id="rulesDevelopment" class="rules-development"></dl>
+        <p id="rulesVictoryCard"></p>
+      </section>
+      <section class="rule-section">
+        <h3>最长道路与最大骑士团 <small>Longest Road &amp; Largest Army</small></h3>
+        <p>最长道路至少 5 段，最大骑士团至少使用 3 张骑士卡，各值 2 分。并列时原持有者保留；只有更长的道路或更多已使用的骑士才能夺取。最长道路按连续路线计算，分叉不相加，对手建筑会阻断路线。<small>Longest Road requires at least 5 connected edges; Largest Army requires at least 3 played knights. Each awards 2 points. The holder keeps the award on a tie. Only a longer road or more played knights can take it. Count one continuous route, not branches; opponents' buildings interrupt it.</small></p>
+      </section>
+      <p id="rulesScenarioNote" hidden>航海家的船、海盗、金矿与地图奖励另见「航海规则」及「本图规则」。<small>For ships, the pirate, gold fields and scenario bonuses, see Sailing Rules and Map Rules.</small></p>
+      <a class="rules-link" href="https://www.catan.com/sites/default/files/2021-06/catan_base_rules_2020_200707.pdf" target="_blank" rel="noopener noreferrer">CATAN 官方完整规则 / Official Rulebook ↗</a>
+    </div>
+    <button class="primary wide" id="helpAcknowledge">已阅读 / Got it</button>
+  </dialog>
+  <dialog id="leaveDialog"><div class="dialog-heading"><h2>离开岛屿？<small>Leave the island?</small></h2><button class="icon-button" data-close="leaveDialog" aria-label="关闭 / Close">×</button></div><p>正在进行的对局会由机器人接手。<small>A bot will take over your seat in the current game.</small></p><button id="confirmLeave" class="primary wide">离开房间 / Leave Room</button></dialog>
+  <dialog id="sailingDialog" aria-labelledby="sailingTitle"><div class="dialog-heading"><h2 id="sailingTitle"></h2><button class="icon-button" data-close="sailingDialog" aria-label="关闭 / Close">×</button></div><div id="sailingContent" class="rules-content"></div><button class="primary wide" id="sailingAcknowledge">已阅读 / Got it</button></dialog>
+  <script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-ui.js"></script><script src="catan-maps.js"></script><script src="catan-board.js"></script><script src="catan.js"></script>
+</body>
+</html>

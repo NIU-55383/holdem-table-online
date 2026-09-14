@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>棋局 / Board Game Club</title>
+  <link rel="stylesheet" href="duel.css"><link rel="stylesheet" href="game-ui.css">
+</head>
+<body>
+  <header class="duel-header"><a class="icon-button" href="index.html" title="返回桌游小馆 / Back to club" aria-label="返回桌游小馆 / Back to club"><i data-lucide="arrow-left"></i></a><div class="game-title"><strong id="gameTitle">五子棋</strong><small id="gameEnglish">Gomoku</small></div><span id="connection" role="status">连接中 / Connecting</span><button id="rulesBtn" class="icon-button" title="规则 / Rules" aria-label="规则 / Rules"><i data-lucide="circle-help"></i></button></header>
+  <main class="duel-layout">
+    <section class="board-workspace">
+      <div id="opponent" class="player-strip"></div>
+      <div id="board" class="board-host"></div>
+      <div id="you" class="player-strip"></div>
+      <div id="status" class="turn-status" role="status"></div>
+      <div id="gameActions" class="game-actions" hidden>
+        <button id="undoBtn" title="悔棋 / Undo"><i data-lucide="undo-2"></i><span>悔棋<small>Undo</small></span></button>
+        <button id="drawBtn" title="求和 / Offer draw"><i data-lucide="handshake"></i><span>求和<small>Draw</small></span></button>
+        <button id="flipBtn" title="翻转棋盘 / Flip board"><i data-lucide="flip-horizontal-2"></i><span>翻转<small>Flip</small></span></button>
+        <button id="resignBtn" title="认输 / Resign"><i data-lucide="flag"></i><span>认输<small>Resign</small></span></button>
+        <button id="rematchBtn" class="primary" hidden><i data-lucide="rotate-cw"></i><span>换边再来<small>Rematch</small></span></button>
+      </div>
+      <label id="numberOption" class="number-option"><input id="numbers" type="checkbox">显示手数 / Move numbers</label>
+    </section>
+    <aside class="duel-sidebar">
+      <section id="setup" class="setup-section">
+        <h1>开始一局 <small>Start a game</small></h1>
+        <div class="identity"><div id="avatarPicker"></div><label>名字 / Name<input id="playerName" maxlength="18" autocomplete="nickname" value=""></label></div>
+        <fieldset><legend>对手 / Opponent</legend><div class="segmented"><label><input type="radio" name="mode" value="ai" checked><span><i data-lucide="bot"></i>机器人 / AI</span></label><label><input type="radio" name="mode" value="friend"><span><i data-lucide="users"></i>好友 / Friend</span></label></div></fieldset>
+        <label id="difficultyRow" class="field-label">AI 难度 / Difficulty<select id="difficulty"><option value="easy">入门 / Easy</option><option value="normal" selected>标准 / Standard</option><option value="hard">进阶 / Advanced</option></select></label>
+        <fieldset><legend>你的执子 / Your side</legend><div id="sideOptions" class="segmented"></div></fieldset>
+        <button id="createBtn" class="primary wide"><i data-lucide="play"></i><span id="createLabel">开始对战 / Play</span></button>
+        <form id="joinForm" class="join-form"><label>加入好友房间 / Join a room<input id="roomInput" placeholder="房间号 / Room code" maxlength="6" autocomplete="off" autocapitalize="characters"></label><button type="submit" title="加入 / Join" aria-label="加入 / Join"><i data-lucide="log-in"></i></button></form>
+      </section>
+      <section id="roomPanel" hidden>
+        <div class="room-heading"><div><small>房间 / Room</small><strong id="roomCode"></strong></div><button id="copyBtn" class="icon-button" title="复制邀请链接 / Copy invite" aria-label="复制邀请链接 / Copy invite"><i data-lucide="copy"></i></button><button id="leaveBtn" class="icon-button" title="离开 / Leave" aria-label="离开 / Leave"><i data-lucide="log-out"></i></button></div>
+        <div id="lobby" class="lobby"><div id="lobbySeats"></div><div class="lobby-actions"><button id="swapBtn"><i data-lucide="arrow-left-right"></i>换边 / Swap</button><button id="readyBtn">准备 / Ready</button><button id="startBtn" class="primary">开局 / Start</button></div></div>
+        <div id="requestPanel" class="request-panel" hidden></div>
+        <details class="chat-section" open><summary>聊天 <small>Chat</small></summary><div id="messages" class="messages" aria-live="polite"></div><form id="chatForm"><input id="chatText" maxlength="160" aria-label="消息 / Message" placeholder="消息 / Message" autocomplete="off"><button type="submit" aria-label="发送 / Send" title="发送 / Send"><i data-lucide="send"></i></button></form></details>
+        <details class="history-section"><summary>棋谱 <small>Move log</small><span id="moveCount">0</span></summary><ol id="moveLog"></ol></details>
+      </section>
+      <div id="error" class="error" role="alert"></div>
+    </aside>
+  </main>
+  <dialog id="rulesDialog"><div class="dialog-heading"><h2>规则 <small>Rules</small></h2><button class="icon-button" data-close="rulesDialog" aria-label="关闭 / Close"><i data-lucide="x"></i></button></div><div id="rulesContent"></div></dialog>
+  <dialog id="confirmDialog"><h2 id="confirmTitle"></h2><div class="dialog-actions"><button data-close="confirmDialog">取消 / Cancel</button><button id="confirmYes" class="primary">确认 / Confirm</button></div></dialog>
+  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-ui.js"></script><script src="duel-board.js"></script><script src="duel.js"></script>
+</body>
+</html>

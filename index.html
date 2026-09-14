@@ -3,24 +3,29 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>德州牌桌 / Hold'em Table</title>
+  <title>桌游小馆 / Board Game Club</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="club.css">
+  <link rel="stylesheet" href="game-ui.css">
 </head>
 <body>
   <div class="app-shell">
     <header class="app-header">
       <button id="brandButton" class="brand-button" type="button" aria-label="返回主页">
-        <span class="brand-mark">A♠</span>
+        <span class="brand-mark">▦</span>
         <span>
           <strong data-i18n="appName">德州牌桌</strong>
-          <small>Hold'em Table</small>
+          <small>Board Game Club</small>
         </span>
       </button>
 
       <nav class="view-tabs" aria-label="功能导航">
         <button type="button" data-view-target="home" class="active" data-i18n="home">主页</button>
-        <button type="button" data-view-target="calculator" data-i18n="calculator">概率计算</button>
-        <button type="button" data-view-target="online">开始游戏 / Start Game</button>
+        <button type="button" data-view-target="online">德扑 / Hold'em</button>
+        <a href="catan.html">卡坦岛 / CATAN</a>
+        <a href="duel.html?game=gomoku">五子棋 / Gomoku</a>
+        <a href="duel.html?game=xiangqi">象棋 / Xiangqi</a>
+        <a href="richman.html">大富翁 / Richman</a>
       </nav>
 
       <div class="language-toggle" role="group" aria-label="Language">
@@ -30,39 +35,26 @@
     </header>
 
     <main>
+      <nav id="pokerSectionNav" class="poker-section-nav" aria-label="德扑功能 / Poker tools" hidden>
+        <strong>德州扑克 <small>Texas Hold'em</small></strong>
+        <div>
+          <button type="button" data-open-view="online">开始游戏 / Play</button>
+          <button type="button" data-open-view="calculator">概率计算 / Poker Odds</button>
+        </div>
+      </nav>
       <section id="homeView" class="view home-view active">
-        <div class="home-heading">
-          <p class="eyebrow">TEXAS HOLD'EM</p>
-          <h1>选择一个模式 <span class="en-inline">/ Choose a mode</span></h1>
-          <p>练习决策，或直接坐上牌桌。<span class="en-line">Study a decision or take a seat at the table.</span></p>
-        </div>
-
-        <div class="mode-grid">
-          <button class="mode-card calculator-card" type="button" data-open-view="calculator">
-            <span class="mode-icon">%</span>
-            <span class="mode-copy">
-              <strong>概率计算 <span>/ Odds Calculator</span></strong>
-              <small>选择手牌和公共牌，查看牌型分布、胜率与底池赔率。<span class="en-line">Choose hole and community cards to see hand distribution, equity, and pot odds.</span></small>
-            </span>
-            <span class="mode-arrow" aria-hidden="true">→</span>
+        <div class="club-heading"><div><p class="eyebrow">GOOD COMPANY. GREAT GAMES.</p><h1>桌游小馆 <span>Board Game Club</span></h1></div><span class="club-open"><i></i> 随时开桌 / Ready to play</span></div>
+        <div class="club-games">
+          <button class="club-game poker-game" type="button" data-open-view="online">
+            <div class="club-game-art poker-art" aria-hidden="true"><div class="mini-table"><span class="mini-chip chip-one">25</span><span class="mini-chip chip-two">50</span><div class="mini-card card-a"><b>A</b><span>♠</span></div><div class="mini-card card-k"><b>K</b><span>♥</span></div><div class="mini-chip chip-three">100</div><div class="mini-board"><span>10♣</span><span>J♦</span><span>Q♠</span></div></div></div>
+            <div class="club-game-info"><span class="game-index">01 / CARDS</span><h2>德州扑克 <small>Texas Hold'em</small></h2><div class="game-meta"><span>2–8 人 / Players</span><span>真人 + 机器人 / Friends + Bots</span></div><span class="club-play">开桌 / Play <b>→</b></span></div>
           </button>
-
-          <button class="mode-card online-card" type="button" data-open-view="online">
-            <span class="mode-icon">◎</span>
-            <span class="mode-copy">
-              <strong>开始游戏 <span>/ Start Game</span></strong>
-              <small>邀请真人，或用机器人填满座位开始单人游戏。<span class="en-line">Invite friends, or fill the table with bots for a solo game.</span></small>
-            </span>
-            <span class="mode-arrow" aria-hidden="true">→</span>
-          </button>
+          <a class="club-game catan-game" href="catan.html"><div class="club-game-art catan-art" id="clubIsland" aria-hidden="true"></div><div class="club-game-info"><span class="game-index">02 / STRATEGY</span><h2>卡坦岛 <small>CATAN</small></h2><div class="game-meta"><span>3–4 人 / Players</span><span>基础版 + 航海家 / Base + Seafarers</span></div><span class="club-play">登岛 / Play <b>→</b></span></div></a>
+          <a class="club-game gomoku-game" href="duel.html?game=gomoku"><div class="club-game-art gomoku-art" aria-hidden="true"><img src="duel-art.svg#gomoku" alt=""></div><div class="club-game-info"><span class="game-index">03 / FIVE IN A ROW</span><h2>五子棋 <small>Gomoku</small></h2><div class="game-meta"><span>2 人 / Players</span><span>三级 AI + 好友联机 / AI + Online</span></div><span class="club-play">落子 / Play <b>→</b></span></div></a>
+          <a class="club-game xiangqi-game" href="duel.html?game=xiangqi"><div class="club-game-art xiangqi-art" aria-hidden="true"><img src="duel-art.svg#xiangqi" alt=""></div><div class="club-game-info"><span class="game-index">04 / CHINESE CHESS</span><h2>中国象棋 <small>Xiangqi</small></h2><div class="game-meta"><span>2 人 / Players</span><span>三级 AI + 好友联机 / AI + Online</span></div><span class="club-play">对弈 / Play <b>→</b></span></div></a>
+          <a class="club-game richman-game" href="richman.html"><div class="club-game-art richman-art" aria-hidden="true"><img src="richman-art.svg" alt=""></div><div class="club-game-info"><span class="game-index">05 / SUNNY BAY</span><h2>大富翁 <small>Richman</small></h2><div class="game-meta"><span>2–6 人 / Players</span><span>神明 · 卡片 · 股票 · 彩票 / Deities &amp; Strategy</span></div><span class="club-play">出发 / Play <b>→</b></span></div></a>
         </div>
-
-        <div class="home-strip">
-          <span>2-8 <small>玩家 / Players</small></span>
-          <span>1 / 2 <small>盲注 / Blinds</small></span>
-          <span>100 / 150 / 200 <small>起始筹码 / Starting Stack</small></span>
-          <span>中 / EN <small>语言 / Language</small></span>
-        </div>
+        <div class="club-footer"><span>好友、机器人，一起入座。<small>Friends and bots, at the same table.</small></span></div>
       </section>
 
       <section id="calculatorView" class="view calculator-view">
@@ -303,10 +295,10 @@
           </div>
 
           <div class="setup-controls online-controls">
-            <label class="online-field">
+            <div class="player-profile-fields"><label class="online-field">
               <span>你的名字 / Your Name</span>
               <input id="onlineNameInput" type="text" maxlength="18" autocomplete="nickname" placeholder="Player">
-            </label>
+            </label><div id="pokerAvatarPicker"></div></div>
             <div class="online-create-options">
               <div class="setup-option">
                 <span>房间人数 / Seats</span>
@@ -466,6 +458,12 @@
             </div>
           </div>
           <div class="table-tools-row">
+            <div class="replay-view-toggle" role="group" aria-label="回放视角 / Replay Perspective">
+              <button class="active" type="button" data-replay-view="player">玩家视角 / Player View</button>
+              <button type="button" data-replay-view="god">上帝视角 / Omniscient</button>
+            </div>
+            <button id="onlineReplayVideoBtn" class="secondary-button replay-video-button" type="button" disabled>生成本局回放视频 / Export Hand Video</button>
+            <a id="onlineReplayDownloadLink" class="secondary-button replay-video-button replay-download-link" href="#" download hidden>点击下载回放视频 / Download Video</a>
             <button class="secondary-button hand-rank-open" type="button">牌型大小 / Hand Rankings</button>
           </div>
         </div>
@@ -493,7 +491,12 @@
     </div>
   </div>
 
+  <script src="avatar-data.js"></script>
+  <script src="social-data.js"></script>
+  <script src="game-ui.js"></script>
   <script src="app.js"></script>
   <script src="online.js"></script>
+  <script src="catan-board.js"></script>
+  <script src="club.js"></script>
 </body>
 </html>

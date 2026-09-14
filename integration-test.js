@@ -2,7 +2,7 @@ const { spawn } = require("child_process");
 const path = require("path");
 
 const node = process.execPath;
-const port = 8012;
+const port = Number(process.env.TEST_PORT) || 18765;
 const server = spawn(node, [path.join(__dirname, "server.js")], {
   cwd: __dirname,
   env: { ...process.env, PORT: String(port) },
@@ -138,6 +138,7 @@ async function waitForRoom(client, predicate, after = 0, label = "room condition
     assert(aliceGame.room.players[1].hand.length === 0, "Alice can see Bob's private hand");
     assert(bobGame.room.players[1].hand.length === 2, "Bob cannot see his hand");
     assert(bobGame.room.players[0].hand.length === 0, "Bob can see Alice's private hand");
+    assert(aliceGame.room.replayHands.length === 0, "God-view hands leaked during active play");
     assert(aliceGame.room.pot === 3, "Blinds were not posted correctly");
     assert(aliceGame.room.practice, "Practice analysis was not returned");
     assert(aliceGame.room.practice.distribution.length === 10, "Practice hand distribution is incomplete");
@@ -176,6 +177,10 @@ async function waitForRoom(client, predicate, after = 0, label = "room condition
     assert(acted.room.status === "handComplete", "Hand did not reach completion");
     assert(acted.room.board.length === 5, "Board did not run out to five cards");
     assert(acted.room.players.every((player) => player.hand.length === 2), "Showdown cards were not revealed");
+    assert(
+      acted.room.replayHands.length === 2 && acted.room.replayHands.every((hand) => hand.length === 2),
+      "God-view replay hands were not released after hand completion"
+    );
     assert(
       acted.room.players.reduce((total, player) => total + player.chips, 0) === 400,
       "Chips were not conserved after settlement"

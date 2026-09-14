@@ -1,0 +1,9 @@
+server.out.log
+server.err.log
+node_modules/
+.pnpm-store/
+release/
+test-results/
+*.zip
+*.cmd
+*.bat

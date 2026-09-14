@@ -4,6 +4,11 @@ const path = require("path");
 const crypto = require("crypto");
 const os = require("os");
 const { execFile } = require("child_process");
+const { attachCatan } = require("./catan-server");
+const { attachDuel } = require("./duel-server");
+const { attachRichman } = require("./richman-server");
+const AvatarData = require("./avatar-data");
+const Social = require("./game-social");
 
 const PORT = Number(process.env.PORT) || 8002;
 const ROOT = __dirname;
@@ -216,6 +221,7 @@ function addBot(room) {
     clientId: `bot-${room.code}-${room.botSerial}`,
     name,
     isBot: true,
+    avatar: AvatarData.randomBot(),
     chips: room.startingStack,
     hand: [],
     bet: 0,
@@ -268,12 +274,13 @@ function removeBot(room) {
   room.players.splice(index, 1);
 }
 
-function addPlayer(room, client, name) {
+function addPlayer(room, client, name, avatar) {
   const existing = room.players.find((player) => player.clientId === client.clientId);
   if (existing) {
     existing.connected = true;
     existing.socket = client;
     existing.name = cleanName(name) || existing.name;
+    if (avatar !== undefined) existing.avatar = avatar;
     if (client.clientId === room.originalHostId) room.hostId = client.clientId;
     return existing;
   }
@@ -284,6 +291,7 @@ function addPlayer(room, client, name) {
   const player = {
     clientId: client.clientId,
     name: normalized,
+    avatar: avatar === undefined ? client.avatar || null : avatar,
     chips: room.startingStack,
     hand: [],
     bet: 0,
@@ -1145,9 +1153,14 @@ function publicState(room, clientId) {
       canManage: canManageRoom(room, clientId),
       practice: practiceAnalysis(room, viewerIndex),
       viewerIndex,
+      replayHands: room.status === "handComplete"
+        ? room.players.map((player) => player.hand)
+        : [],
       players: room.players.map((player, index) => ({
+        socialId: Social.publicId(player),
         clientId: player.clientId,
         name: player.name,
+        avatar: player.avatar || null,
         chips: player.chips,
         bet: player.bet,
         totalBet: player.totalBet,
@@ -1205,8 +1218,10 @@ function leaveClient(client) {
 
 function handleMessage(client, message) {
   const data = JSON.parse(message);
+  const avatar = ["hello", "create", "join", "profile"].includes(data.type) && Object.hasOwn(data, "avatar") ? AvatarData.normalize(data.avatar) : undefined;
   if (data.type === "hello") {
     client.clientId = String(data.clientId || crypto.randomUUID()).slice(0, 64);
+    client.avatar = avatar || null;
     return;
   }
   if (!client.clientId) throw new Error("连接尚未初始化 / Connection not initialized");
@@ -1214,7 +1229,7 @@ function handleMessage(client, message) {
   if (data.type === "create") {
     leaveClient(client);
     const room = makeRoom(client, data);
-    addPlayer(room, client, data.name);
+    addPlayer(room, client, data.name, avatar);
     client.roomCode = room.code;
     send(client, publicState(room, client.clientId));
     return;
@@ -1224,7 +1239,7 @@ function handleMessage(client, message) {
     const code = String(data.code || "").trim().toUpperCase();
     const room = rooms.get(code);
     if (!room) throw new Error("找不到房间 / Room not found");
-    addPlayer(room, client, data.name);
+    addPlayer(room, client, data.name, avatar);
     client.roomCode = room.code;
     broadcast(room);
     return;
@@ -1233,7 +1248,17 @@ function handleMessage(client, message) {
   const room = rooms.get(client.roomCode);
   if (!room) throw new Error("你还没有加入房间 / Join a room first");
   const playerIndex = room.players.findIndex((player) => player.clientId === client.clientId);
+  if (data.type === "profile") {
+    if (playerIndex < 0 || avatar === undefined) throw new Error("请选择头像 / Choose an avatar");
+    room.players[playerIndex].avatar = avatar; client.avatar = avatar; broadcast(room); return;
+  }
   if (playerIndex < 0) throw new Error("座位不存在 / Seat not found");
+
+  if (data.type === "reaction") {
+    if (room.players[playerIndex].socket !== client) throw new Error("连接已失效 / Connection replaced");
+    const event = Social.reaction(room, room.players, room.players[playerIndex], data);
+    room.players.forEach((p) => { if (p.connected && p.socket) send(p.socket, event); }); return;
+  }
 
   if (data.type === "start") {
     if (!canManageRoom(room, client.clientId)) throw new Error("只有房主可以开局 / Host only");
@@ -1341,6 +1366,7 @@ function parseFrames(client, chunk) {
       offset = 10;
     }
     const maskLength = masked ? 4 : 0;
+    if (length > 32768) { client.socket.destroy(); return; }
     if (client.buffer.length < offset + maskLength + length) return;
     const mask = masked ? client.buffer.subarray(offset, offset + 4) : null;
     offset += maskLength;
@@ -1378,6 +1404,14 @@ const mimeTypes = {
 
 const server = http.createServer((request, response) => {
   const pathname = decodeURIComponent(new URL(request.url, `http://${request.headers.host}`).pathname);
+  if (pathname === "/api/catan-preview") {
+    const params = new URL(request.url, `http://${request.headers.host}`).searchParams;
+    const mapId = (params.get("map") || "base") + (params.get("layout") === "random" && params.get("map") !== "base" ? ":random" : "");
+    if (!catan.previews.has(mapId)) { response.writeHead(404); response.end("Unknown map"); return; }
+    response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=300" });
+    response.end(JSON.stringify(catan.previews.get(mapId)));
+    return;
+  }
   if (pathname === "/health") {
     response.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
@@ -1427,7 +1461,17 @@ const server = http.createServer((request, response) => {
   fs.createReadStream(filePath).pipe(response);
 });
 
-server.on("upgrade", (request, socket) => {
+const catan = attachCatan(server);
+const duel = attachDuel(server);
+const richman = attachRichman(server);
+
+server.on("upgrade", (request, socket, head) => {
+  if (request.url === "/richman-ws") { richman.upgrade(request, socket, head); return; }
+  if (request.url === "/duel-ws") { duel.upgrade(request, socket, head); return; }
+  if (request.url === "/catan-ws") {
+    catan.upgrade(request, socket, head);
+    return;
+  }
   if (request.url !== "/ws") {
     socket.destroy();
     return;

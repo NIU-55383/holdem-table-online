@@ -1,0 +1,51 @@
+.presence-anchor {position: relative;}
+.player-chat, .chat-bubble {width: max-content; box-sizing: border-box; max-height: 65px; overflow-y: auto; overflow-wrap: anywhere; scrollbar-width: thin;}
+[data-social-target] {cursor: pointer; touch-action: manipulation;}
+[data-social-target]:focus-visible {outline: 3px solid #e8bd52; outline-offset: 3px;}
+.reaction-menu {position: fixed; z-index: 10000; box-sizing: border-box; width: 268px; max-width: calc(100vw - 16px); padding: 10px; border: 1px solid #a7c5bd; border-radius: 8px; background: #f3faf5; color: #244e5f; box-shadow: 0 8px 28px #163b5040;}
+.reaction-heading {display: flex; align-items: center; justify-content: space-between; gap: 8px;}
+.reaction-heading strong {font-size: 14px; overflow-wrap: anywhere;}
+.reaction-menu button {margin: 0; min-width: 0; min-height: 44px; padding: 4px; border: 1px solid transparent; border-radius: 5px; color: inherit; background: transparent; cursor: pointer;}
+.reaction-menu button:hover, .reaction-menu button:focus-visible {background: #dfefe7; border-color: #8fb4a4;}
+.reaction-heading button {flex: 0 0 44px; font-size: 24px;}
+.reaction-options {display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px;}
+.reaction-options button {display: grid; justify-items: center; align-content: center; gap: 4px; min-height: 68px;}
+.reaction-options span {font: 28px/1.2 "Apple Color Emoji", "Segoe UI Emoji", sans-serif;}
+.reaction-options small {font: 10px/1.3 sans-serif; overflow-wrap: anywhere;}
+.avatar-reaction {position: fixed; z-index: 9999; pointer-events: none; display: grid; justify-items: center; gap: 2px; max-width: 150px; text-align: center;}
+.avatar-reaction > span {font: 36px/1.2 "Apple Color Emoji", "Segoe UI Emoji", sans-serif; filter: drop-shadow(0 2px 2px #173e5044);}
+.avatar-reaction small {padding: 3px 6px; border-radius: 4px; background: #f4fff4ed; color: #244e5f; font: 10px/1.2 sans-serif; overflow-wrap: anywhere;}
+.presence-dot {position: absolute; left: -2px; bottom: -2px; z-index: 2; display: block; width: var(--presence-size, 9px); height: var(--presence-size, 9px); border: 1px solid #edf5ee; border-radius: 50%; background: #92999d; font-style: normal;}
+.presence-dot[data-connected="true"] {background: #24976b;}
+.presence-dot[data-connected="false"] {background: #92999d;}
+.game-avatar {position: relative; display: inline-grid; place-items: center; flex-shrink: 0; padding: 0; border-radius: 50%; background: var(--player, #deece5); color: #284651; line-height: 1;}
+.avatar-face {position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; border-radius: inherit;}
+.avatar-face > svg, .avatar-face > img {display: block; width: 100%; height: 100%;}
+.avatar-face > img {position: absolute; inset: 0; object-fit: cover;}
+.avatar-initial {font-size: var(--avatar-text, 20px); font-weight: 800;}
+.avatar-emoji {font: var(--avatar-emoji, 26px)/1 "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;}
+.seat-avatar {--avatar-text: 12px; --avatar-emoji: 16px;}
+.lobby-player > .seat-avatar {width: 30px; height: 30px; --avatar-text: 17px; --avatar-emoji: 23px;}
+[data-edit-avatar] {cursor: pointer;}
+[data-edit-avatar]:focus-visible {outline: 3px solid #e8bd52; outline-offset: 3px;}
+.player-profile-fields {display: grid; grid-template-columns: minmax(0, 1fr) 64px; gap: 10px; align-items: end;}
+.avatar-picker-trigger {display: flex; width: 64px; min-height: 64px; padding: 0; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: transparent; color: inherit; border: 0; cursor: pointer;}
+.avatar-picker-trigger small {font-size: 9px; line-height: 1.2; white-space: nowrap;}
+.avatar-preview {width: 42px; height: 42px; border: 2px solid #adc3b5; --avatar-text: 24px; --avatar-emoji: 30px;}
+.avatar-dialog {width: 370px; max-width: calc(100vw - 24px); max-height: calc(100svh - 24px); overflow: auto; padding: 18px; border: 1px solid #abc6c5; border-radius: 8px; background: #edf6f1; color: #244e5f; box-shadow: 0 16px 50px #123d5055;}
+.avatar-dialog::backdrop {background: #102b41aa;}
+.avatar-dialog-heading {display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;}
+.avatar-dialog h2 {margin: 0; font-size: 20px; line-height: 1.3;}
+.avatar-dialog h2 small {display: block; margin-top: 3px; font-size: 12px; font-weight: 500;}
+.avatar-dialog button {min-height: 44px; padding: 7px 9px; border: 1px solid #aecac5; border-radius: 5px; font-size: 12px; line-height: 1.3; font-weight: 600; color: #244e5f; background: #fffdf4; cursor: pointer;}
+.avatar-dialog-heading button {width: 44px; padding: 0; font-size: 24px;}
+.avatar-editor-preview {display: grid; margin: 16px auto; width: 76px; height: 76px; border: 2px solid #94b5a8; --avatar-text: 42px; --avatar-emoji: 55px;}
+.avatar-photo-actions, .avatar-dialog-actions {display: grid; grid-template-columns: 1fr 1fr; gap: 8px;}
+.avatar-emoji-label {display: grid; gap: 4px; margin: 12px 0 8px; font-size: 12px; font-weight: 600;}
+.avatar-emoji-label input {width: 100%; min-height: 44px; padding: 8px; border: 1px solid #abc6c5; border-radius: 5px; background: #fff; color: #254b5d; font-size: 18px;}
+.avatar-dialog [data-avatar-initial] {width: 100%;}
+.avatar-error {min-height: 16px; margin: 8px 0; color: #a3413d; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere;}
+.avatar-dialog #avatarSave {background: #216d54; color: #fff; border-color: #216d54;}
+.avatar-dialog button:disabled {opacity: .45; cursor: default;}
+@media (max-width: 740px) {.turn-avatar {--avatar-text: 15px; --avatar-emoji: 19px;}}
+@media (max-width: 520px) {.seat-avatar {--avatar-text: 9px; --avatar-emoji: 12px;}.lobby-player > .seat-avatar {--avatar-text: 17px; --avatar-emoji: 22px;}}

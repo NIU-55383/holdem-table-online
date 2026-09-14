@@ -2,13 +2,17 @@
   "name": "holdem-table-online",
   "version": "1.0.0",
   "private": true,
-  "description": "Bilingual Texas Hold'em calculator, solo game, and multiplayer room server.",
+  "description": "Bilingual board game club with Texas Hold'em and Catan multiplayer rooms.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node integration-test.js"
+    "test": "node integration-test.js && node --test catan-test.js avatar-test.js social-test.js seafarers-test.js seafarers-expansion-test.js duel-test.js richman-test.js"
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "honeycomb-grid": "4.1.5",
+    "ws": "8.21.3"
   }
 }

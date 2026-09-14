@@ -1,6 +1,6 @@
 const translations = {
   zh: {
-    appName: "德州牌桌",
+    appName: "桌游小馆",
     home: "主页",
     calculator: "概率计算",
     soloGame: "单机对局",
@@ -84,7 +84,7 @@ const translations = {
     highCard: "高牌",
   },
   en: {
-    appName: "Hold'em Table",
+    appName: "Board Game Club",
     home: "Home",
     calculator: "Odds Calculator",
     soloGame: "Solo Game",
@@ -316,11 +316,19 @@ let currentView = "home";
 
 function setView(view) {
   currentView = view;
+  const pokerView = ["online", "game", "calculator"].includes(view);
   Object.entries(viewElements).forEach(([key, element]) => {
     element.classList.toggle("active", key === view);
   });
   document.querySelectorAll("[data-view-target]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.viewTarget === view);
+    button.classList.toggle("active", button.dataset.viewTarget === (pokerView ? "online" : view));
+  });
+  document.querySelector("#pokerSectionNav").hidden = !pokerView;
+  document.querySelectorAll("#pokerSectionNav [data-open-view]").forEach((button) => {
+    const active = button.dataset.openView === (view === "game" ? "online" : view);
+    button.classList.toggle("active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
   });
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -778,6 +786,14 @@ const game = {
   timer: null,
 };
 
+let soloReactionTime = 0, nextSoloSocialId = 0;
+const soloSocial = window.BoardGameUI.mountInteractions(() => ({ code: "solo", players: game.players.map((p) => ({ ...p, name: playerDisplayName(p) })), you: game.players[0]?.socialId, connected: true }), (data) => {
+  const target = game.players.find((p) => p.socialId === data.target), sender = game.players[0];
+  if (!target || target === sender || Date.now() - soloReactionTime < window.GameSocialData.COOLDOWN) return false;
+  soloReactionTime = Date.now();
+  soloSocial.receive({ ...data, id: String(soloReactionTime), room: "solo", from: sender.socialId, to: target.socialId, fromName: playerDisplayName(sender), toName: playerDisplayName(target) }); return true;
+});
+
 function gameText(key) {
   const zh = translations.zh[key] || key;
   const en = translations.en[key] || key;
@@ -826,7 +842,9 @@ function startGame() {
       : 0.48 + Math.random() * 0.22
   )));
   game.players = [{
+    socialId: `solo-${++nextSoloSocialId}`,
     isHuman: true,
+    avatar: window.BoardGameUI.getAvatar(),
     profile: null,
     chips: selectedStartingStack,
     hand: [],
@@ -842,8 +860,10 @@ function startGame() {
 
   for (let i = 0; i < selectedPlayerCount - 1; i += 1) {
     game.players.push({
+      socialId: `solo-${++nextSoloSocialId}`,
       isHuman: false,
       name: names[i],
+      avatar: window.AvatarData.randomBot(),
       profile: { ...profiles[i] },
       style: botStyleLabel(profiles[i]),
       mastery: masteryLevels[i],
@@ -1634,8 +1654,8 @@ function seatPositions(count) {
     4: [[50, 92], [8, 66], [50, 8], [92, 66]],
     5: [[50, 92], [8, 74], [13, 28], [87, 28], [92, 74]],
     6: [[50, 92], [8, 76], [8, 30], [50, 8], [92, 30], [92, 76]],
-    7: [[50, 92], [8, 78], [8, 35], [31, 9], [69, 9], [92, 35], [92, 78]],
-    8: [[50, 92], [8, 79], [8, 39], [28, 10], [50, 7], [72, 10], [92, 39], [92, 79]],
+    7: [[50, 92], [8, 78], [8, 31], [31, 6], [69, 6], [92, 31], [92, 78]],
+    8: [[50, 92], [8, 79], [8, 31], [20, 6], [50, 6], [80, 6], [92, 31], [92, 79]],
   } : {
     2: [[50, 91], [50, 8]],
     3: [[50, 91], [12, 34], [88, 34]],
@@ -1647,6 +1667,17 @@ function seatPositions(count) {
   };
   return map[count];
 }
+
+window.addEventListener("resize", () => {
+  for (const id of ["playersLayer", "onlinePlayersLayer"]) {
+    const seats = document.querySelectorAll(`#${id} .player-seat`), positions = seatPositions(seats.length);
+    if (!positions) continue;
+    seats.forEach((seat, index) => {
+      seat.style.left = `${positions[index][0]}%`;
+      seat.style.top = `${positions[index][1]}%`;
+    });
+  }
+});
 
 function renderGame() {
   const playersLayer = document.querySelector("#playersLayer");
@@ -1686,6 +1717,7 @@ function renderGame() {
     return `
       <div class="${classes}" style="left:${left}%;top:${top}%;--deal-x:${dealX}px;--deal-y:${dealY}px;--fold-x:${foldX}px;--fold-y:${foldY}px">
         <div class="seat-head">
+          ${window.BoardGameUI.avatar({ name: playerDisplayName(player), avatar: player.avatar, socialId: player.socialId }, true, "seat-avatar", player.isHuman)}
           <span class="seat-name">${playerDisplayName(player)}</span>
         </div>
         <span class="seat-badges">${badges}</span>
@@ -1842,5 +1874,8 @@ document.addEventListener("keydown", (event) => {
 });
 
 applyLanguage();
+window.addEventListener("board-avatar-change", ({ detail }) => {
+  if (game.players[0]?.isHuman) { game.players[0].avatar = detail.avatar; renderGame(); }
+});
 renderCalculator();
 renderPotOdds();

@@ -90,13 +90,17 @@ Render 的构建命令仍用 `npm install`，启动命令用 `npm start`。不�
 
 ## 本次更新
 
+超时托管改为个人主动选择，默认关闭：覆盖 `room-control.js`、`game-ui.js`、`game-ui.css`、`catan-server.js`、`richman-server.js`、`richman.js`、`server.js`，同步 `room-control-test.js`、`room-control-ui-test.js`、`AGENTS.md`、`README.md` 与本清单。五游戏房间管理增加个人超时托管复选框和主动托管按钮；只有本人勾选后才启用 120 秒期限及最后 20 秒提醒，房主不能代开，替换者不继承。未开启托管时，断线或离开不再自动接管或弃牌。完整包仍为 72 个文件；此修改包含服务端逻辑，必须重新部署并重新开房，旧服务器只刷新页面不会生效。
+
+五游戏移除真人／机器人统一双重确认：覆盖 `game-ui.js`、`game-ui.css`、`catan.js`、`online.js`、`richman.js`、`catan-server.js`、`server.js` 和 `richman-server.js`，同步 `room-control-test.js`、`room-control-ui-test.js`、`AGENTS.md`、`README.md` 和本清单。开局后通过房间管理可移除机器人，仍保留资产、暂停等待补位；等待室原有移除机器人入口也有两步确认，任一步可取消，并防止旧确认误删替换者。此次没有加入未获授权的商业 BGM，原有本地音效与开关保持不变。完整包仍为 72 个文件，需要重新部署服务。
+
 卡坦岛交易提醒与音效：新增 `catan-audio.js`，覆盖 `catan.html`、`catan.css`、`catan.js`、`catan-engine.js`；同步 `catan-audio-test.js`、`catan-feedback-ui-test.js`、`package.json`、`README.md` 和本清单。新增面向接收者的醒目交易提示、16 种本地合成短音效，以及右上角带记忆的喇叭开关。没有语音或文字播报，不依赖外部音频服务器。动作声音需要新版服务器确认事件，因此要重新部署；请先结束旧对局再更新。
 
 此前卡坦岛规则与资源操作更新也已包含：规则全部改为手动打开，进房、切地图和重连不再弹出；丰收、垄断与金矿统一使用图标添加、已选卡牌移除，不再填写资源数量；银行库存默认展开。
 
 此前卡坦岛胜利目标标注：地图上沿右侧新增金色奖杯与双语目标分数，基础版及全部航海地图均适用，已包含在完整包中。
 
-五个游戏都支持双方确认转让房主、按号位顺时针自动接任、开局后移除玩家并暂停、真人或机器人补位，以及 120 秒无操作前最后 20 秒的托管提醒。被移出者仍可重新输入房间号加入有空位的房间，不是永久封禁；全部空位补齐后沿用原棋局与资产继续。
+五个游戏都支持双方确认转让房主、按号位顺时针自动接任、开局后移除玩家并暂停、真人或机器人补位。120 秒超时托管默认关闭，仅本人主动选择后才计时并在最后 20 秒提醒。被移出者仍可重新输入房间号加入有空位的房间，不是永久封禁；全部空位补齐后沿用原棋局与资产继续。
 
 如果上一版 66 文件包已经完整上传，新增 `room-control.js`、`room-control-test.js`、`room-control-ui-test.js`；覆盖 `server.js`、`catan-server.js`、`duel-server.js`、`richman-server.js`、`game-ui.js`、`game-ui.css`、`game-social.js`、`catan.js`、`online.js`、`duel.js`、`richman.js`、`catan.html`、`index.html`、`seafarers-ui-test.js`、`package.json`、`AGENTS.md`、`README.md` 和本清单。保留 `vendor/lucide.min.js`。需要重新部署服务器；更新会清空旧房间，请先结束正在玩的对局。不确定之前上传到了哪版时直接使用完整包覆盖。
 

@@ -27,7 +27,7 @@ function createRoomControl(options) {
     const actors = !paused(room) && options.active(room) ? options.actors(room) : [];
     const key = options.turnKey(room);
     for (const p of list) {
-      if (!human(p) || !connected(p) || p.auto || !actors.includes(list.indexOf(p))) { m.idle.delete(p); continue; }
+      if (!human(p) || !connected(p) || p.idleAuto !== true || p.auto || !actors.includes(list.indexOf(p))) { m.idle.delete(p); continue; }
       if (m.idle.get(p)?.key !== key) m.idle.set(p, { key, deadline: now + idleMs, warned: false });
     }
     for (const p of m.idle.keys()) if (!list.includes(p)) m.idle.delete(p);
@@ -36,7 +36,7 @@ function createRoomControl(options) {
   function snapshot(room, viewer) {
     const m = meta(room), idle = m.idle.get(viewer);
     return { code: room.code, you: Social.publicId(viewer), host: seats(room).find((p) => identity(p) === host(room)) ? Social.publicId(seats(room).find((p) => identity(p) === host(room))) : null,
-      started: options.started(room), paused: paused(room), auto: Boolean(viewer.auto), now: Date.now(),
+      started: options.started(room), paused: paused(room), auto: Boolean(viewer.auto), idleAuto: viewer.idleAuto === true, now: Date.now(),
       warning: idle ? { warnAt: idle.deadline - warningMs, deadline: idle.deadline } : null,
       pending: m.pending ? { id: m.pending.id, from: m.pending.from, to: m.pending.to, next: m.pending.next } : null,
       seats: seats(room).map((p, index) => p ? { id: Social.publicId(p), index, position: p.position ?? index, name: p.name, avatar: p.avatar || null, bot: Boolean(bot(p)), vacant: Boolean(p.vacant), connected: !p.vacant && Boolean(bot(p) || connected(p)) } : null) };
@@ -45,6 +45,7 @@ function createRoomControl(options) {
   function fill(room, index, replacement) {
     const old = seats(room)[index]; requireRule(old?.vacant, "空位已被占用 / Seat already filled");
     const next = options.replace ? options.replace(room, index, old, replacement) : { ...replacement, position: old.position };
+    next.idleAuto = replacement.idleAuto === true;
     seats(room)[index] = next;
     if (room.game?.players?.[index]) room.game.players[index].name = next.name;
     meta(room).idle.clear();
@@ -87,6 +88,14 @@ function createRoomControl(options) {
       const common = ["Emma", "Alex", "Laura", "Sarah", "Olivia", "James", "Daniel", "David", "Sophia", "Emily", "Michael", "Ryan", "Anna", "Chris"];
       const available = (crypto.randomInt(10) < 4 ? familiar : common).filter((n) => !list.some((p) => p?.name === n));
       fill(room, list.indexOf(target), { token: crypto.randomUUID(), name: available[crypto.randomInt(available.length)] || "Bot", avatar: Avatar.randomBot(), bot: true, auto: true, ready: true, ws: null });
+    } else if (data.action === "idleAuto") {
+      requireRule(typeof data.enabled === "boolean", "请选择开启或关闭 / Choose on or off");
+      sender.idleAuto = data.enabled;
+      if (!data.enabled && sender.auto) { options.stop(room); sender.auto = false; }
+      touch(room, sender);
+    } else if (data.action === "auto") {
+      requireRule(options.started(room) && typeof data.enabled === "boolean", "游戏开始后才可托管 / Start the game first");
+      options.stop(room); sender.auto = data.enabled; touch(room, sender);
     } else if (data.action === "stay") {
       requireRule(sender.auto || m.idle.has(sender), "当前无需取消托管 / No pending auto-play");
       if (sender.auto) options.stop(room);

@@ -97,7 +97,7 @@
       if(ruleTab==="gods")html+=`<div class="dialog-summary">神明通常附身 7 天，死神 13 天；遇到新神明替换旧神明。<small>Most deities stay 7 days; the Reaper stays 13. A new deity replaces the old one.</small></div><div class="rule-figures">${Object.entries(D.gods).map(([k,d])=>`<div class="rule-figure">${godArt(k)}<div><strong>${label(d.name,d.en)}</strong><p>${label(d.desc,d.detail)}</p></div></div>`).join("")}</div>`;
       if(ruleTab==="cards")html+=`<div class="dialog-summary">自己的掷骰前、土地决策或回合结束前可用卡；免费卡与免罪卡自动生效。<small>Use cards before rolling, at a property decision or before ending your turn. Waiver and Amnesty activate automatically.</small></div><div class="rule-figures">${Object.values(D.cards).map(c=>`<div class="rule-figure">${icon(c[2])}<div><strong>${label(c[0],c[1])}</strong><p>${label(c[5],c[6])}</p><small>${c[3]} 点券 / Points</small></div></div>`).join("")}</div>`;
       html+=`<p class="rules-source">规则参考 / References: <a href="https://km.softstar.com.tw/topic.aspx?mobile-app=true&theme=wiki&tid=456" target="_blank" rel="noopener">大宇《大富翁4Fun》介绍</a> · <a href="https://store.steampowered.com/app/2059810/4/?l=tchinese" target="_blank" rel="noopener">四代官方手册 / Richman 4 manual</a></p>`;
-    }else if(kind==="leave"){title=label("离开房间？","Leave room?");html=`<p>进行中的角色会由机器人托管；保留此浏览器记录后可用房间号重进。<small>Your player will use auto mode. Rejoin with the room code in this browser session.</small></p><div class="dialog-actions"><button data-cancel>取消 / Cancel</button><button data-leave-confirm class="danger">离开 / Leave</button></div>`;}
+    }else if(kind==="leave"){title=label("离开房间？","Leave room?");html=`<p>未开启托管时，轮到你会等待你回来。可以用房间号重进，房主也可移除后补位。<small>Without auto-play, your turn waits for your return. Rejoin with the room code, or the host can remove and replace your seat.</small></p><div class="dialog-actions"><button data-cancel>取消 / Cancel</button><button data-leave-confirm class="danger">离开 / Leave</button></div>`;}
     else if(kind==="god"){const d=D.gods[value];title=label(d.name,d.en);html=`<div class="card-focus">${godArt(value)}<p>${label(d.desc,d.detail)}</p></div><p>${d.days} 天 / days</p>`;}
     else if(!g){title=label("尚未开局","Game not started");html="<p>请先开始游戏 / Start a game first</p>";}
     else if(kind==="stocks"){
@@ -138,7 +138,12 @@
     else if(d.act){action({type:d.act,...(d.act==="roll"?{dice:Number($("#diceCount")?.value||1)}:{})},d.closeAfter!==undefined);}
     else if(d.roomStart!==undefined)send({type:"start"});
     else if(d.addBots!==undefined)send({type:"bots",fill:true});
-    else if(d.removeBot!==undefined)send({type:"bots",remove:Number(d.removeBot)});
+    else if(d.removeBot!==undefined) {
+      const c=state?.control,index=Number(d.removeBot),target=c?.seats[index];
+      if(target?.bot)UI.confirmRemoval({name:target.name,started:false,
+        valid:()=>{const now=state?.control;return now?.code===c.code&&!now.started&&now.host===now.you&&now.seats[index]?.bot&&now.seats[index].id===target.id;},
+        remove:()=>send({type:"bots",remove:index,target:target.id})});
+    }
     else if(d.ready!==undefined)send({type:"ready",ready:!state.seats[state.you].ready});
     else if(d.leaveConfirm!==undefined){send({type:"leave"});closeModal();}
     else if(d.cancel!==undefined)closeModal();

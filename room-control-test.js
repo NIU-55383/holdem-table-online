@@ -12,7 +12,12 @@ test("inactivity warns before auto, stay resets the deadline, and empty seats su
   let control;
   control = createRoomControl({rooms,active:()=>true,started:()=>true,turnKey:()=>"turn",actors:()=>[0],stop:()=>{},remove:()=>{},changed:r=>{control.sync(r);events.push(control.snapshot(r,a));}});
   try {
-    control.sync(room); const initial = control.snapshot(room,a).warning;
+    control.sync(room);
+    assert.equal(control.snapshot(room,a).idleAuto,false);
+    await sleep(700);
+    assert.equal(control.snapshot(room,a).warning,null);assert.ok(!a.auto,"Inactivity never enables auto by default");
+    control.handle(room,a,{type:"roomControl",action:"idleAuto",enabled:true});
+    const initial = control.snapshot(room,a).warning;
     await sleep(420);
     assert.ok(events.some((e)=>e.warning && e.now>=e.warning.warnAt)); assert.ok(!a.auto);
     control.handle(room,a,{type:"roomControl",action:"stay"});
@@ -23,9 +28,31 @@ test("inactivity warns before auto, stay resets the deadline, and empty seats su
     control.handle(room,a,{type:"roomControl",action:"fillBot",target:Social.publicId(room.seats[1])});
     await sleep(720); assert.equal(a.auto,true); assert.equal(control.snapshot(room,a).warning,null);
     control.handle(room,a,{type:"roomControl",action:"stay"}); assert.equal(a.auto,false);
+    control.handle(room,a,{type:"roomControl",action:"idleAuto",enabled:false});
+    assert.equal(control.snapshot(room,a).warning,null);
+    await sleep(700);assert.equal(a.auto,false);
+    control.handle(room,a,{type:"roomControl",action:"auto",enabled:true});assert.equal(a.auto,true);
+    control.handle(room,a,{type:"roomControl",action:"auto",enabled:false});assert.equal(a.auto,false);
   } finally {
     control.close(); previous.forEach((v,i)=>{const k=["ROOM_IDLE_MS","ROOM_WARNING_MS"][i];if(v===undefined)delete process.env[k];else process.env[k]=v;});
   }
+});
+
+test("idle opt-in belongs only to the sender and never follows a vacated seat", () => {
+  const a={token:"a",name:"A",ws:{readyState:1}},b={token:"b",name:"B",ws:{readyState:1}};
+  const room={code:"PREF",host:"a",seats:[a,b]},rooms=new Map([[room.code,room]]);
+  const control=createRoomControl({rooms,active:()=>true,started:()=>true,turnKey:()=>"turn",actors:()=>[0,1],stop:()=>{},remove:()=>{},changed:r=>control.sync(r)});
+  try {
+    control.handle(room,a,{type:"roomControl",action:"idleAuto",enabled:true,target:Social.publicId(b)});
+    assert.equal(control.snapshot(room,a).idleAuto,true);assert.equal(control.snapshot(room,b).idleAuto,false);
+    assert.equal(control.snapshot(room,b).warning,null);
+    assert.throws(()=>control.handle(room,b,{type:"roomControl",action:"idleAuto",enabled:"false"}),/on or off/);
+    control.handle(room,b,{type:"roomControl",action:"idleAuto",enabled:true});
+    control.handle(room,a,{type:"roomControl",action:"kick",target:Social.publicId(b)});
+    const next=control.fill(room,1,{token:"new",name:"New",ws:{readyState:1}});
+    control.sync(room);assert.equal(control.snapshot(room,next).idleAuto,false);assert.equal(control.snapshot(room,next).warning,null);
+    a.ws=null;control.sync(room);assert.equal(control.snapshot(room,a).warning,null,"No background deadline for disconnected humans");
+  } finally {control.close();}
 });
 
 test("election follows chosen seat order and all vacancies must be filled before resuming", () => {
@@ -71,11 +98,20 @@ test("all five games: consent, closest online human, kick/pause, human and bot r
       await join(b); if(c)await join(c);
       if(!duel)await a.request({type:kind==="richman"?"bots":"fillBots",fill:true});
       const latest=(p)=>p.state(p.messages.filter(m=>m.type==="state").at(-1));
+      if(!duel) {
+        const botSeat=latest(a).control.seats.findLast(s=>s?.bot);
+        const rejected=await a.request(kind==="richman"?{type:"bots",remove:botSeat.index,target:"stale-id"}:{type:"removeBot",target:"stale-id"},"error");
+        assert.match(rejected.message,/Seat changed/);
+      }
       const ownId=p=>latest(p).control.you;
       const hostChange=async(sender,target)=>{
-        const offer=await sender.request({type:"roomControl",action:"transfer",target:ownId(target)});
+        const cursor=sender.messages.length;
+        sender.send({type:"roomControl",action:"transfer",target:ownId(target)});
+        const offer=sender.state(await sender.next(m=>m.type==="state"&&sender.state(m).control.pending?.next===ownId(target),cursor));
         assert.notEqual(offer.control.host,ownId(target),"Transfer waits for consent");
-        const done=await target.request({type:"roomControl",action:"respond",id:offer.control.pending.id,accept:true});
+        const replyCursor=target.messages.length;
+        target.send({type:"roomControl",action:"respond",id:offer.control.pending.id,accept:true});
+        const done=target.state(await target.next(m=>m.type==="state"&&target.state(m).control.host===ownId(target)&&!target.state(m).control.pending,replyCursor));
         assert.equal(done.control.host,ownId(target));return done;
       };
       const invalid=await b.request({type:"roomControl",action:"transfer",target:ownId(a)},"error"); assert.match(invalid.message,/Host only/);
@@ -124,8 +160,19 @@ test("all five games: consent, closest online human, kick/pause, human and bot r
       if(kind==="poker")assert.deepEqual(replaced.players.map(p=>[p.chips,p.bet,p.totalBet]),kicked.players.map(p=>[p.chips,p.bet,p.totalBet]));
       else assert.equal(replaced.game.revision,kicked.game.revision);
       const emptyAgain=await a.request({type:"roomControl",action:"kick",target:replaced.control.you});
-      const filled=await a.request({type:"roomControl",action:"fillBot",target:emptyAgain.control.seats[guestIndex].id});
+      let filled=await a.request({type:"roomControl",action:"fillBot",target:emptyAgain.control.seats[guestIndex].id});
       assert.equal(filled.control.seats[guestIndex].bot,true);assert.equal(filled.control.paused,false);
+      const botId=filled.control.seats[guestIndex].id;
+      const botKicked=await a.request({type:"roomControl",action:"kick",target:botId});
+      assert.equal(botKicked.control.paused,true,"Removing a bot pauses every game");
+      assert.equal(botKicked.control.seats[guestIndex].vacant,true);
+      const assets=s=>kind==="poker"?JSON.stringify([s.pot,s.actor,s.players.map(p=>[p.chips,p.bet,p.totalBet])]):JSON.stringify(s.game);
+      await sleep(650);const botFrozen=await a.request({type:"chat",text:"Bot seat stays empty"});
+      assert.equal(assets(botFrozen),assets(botKicked),"Removing a bot cancels AI and retains assets");
+      assert.match((await a.request({type:"roomControl",action:"kick",target:botId},"error")).message,/other player/);
+      filled=await a.request({type:"roomControl",action:"fillBot",target:botKicked.control.seats[guestIndex].id});
+      assert.equal(filled.control.paused,false);assert.notEqual(filled.control.seats[guestIndex].id,botId);
+      assert.match((await a.request({type:"roomControl",action:"kick",target:botId},"error")).message,/other player/,"Old confirmation cannot remove the replacement bot");
       const aiBefore=duel?filled.game.revision:null;
       if(duel) {
         const move=kind==="gomoku"?{to:112}:{from:54,to:45};
@@ -138,7 +185,7 @@ test("all five games: consent, closest online human, kick/pause, human and bot r
   } finally { sockets.forEach(ws=>ws.terminate());server.kill();await once(server,"exit"); }
 });
 
-test("all five games: required actor is warned and auto-play really advances the game", {timeout:30000}, async () => {
+test("all five games: default waits, opted-in actor is warned and auto-play advances", {timeout:40000}, async () => {
   const port=18944, server=spawn(process.execPath,[require.resolve("./server")],{windowsHide:true,env:{...process.env,PORT:String(port),AUTO_OPEN:"0",ROOM_IDLE_MS:"700",ROOM_WARNING_MS:"300"},stdio:["ignore","pipe","pipe"]}), sockets=[];
   let errors="";server.stderr.on("data",s=>{errors+=s;});
   try {
@@ -153,6 +200,13 @@ test("all five games: required actor is warned and auto-play really advances the
       send({type:"create",kind,name:"Idle player",seats:3,maxPlayers:2,players:2,funds:50000,days:30,difficulty:"easy",side:0,ai:true});
       await wait(s=>s.code);
       if(!duel&&kind!=="richman") {send({type:"fillBots"}); if(poker)send({type:"toggleAutoNext",enabled:false});send({type:"start"});}
+      const idle=await wait(s=>s.control.started&&(poker?s.actor===s.viewerIndex:s.game?.current===s.you));
+      assert.equal(idle.control.idleAuto,false);assert.equal(idle.control.warning,null);
+      await sleep(1100);send({type:"chat",text:"Still here"});await sleep(60);
+      const unchanged=states.at(-1);
+      assert.equal(unchanged.control.auto,false);assert.equal(unchanged.control.warning,null);
+      if(poker){assert.equal(unchanged.actor,idle.actor);assert.equal(unchanged.pot,idle.pot);}else assert.equal(unchanged.game.revision,idle.game.revision);
+      send({type:"roomControl",action:"idleAuto",enabled:true});
       const first=await wait(s=>s.control.warning); assert.ok(first.control.warning.warnAt<first.control.warning.deadline);
       await wait(s=>s.control.warning && s.control.now>=s.control.warning.warnAt && !s.control.auto);
       await wait(s=>s.control.auto);
@@ -163,4 +217,47 @@ test("all five games: required actor is warned and auto-play really advances the
     }
     assert.equal(errors,"");
   } finally { sockets.forEach(s=>s.terminate());server.kill();await once(server,"exit"); }
+});
+
+test("all five games: disconnected humans wait beyond the old takeover timeout", {timeout:50000}, async () => {
+  const port=18946,server=spawn(process.execPath,[require.resolve("./server")],{windowsHide:true,env:{...process.env,PORT:String(port),AUTO_OPEN:"0",ROOM_IDLE_MS:"300",ROOM_WARNING_MS:"100"},stdio:["ignore","pipe","pipe"]});
+  const sockets=[],checks=[];let errors="";server.stderr.on("data",s=>errors+=s);
+  async function client(kind) {
+    const endpoint=kind==="poker"?"ws":kind==="catan"?"catan-ws":kind==="richman"?"richman-ws":"duel-ws";
+    const ws=new WebSocket(`ws://127.0.0.1:${port}/${endpoint}`),messages=[];sockets.push(ws);
+    ws.on("message",raw=>{const m=JSON.parse(raw);if(m.type==="state")messages.push(m.room||m);});
+    await once(ws,"open");
+    const send=m=>ws.send(JSON.stringify(m));send(kind==="poker"?{type:"hello",clientId:crypto.randomUUID()}:{type:"hello"});
+    const wait=async(predicate,after=0)=>{for(let i=0;i<600;i++){const s=messages.slice(after).find(predicate);if(s)return s;await sleep(10);}throw Error(`${kind}: missing offline test state`);};
+    const request=async(m,predicate=()=>true)=>{const after=messages.length;send(m);return wait(predicate,after);};
+    return{ws,send,wait,request,messages};
+  }
+  const assets=(kind,s)=>kind==="poker"?JSON.stringify([s.status,s.actor,s.street,s.pot,s.board,s.players.map(p=>[p.chips,p.bet,p.totalBet,p.folded])]):JSON.stringify([s.game.revision,s.game.current,s.game.phase,s.game.day,s.game.turn]);
+  try {
+    await once(server.stdout,"data");
+    for(const kind of ["catan","poker","gomoku","xiangqi","richman"]) {
+      const duel=["gomoku","xiangqi"].includes(kind),a=await client(kind),b=await client(kind);
+      const room=await a.request({type:"create",kind,name:"Host",seats:3,maxPlayers:3,players:3,funds:50000,days:30,difficulty:"easy",side:0,ai:false});
+      await b.request({type:"join",code:room.code,name:"Guest"});
+      if(!duel)await a.request({type:kind==="richman"?"bots":"fillBots",fill:true},s=>s.control.seats.some(p=>p?.bot));
+      if(duel||kind==="richman")await b.request({type:"ready",ready:true},s=>s.seats[1]?.ready);
+      if(kind==="poker")await a.request({type:"toggleAutoNext",enabled:false},s=>!s.autoNext);
+      a.send({type:"start"});
+      const before=await a.wait(s=>s.control.started&&(kind==="poker"?s.actor>=0&&s.actor<2:s.game.current===0));
+      const index=kind==="poker"?before.actor:0,leaving=index===0?a:b,observer=index===0?b:a;
+      const cursor=observer.messages.length;leaving.ws.close();await once(leaving.ws,"close");
+      const offline=await observer.wait(s=>s.control.seats[index]?.connected===false,cursor);
+      assert.equal(assets(kind,offline),assets(kind,before),`${kind}: disconnect must not act or fold`);
+      assert.equal(offline.control.warning,null);
+      checks.push({kind,observer,index,before});
+    }
+    await sleep(32000);
+    for(const {kind,observer,index,before} of checks) {
+      const state=await observer.request({type:"chat",text:"Waiting for the player"});
+      assert.equal(assets(kind,state),assets(kind,before),`${kind}: offline seat must wait, not time out into auto-play`);
+      assert.equal(state.control.seats[index].connected,false);
+      assert.equal(state.control.idleAuto,false);assert.equal(state.control.warning,null);
+    }
+    assert.equal(errors,"");
+  } finally {sockets.forEach(s=>s.terminate());server.kill();await once(server,"exit");}
 });

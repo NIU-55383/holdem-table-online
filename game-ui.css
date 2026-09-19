@@ -63,10 +63,18 @@ dialog.room-control-dialog { box-sizing:border-box; width:560px; min-width:0; ma
 .room-control-dialog small { display:block; font-size:13px; line-height:1.5; font-weight:normal; }
 .room-control-dialog button { min-height:44px; min-width:44px; max-width:100%; font:inherit; font-size:14px; padding:8px 10px; white-space:normal; overflow-wrap:anywhere; background:#f9fcf8; color:#214f59; border:1px solid #afc9bc; border-radius:6px; cursor:pointer; }
 .room-control-seats { margin-top:12px; }
+.room-auto-options { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid #cbded5; }
+.room-auto-options label { display:flex; align-items:center; gap:10px; min-height:44px; flex:1 1 250px; cursor:pointer; }
+.room-auto-options label span { min-width:0; overflow-wrap:anywhere; font-size:14px; }
+.room-auto-options input[type="checkbox"] { appearance:auto; flex:0 0 20px; width:20px; height:20px; min-width:20px; padding:0; margin:0; accent-color:#24976b; }
 .room-control-seat { display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between; gap:8px; padding:10px 0; border-bottom:1px solid #cbded5; }
 .room-control-seat > span { flex:1 1 110px; min-width:0; overflow-wrap:anywhere; }
 .room-control-seat > div, .host-request > div { display:flex; flex-wrap:wrap; gap:6px; }
-.room-kick-confirm, .room-paused-note, .host-request { padding:10px 0; overflow-wrap:anywhere; }
-.room-kick-confirm { border-top:2px solid #d99967; }
+.room-paused-note, .host-request { padding:10px 0; overflow-wrap:anywhere; }
+.removal-confirm-dialog p { overflow-wrap:anywhere; line-height:1.5; }
+.removal-name { font-weight:700; }
+.removal-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.removal-actions.is-final [data-room-action="executeKick"] { grid-column:1; grid-row:1; color:#fff; background:#b13e38; border-color:#b13e38; }
+.removal-actions.is-final [data-room-action="cancelKick"] { grid-column:2; grid-row:1; }
 .idle-warning button { width:100%; background:#ffdf85; }
 .vacant-avatar { opacity:.65; }

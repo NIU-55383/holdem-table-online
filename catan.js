@@ -257,7 +257,14 @@
   $("create").onclick = () => { const name = playerName(); if (name) send({ type: "create", name, avatar: window.BoardGameUI.getAvatar(), seats: state.seats, mapId: state.mapId, layout: state.layout, skins: state.skins }); };
   $("join").onclick = () => { const name = playerName(); if (name) send({ type: "join", name, avatar: window.BoardGameUI.getAvatar(), code: $("code").value }); };
   $("code").addEventListener("keydown", (e) => { if (e.key === "Enter") $("join").click(); });
-  for (const id of ["addBot", "removeBot", "fillBots", "start", "rematch"]) $(id).onclick = () => send({ type: id });
+  for (const id of ["addBot", "fillBots", "start", "rematch"]) $(id).onclick = () => send({ type: id });
+  $("removeBot").onclick = () => {
+    const c = state.room?.control, target = c?.seats.findLast(s => s?.bot);
+    if (!target) return;
+    window.BoardGameUI.confirmRemoval({ name: target.name, started: false,
+      valid: () => { const now = state.room?.control; return now?.code === c.code && !now.started && now.host === now.you && now.seats.findLast(s => s?.bot)?.id === target.id; },
+      remove: () => send({ type: "removeBot", target: target.id }) });
+  };
   $("lobbySeats").addEventListener("click", (e) => {
     const button = e.target.closest("[data-seat-position]");
     if (button && !button.disabled) send({ type: "chooseSeat", position: Number(button.dataset.seatPosition) });

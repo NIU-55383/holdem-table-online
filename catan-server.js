@@ -73,7 +73,7 @@ function attachCatan(server) {
     room.seats.forEach((p) => { if (!p.bot && p.ws) send(p.ws, snapshot(room, p)); });
     schedule(room);
   }
-  function controlled(p) { return p && !p.vacant && (p.bot || p.auto || (!p.ws && Date.now() - p.disconnectedAt > 30000)); }
+  function controlled(p) { return p && !p.vacant && (p.bot || p.auto); }
   function schedule(room) {
     clearTimeout(room.timer);
     if (control.paused(room) || !room.game || room.game.phase === "over" || !room.seats.some((p) => !p.bot && p.ws)) return;
@@ -83,13 +83,10 @@ function attachCatan(server) {
     else if (g.phase === "gold") actor = controlled(room.seats[g.goldQueue[0].id]) ? g.goldQueue[0].id : -1;
     else if (g.trade) actor = room.seats.findIndex((p, i) => controlled(p) && E.canRespondToTrade(g, i));
     if (actor < 0 && controlled(room.seats[g.current]) && !["discard", "gold"].includes(g.phase)) actor = g.current;
-    if (actor < 0) {
-      if (room.seats.some((p) => !p.bot && !p.ws)) room.timer = setTimeout(() => schedule(room), 3000);
-      return;
-    }
+    if (actor < 0) return;
     const revision = g.revision;
     room.timer = setTimeout(() => {
-      if (control.paused(room) || !rooms.has(room.code) || room.game !== g || g.revision !== revision) return schedule(room);
+      if (control.paused(room) || !rooms.has(room.code) || room.game !== g || g.revision !== revision || !controlled(room.seats[actor])) return schedule(room);
       try {
         const action = E.chooseBotAction(g, actor);
         if (action) { E.act(g, actor, action); broadcast(room); }
@@ -205,7 +202,7 @@ function attachCatan(server) {
         }
         else if (data.type === "addBot") { host(); addBot(room); }
         else if (data.type === "fillBots") { host(); fail(!room.game, "游戏已开始 / Game started"); while (room.seats.length < room.maxPlayers) addBot(room); }
-        else if (data.type === "removeBot") { host(); fail(!room.game, "游戏已开始 / Game started"); const last = room.seats.findLastIndex((p) => p.bot); if (last >= 0) { const before = [...room.seats]; room.seats.splice(last, 1); remapChat(room, before); } }
+        else if (data.type === "removeBot") { host(); fail(!room.game, "游戏已开始 / Game started"); const last = room.seats.findLastIndex((p) => p.bot); if (last >= 0) { fail(data.target === undefined || Social.publicId(room.seats[last]) === data.target, "座位已变化，请重新确认 / Seat changed; confirm again"); const before = [...room.seats]; room.seats.splice(last, 1); remapChat(room, before); } }
         else if (data.type === "start") {
           host(); fail(!room.game && room.seats.length === room.maxPlayers, "座位尚未坐满 / Waiting for all seats to be filled");
           fail(!room.seatSwap, "请先处理当前换座申请 / Resolve the pending swap first");

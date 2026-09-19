@@ -267,7 +267,13 @@
 
   elements.startButton.addEventListener("click", () => send({ type: "start" }));
   elements.addBot.addEventListener("click", () => send({ type: "addBot" }));
-  elements.removeBot.addEventListener("click", () => send({ type: "removeBot" }));
+  elements.removeBot.addEventListener("click", () => {
+    const c = state.room?.control, target = c?.seats.findLast(s => s?.bot);
+    if (!target) return;
+    window.BoardGameUI.confirmRemoval({ name: target.name, started: false,
+      valid: () => { const now = state.room?.control; return now?.code === c.code && !now.started && now.host === now.you && now.seats.findLast(s => s?.bot)?.id === target.id; },
+      remove: () => send({ type: "removeBot", target: target.id }) });
+  });
   elements.fillBots.addEventListener("click", () => send({ type: "fillBots" }));
   elements.nextButton.addEventListener("click", () => {
     send({ type: elements.nextButton.dataset.action === "takeHost" ? "takeHost" : "nextHand" });

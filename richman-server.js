@@ -20,11 +20,11 @@ function attachRichman(server,options={}){
   function schedule(room){
     if(control.paused(room)||room.timer||!room.game||room.game.phase==="over"||!present(room))return;
     const p=room.seats[room.game.current];
-    if(!p.bot&&!p.auto&&connected(p))return;
-    const delay=options.botDelay??(!p.bot&&!p.auto?30000:1000+(room.game.lastMove?.path.length||0)*135);
+    if(!p.bot&&!p.auto)return;
+    const delay=options.botDelay??(1000+(room.game.lastMove?.path.length||0)*135);
     room.timer=setTimeout(()=>{
       room.timer=null;if(control.paused(room)||!present(room)||room.game.phase==="over")return;
-      const seat=room.seats[room.game.current];if(!seat.bot&&!seat.auto&&connected(seat))return;
+      const seat=room.seats[room.game.current];if(!seat.bot&&!seat.auto)return;
       try{E.apply(room.game,room.game.current,E.botAction(room.game,room.game.current,room.options.difficulty));}
       catch(error){console.error("Richman AI:",error.message);try{E.apply(room.game,room.game.current,{type:room.game.phase==="roll"?"roll":"done"});}catch(failure){console.error("Richman fallback:",failure.message);return;}}
       broadcast(room);schedule(room);
@@ -41,7 +41,7 @@ function attachRichman(server,options={}){
     const id=room.seats.findIndex(p=>p?.token===session.token),seat=room.seats[id];if(!seat)return;
     seat.ws=null;
     control.elect(room);
-    if(explicit){session.room="";if(!room.game)room.seats[id]=null;else seat.auto=true;}
+    if(explicit){session.room="";if(!room.game)room.seats[id]=null;}
     stop(room);broadcast(room);schedule(room);
   }
   wss.on("connection",ws=>{
@@ -83,7 +83,7 @@ function attachRichman(server,options={}){
       if(!["profile","chat","auto"].includes(data.type))control.guard(room);
       if(data.type==="profile"){ensure(avatar!==undefined,"请选择头像 / Choose avatar");room.seats[id].avatar=avatar;}
       else if(data.type==="ready"){ensure(!room.game||room.game.phase==="over","游戏已开始 / Game started");room.seats[id].ready=!!data.ready;}
-      else if(data.type==="bots"){host();ensure(!room.game,"游戏已开始 / Game started");if(data.remove!==undefined){ensure(room.seats[data.remove]?.bot,"只能移除机器人 / Bots only");room.seats[data.remove]=null;}else{ensure(room.seats.includes(null),"座位已满 / Room full");addBot(room);if(data.fill)while(room.seats.includes(null))addBot(room);}}
+      else if(data.type==="bots"){host();ensure(!room.game,"游戏已开始 / Game started");if(data.remove!==undefined){ensure(room.seats[data.remove]?.bot,"只能移除机器人 / Bots only");ensure(data.target===undefined||Social.publicId(room.seats[data.remove])===data.target,"座位已变化，请重新确认 / Seat changed; confirm again");room.seats[data.remove]=null;}else{ensure(room.seats.includes(null),"座位已满 / Room full");addBot(room);if(data.fill)while(room.seats.includes(null))addBot(room);}}
       else if(data.type==="start"){host();ensure(!room.game||room.game.phase==="over","本局未结束 / Game still playing");ensure(room.seats.every(p=>p&&p.ready&&connected(p)),"等待所有玩家入座并准备 / Waiting for ready players");start(room);return;}
       else if(data.type==="auto"){room.seats[id].auto=!room.seats[id].auto;stop(room);}
       else if(data.type==="action"){

@@ -175,6 +175,45 @@
       },
     };
   }
+  let removalDialog, removalRequest, removalStep = 0;
+  function syncRemoval() {
+    if (removalRequest && !removalRequest.valid()) {
+      removalRequest = null;
+      removalDialog.close();
+    }
+  }
+  function confirmRemoval(request) {
+    if (!request.valid()) return;
+    if (!removalDialog) {
+      removalDialog = document.createElement("dialog");
+      removalDialog.className = "room-control-dialog removal-confirm-dialog";
+      removalDialog.setAttribute("aria-labelledby", "removalTitle");
+      document.body.append(removalDialog);
+      removalDialog.addEventListener("close", () => { if (!removalDialog.open) removalRequest = null; });
+      removalDialog.addEventListener("cancel", () => { removalRequest = null; });
+      removalDialog.addEventListener("click", (event) => {
+        const action = event.target.closest("[data-room-action]")?.dataset.roomAction;
+        if (!action || !removalRequest) return;
+        syncRemoval(); if (!removalRequest) return;
+        if (action === "cancelKick") { removalRequest = null; removalDialog.close(); }
+        else if (action === "confirmKick" && removalStep === 1) { removalStep = 2; drawRemoval(); }
+        else if (action === "executeKick" && removalStep === 2) {
+          const accepted = removalRequest;
+          removalRequest = null; removalDialog.close(); accepted.remove();
+        }
+      });
+    }
+    if (removalDialog.open) return;
+    removalRequest = request; removalStep = 1; drawRemoval(); removalDialog.showModal();
+  }
+  function drawRemoval() {
+    const r = removalRequest, final = removalStep === 2;
+    removalDialog.innerHTML = `<h2 id="removalTitle">${final ? "最后确认 · 2/2" : "移除确认 · 1/2"}<small>${final ? "Final confirmation" : "Confirm removal"}</small></h2>
+      <p class="removal-name">${escape(r.name)}</p>
+      <p>${r.started ? "移除后此位置将空缺，游戏暂停，补齐玩家或机器人后继续。" : "这位机器人将离开等待室。"}<small>${r.started ? "The seat becomes vacant. Play pauses until a human or bot fills it." : "This bot will leave the lobby."}</small></p>
+      <div class="removal-actions ${final ? "is-final" : ""}"><button type="button" data-room-action="cancelKick" autofocus>取消 / Cancel</button><button type="button" data-room-action="${final ? "executeKick" : "confirmKick"}">${final ? "确定移除 / Remove now" : "继续确认 / Continue"}</button></div>`;
+    if (removalDialog.open) removalDialog.querySelector('[data-room-action="cancelKick"]').focus();
+  }
   function mountRoomControl(view, send, anchor) {
     const bar = document.createElement("div"), dialog = document.createElement("dialog"), warning = document.createElement("dialog");
     bar.className = "room-control-bar"; bar.hidden = true;
@@ -185,19 +224,20 @@
     warning.innerHTML = '<h2 id="idleWarningTitle">还在吗？<small>Are you still there?</small></h2><p>即将由机器人托管 / Auto-play starts in <strong data-idle-seconds></strong> 秒 / seconds</p><button type="button" data-room-stay>我在，继续操作 / I am here</button>';
     document.body.append(bar, dialog, warning);
     window.lucide?.createIcons();
-    let key = "", asked = "", dismissedWarning = 0, offset = 0, confirmTarget = null, lastControl;
+    let key = "", asked = "", dismissedWarning = 0, offset = 0, lastControl;
     const command = (action, extra = {}) => send({ type: "roomControl", action, ...extra });
     function draw() {
       const c = view(); if (!c) return;
       const ownHost = c.host === c.you, p = c.pending, name = (id) => escape(c.seats.find((s) => s?.id === id)?.name || "Player");
       dialog.querySelector("[data-room-content]").innerHTML = `${p ? `<section class="host-request"><p>${name(p.from)} 提议由 ${name(p.next)} 担任房主 / Proposes ${name(p.next)} as host</p><div>${p.to === c.you ? '<button data-room-action="accept">同意 / Accept</button><button data-room-action="decline">拒绝 / Decline</button>' : p.from === c.you ? '<button data-room-action="cancel">撤回 / Cancel</button>' : '等待回应 / Waiting'}</div></section>` : !ownHost ? '<button data-room-action="requestHost">申请成为房主 / Request host role</button>' : ""}
+        <section class="room-auto-options"><label><input type="checkbox" data-room-idle-auto ${c.idleAuto ? "checked" : ""}><span>我两分钟未操作时自动托管<small>Auto-play after I am idle for 2 minutes</small></span></label>${c.started ? `<button type="button" data-room-action="auto" aria-pressed="${Boolean(c.auto)}">${c.auto ? "取消托管 / Stop auto" : "立即托管 / Start auto"}</button>` : ""}</section>
         ${c.paused ? '<p class="room-paused-note">全部空位补齐后继续，棋局与资产保留。<small>Resumes when all seats are filled. Game state and assets are preserved.</small></p>' : ""}
         <div class="room-control-seats">${c.seats.map((s) => s ? `<div class="room-control-seat" data-control-seat="${s.index}"><span>${s.position + 1}. ${escape(s.name)}<small>${s.vacant ? "等待补位 / Open seat" : s.id === c.host ? "房主 / Host" : s.bot ? "机器人 / Bot" : s.connected ? "在线 / Online" : "离线 / Offline"}</small></span><div>${s.vacant ? ownHost ? `<button data-room-action="fillBot" data-target="${s.id}">补机器人 / Add bot</button>` : "" : s.id !== c.you && ownHost ? `${!s.bot && s.connected && !p ? `<button data-room-action="transfer" data-target="${s.id}">转让 / Transfer</button>` : ""}${c.started ? `<button data-room-action="kick" data-target="${s.id}">移除 / Remove</button>` : ""}` : ""}</div></div>` : "").join("")}</div>
-        ${confirmTarget && c.seats.some((s) => s?.id === confirmTarget && !s.vacant) ? `<section class="room-kick-confirm"><p>移除 ${name(confirmTarget)} 并暂停游戏？<small>Remove this player and pause the game?</small></p><button data-room-action="confirmKick">确认移除 / Confirm removal</button><button data-room-action="cancelKick">取消 / Cancel</button></section>` : ""}`;
+        `;
     }
     function tick() {
       const c = view(), w = c?.warning, now = Date.now() + offset;
-      const visible = w && !c.paused && !c.auto && now >= w.warnAt && now < w.deadline && dismissedWarning !== w.deadline;
+      const visible = w && c.idleAuto && !c.paused && !c.auto && now >= w.warnAt && now < w.deadline && dismissedWarning !== w.deadline;
       if (visible) { warning.querySelector("[data-idle-seconds]").textContent = Math.max(0, Math.ceil((w.deadline - now) / 1000)); if (!warning.open) warning.showModal(); }
       else if (warning.open) warning.close();
     }
@@ -205,26 +245,34 @@
     warning.querySelector("[data-room-stay]").onclick = stay;
     warning.addEventListener("cancel", (e) => { e.preventDefault(); stay(); });
     bar.querySelector("[data-room-stay]").onclick = stay;
-    const open = () => { confirmTarget = null; draw(); if (!dialog.open) dialog.showModal(); };
+    const open = () => { draw(); if (!dialog.open) dialog.showModal(); };
     bar.querySelector("[data-room-manage]").onclick = open; bar.querySelector("[data-room-pending]").onclick = open;
     dialog.querySelector("[data-room-close]").onclick = () => dialog.close();
+    dialog.addEventListener("change", (event) => {
+      if (event.target.matches("[data-room-idle-auto]")) command("idleAuto", { enabled: event.target.checked });
+    });
     dialog.addEventListener("click", (e) => {
       const button = e.target.closest("[data-room-action]"), c = view(); if (!button || !c) return;
       const action = button.dataset.roomAction, target = button.dataset.target;
-      if (action === "kick") { confirmTarget = target; draw(); dialog.querySelector(".room-kick-confirm")?.scrollIntoView({block:"nearest"}); return; }
-      if (action === "cancelKick") { confirmTarget = null; draw(); return; }
-      if (action === "confirmKick") { command("kick", { target: confirmTarget }); confirmTarget = null; return; }
-      if (["accept", "decline"].includes(action)) command("respond", { id: c.pending?.id, accept: action === "accept" });
+      if (action === "kick") {
+        confirmRemoval({ name: c.seats.find(s => s?.id === target)?.name || "Player", started: true,
+          valid: () => { const now = view(); return now?.code === c.code && now.started && now.host === now.you && target !== now.you && now.seats.some(s => s?.id === target && !s.vacant); },
+          remove: () => command("kick", { target }) });
+        return;
+      }
+      if (action === "auto") command("auto", { enabled: !c.auto });
+      else if (["accept", "decline"].includes(action)) command("respond", { id: c.pending?.id, accept: action === "accept" });
       else if (action === "cancel") command("cancel", { id: c.pending?.id });
       else command(action, { target });
     });
     const timer = setInterval(tick, 250);
     window.addEventListener("pagehide", (event) => { if (!event.persisted) clearInterval(timer); });
     return { sync() {
+      syncRemoval();
       const c = view(), container = anchor();
       bar.hidden = !c; if (!c) { key = ""; if (dialog.open) dialog.close(); if (warning.open) warning.close(); return; }
       if (container && bar.parentElement !== container) container.prepend(bar);
-      if (key !== c.code) { key = c.code; asked = ""; dismissedWarning = 0; confirmTarget = null; }
+      if (key !== c.code) { key = c.code; asked = ""; dismissedWarning = 0; }
       if (lastControl !== c) { offset = c.now - Date.now(); lastControl = c; }
       bar.querySelector("[data-room-paused]").hidden = !c.paused;
       bar.querySelector("[data-room-stay]").hidden = !c.auto;
@@ -234,5 +282,5 @@
       tick();
     } };
   }
-  window.BoardGameUI = Object.freeze({ presence, face, avatar, getAvatar, mountAvatarPicker, mountInteractions, mountRoomControl });
+  window.BoardGameUI = Object.freeze({ presence, face, avatar, getAvatar, mountAvatarPicker, mountInteractions, mountRoomControl, confirmRemoval });
 })();

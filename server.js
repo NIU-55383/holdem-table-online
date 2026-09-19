@@ -26,7 +26,7 @@ const roomControl = require("./room-control").createRoomControl({ rooms, seats: 
     const clientId = next.clientId || next.token;
     if (r.acted.delete(old.clientId)) r.acted.add(clientId);
     return { ...old, token: next.token, name: next.name, avatar: next.avatar, clientId, isBot: Boolean(next.bot), vacant: Boolean(next.vacant),
-      connected: Boolean(next.bot || next.socket), socket: next.socket || null, auto: Boolean(next.auto),
+      connected: Boolean(next.bot || next.socket), socket: next.socket || null, auto: Boolean(next.auto), idleAuto: next.idleAuto === true,
       aggression: .55, looseness: .25, mastery: .85, handBluff: .08 };
   }
 });
@@ -286,10 +286,11 @@ function updatePlayerRead(room, index, action, target = 0) {
   room.playerReads[player.clientId] = read;
 }
 
-function removeBot(room) {
+function removeBot(room, target) {
   if (room.status !== "lobby") throw new Error("Only in lobby / 只能在等待室移除机器人");
   const index = room.players.map((player) => player.isBot).lastIndexOf(true);
   if (index < 0) throw new Error("No bot to remove / 没有机器人可移除");
+  if (target !== undefined && Social.publicId(room.players[index]) !== target) throw new Error("Seat changed; confirm again / 座位已变化，请重新确认");
   room.players.splice(index, 1);
 }
 
@@ -809,7 +810,7 @@ function scheduleBot(room) {
   if (!player || !(player.isBot || player.auto) || !actionable(player)) return;
   const delay = 650 + Math.floor(Math.random() * 850);
   room.botTimer = setTimeout(() => {
-    if (roomControl.paused(room) || room.status !== "playing" || room.players[room.actor] !== player) return;
+    if (roomControl.paused(room) || room.status !== "playing" || room.players[room.actor] !== player || !(player.isBot || player.auto)) return;
     try {
       const decision = chooseBotAction(room, room.actor);
       performAction(room, room.actor, decision.action, decision.target);
@@ -908,7 +909,6 @@ function beginHand(room) {
   room.currentBet = Math.max(room.players[room.smallBlind].bet, room.players[room.bigBlind].bet);
   room.actor = nextIndex(room, room.bigBlind, actionable);
   room.message = `第 ${room.handNumber} 手 / Hand ${room.handNumber}`;
-  skipDisconnectedActor(room);
   broadcast(room);
   scheduleBot(room);
 }
@@ -982,7 +982,6 @@ function performAction(room, index, action, target) {
     return;
   }
   room.actor = nextActor(room, index);
-  skipDisconnectedActor(room);
   broadcast(room);
   scheduleBot(room);
 }
@@ -1028,7 +1027,6 @@ function advanceStreet(room) {
   }
   room.actor = nextIndex(room, room.dealer, actionable);
   room.message = `${room.street.toUpperCase()}`;
-  skipDisconnectedActor(room);
   broadcast(room);
   scheduleBot(room);
 }
@@ -1116,27 +1114,6 @@ function showdown(room) {
   addLog(room, room.message);
   scheduleAutoNext(room);
   broadcast(room);
-}
-
-function skipDisconnectedActor(room) {
-  if (roomControl.paused(room)) return;
-  let guard = room.players.length + 1;
-  while (room.actor >= 0 && !room.players[room.actor].isBot && !room.players[room.actor].connected && guard > 0) {
-    const index = room.actor;
-    room.players[index].folded = true;
-    room.acted.add(room.players[index].clientId);
-    addLog(room, `${room.players[index].name} 断线弃牌 / disconnected and folds`);
-    if (remaining(room).length === 1) {
-      awardUncontested(room);
-      return;
-    }
-    if (bettingComplete(room)) {
-      advanceStreet(room);
-      return;
-    }
-    room.actor = nextActor(room, index);
-    guard -= 1;
-  }
 }
 
 function publicState(room, clientId) {
@@ -1228,8 +1205,6 @@ function leaveClient(client) {
       rooms.delete(room.code);
       return;
     }
-  } else if (room.actor === index) {
-    skipDisconnectedActor(room);
   }
   broadcast(room);
   scheduleBot(room);
@@ -1296,7 +1271,7 @@ function handleMessage(client, message) {
     broadcast(room);
   } else if (data.type === "removeBot") {
     if (!canManageRoom(room, client.clientId)) throw new Error("Host only / 只有房主可以移除机器人");
-    removeBot(room);
+    removeBot(room, data.target);
     broadcast(room);
   } else if (data.type === "fillBots") {
     if (!canManageRoom(room, client.clientId)) throw new Error("Host only / 只有房主可以添加机器人");

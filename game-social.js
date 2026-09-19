@@ -7,8 +7,8 @@ function publicId(player) {
   return identities.get(player);
 }
 function reaction(room, players, sender, request, now = Date.now()) {
-  const target = players.find((p) => p && !p.departed && publicId(p) === request.target);
-  if (!players.includes(sender) || sender.departed || !target || target === sender || !Object.hasOwn(Data.reactions, request.kind)) {
+  const target = players.find((p) => p && !p.departed && !p.vacant && publicId(p) === request.target);
+  if (!players.includes(sender) || sender.departed || sender.vacant || !target || target === sender || !Object.hasOwn(Data.reactions, request.kind)) {
     throw new Error("互动对象或表情无效 / Invalid player or reaction");
   }
   if (now - (lastSent.get(sender) ?? -Infinity) < Data.COOLDOWN) throw new Error("慢一点，稍后再发 / Please wait before sending again");

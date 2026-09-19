@@ -23,3 +23,13 @@
 - Host identity belongs to the authenticated person, never to position zero. Lobby positions are chosen before starting; moving to another human's position requires their consent. Bots and open positions can be selected directly.
 - Do not reorder players during a game. At start, sort by the agreed positions and remap chat author indices before creating the engine state. The first position acts first, and the second setup round is reversed.
 - Preserve chosen positions, avatars and person-bound permissions through reconnects. Connection-based host transfer remains separate from seat selection.
+
+## Shared Room Management
+
+- All multiplayer games must use `room-control.js` for host consent, automatic succession, vacancies and idle deadlines, and `BoardGameUI.mountRoomControl` for the compact shared management entry and warning dialog.
+- Host transfer requires the recipient's approval; a non-host may request the role with the current host's approval. On disconnect, choose the next online human clockwise by agreed position, skipping bots and offline seats. Reconnecting must not reclaim the host role automatically.
+- After starting, only the host may remove another occupied seat. Revoke the removed connection's room membership, retain an explicit vacant seat and all game assets, stop AI/jobs/auto-next timers, and reject gameplay while any vacancy remains. Chat, reactions and management may continue.
+- The host can fill a specific vacancy with a bot; a joining human fills the first vacancy. Existing members must never acquire a second seat. Keep indices and game assets stable and assign a fresh public social ID to each replacement. Resume only when all vacancies are filled.
+- Removal is not a ban. The removed person may explicitly enter the room code to join again if a vacancy remains. Do not auto-rejoin after a removal event.
+- Only required connected human actors have idle deadlines: 120 seconds, warning during the final 20 seconds. A valid action or explicit stay acknowledgement resets the deadline; chat/profile/reactions do not. Vacancies suspend deadlines. Expose a stop-auto control and preserve green online presence for auto-playing humans.
+- Add adapter tests for every future game and update browser regressions and the complete GitHub release bundle whenever this shared behavior changes.

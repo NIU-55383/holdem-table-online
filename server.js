@@ -15,6 +15,25 @@ const ROOT = __dirname;
 const BLIND_LEVELS = [[1, 2], [2, 4], [3, 6], [5, 10], [10, 20], [15, 30], [20, 40]];
 const rooms = new Map();
 const clients = new Set();
+const roomControl = require("./room-control").createRoomControl({ rooms, seats: (r) => r.players,
+  identity: (p) => p?.clientId, bot: (p) => p?.isBot, connected: (p) => p?.connected && Boolean(p.socket),
+  host: (r) => r.hostId, setHost: (r, id) => { r.hostId = id; },
+  active: (r) => r.status === "playing", started: (r) => r.status !== "lobby",
+  turnKey: (r) => `${r.handNumber}:${r.street}:${r.actor}:${r.currentBet}`, actors: (r) => r.actor >= 0 ? [r.actor] : [],
+  stop: (r) => { clearTimeout(r.botTimer); clearTimeout(r.autoNextTimer); r.nextHandAt = 0; }, changed: resumeRoom,
+  remove: (r, p) => { if (p.socket) { p.socket.roomCode = ""; send(p.socket, { type: "left", reason: "房主已将你移出房间 / Removed by the host" }); } },
+  replace: (r, i, old, next) => {
+    const clientId = next.clientId || next.token;
+    if (r.acted.delete(old.clientId)) r.acted.add(clientId);
+    return { ...old, token: next.token, name: next.name, avatar: next.avatar, clientId, isBot: Boolean(next.bot), vacant: Boolean(next.vacant),
+      connected: Boolean(next.bot || next.socket), socket: next.socket || null, auto: Boolean(next.auto),
+      aggression: .55, looseness: .25, mastery: .85, handBluff: .08 };
+  }
+});
+function resumeRoom(room) {
+  if (!roomControl.paused(room) && room.status === "handComplete" && !room.nextHandAt) scheduleAutoNext(room);
+  broadcast(room); scheduleBot(room);
+}
 const FAMILIAR_BOT_NAMES = [
   "Connie", "Colin", "Angela", "Stephan", "Zoey", "William", "Tim", "Gary", "Alison",
 ];
@@ -281,11 +300,12 @@ function addPlayer(room, client, name, avatar) {
     existing.socket = client;
     existing.name = cleanName(name) || existing.name;
     if (avatar !== undefined) existing.avatar = avatar;
-    if (client.clientId === room.originalHostId) room.hostId = client.clientId;
+    existing.auto = false;
     return existing;
   }
-  if (room.status !== "lobby") throw new Error("牌局已经开始 / Game already started");
-  if (room.players.length >= room.maxPlayers) throw new Error("房间已满 / Room is full");
+  const open = roomControl.vacancy(room);
+  if (open < 0 && room.status !== "lobby") throw new Error("牌局已经开始 / Game already started");
+  if (open < 0 && room.players.length >= room.maxPlayers) throw new Error("房间已满 / Room is full");
   const normalized = cleanName(name);
   if (!normalized) throw new Error("请输入名字 / Enter your name");
   const player = {
@@ -302,14 +322,13 @@ function addPlayer(room, client, name, avatar) {
     connected: true,
     socket: client,
   };
+  if (open >= 0) return roomControl.fill(room, open, player);
   room.players.push(player);
   return player;
 }
 
 function canManageRoom(room, clientId) {
-  if (room.hostId === clientId || room.originalHostId === clientId) return true;
-  const host = room.players.find((player) => player.clientId === room.hostId);
-  return !host || !host.connected;
+  return room.hostId === clientId;
 }
 
 function nextIndex(room, start, predicate) {
@@ -785,12 +804,12 @@ function chooseBotAction(room, index) {
 
 function scheduleBot(room) {
   clearTimeout(room.botTimer);
-  if (room.status !== "playing" || room.actor < 0) return;
+  if (roomControl.paused(room) || room.status !== "playing" || room.actor < 0) return;
   const player = room.players[room.actor];
-  if (!player || !player.isBot || !actionable(player)) return;
+  if (!player || !(player.isBot || player.auto) || !actionable(player)) return;
   const delay = 650 + Math.floor(Math.random() * 850);
   room.botTimer = setTimeout(() => {
-    if (room.status !== "playing" || room.players[room.actor] !== player) return;
+    if (roomControl.paused(room) || room.status !== "playing" || room.players[room.actor] !== player) return;
     try {
       const decision = chooseBotAction(room, room.actor);
       performAction(room, room.actor, decision.action, decision.target);
@@ -809,7 +828,7 @@ function scheduleBot(room) {
 function scheduleAutoNext(room) {
   clearTimeout(room.autoNextTimer);
   room.nextHandAt = 0;
-  if (!room.autoNext || room.status !== "handComplete") return;
+  if (roomControl.paused(room) || !room.autoNext || room.status !== "handComplete") return;
   if (livePlayers(room).length < 2) return;
   room.nextHandAt = Date.now() + 8000;
   room.autoNextTimer = setTimeout(() => {
@@ -820,6 +839,7 @@ function scheduleAutoNext(room) {
 }
 
 function beginHand(room) {
+  roomControl.guard(room);
   clearTimeout(room.autoNextTimer);
   room.nextHandAt = 0;
   const active = livePlayers(room);
@@ -910,6 +930,7 @@ function nextActor(room, start) {
 }
 
 function performAction(room, index, action, target) {
+  roomControl.guard(room);
   if (room.status !== "playing" || room.actor !== index) throw new Error("还没轮到你 / Not your turn");
   const player = room.players[index];
   const toCall = Math.max(0, room.currentBet - player.bet);
@@ -951,6 +972,7 @@ function performAction(room, index, action, target) {
     throw new Error("未知操作 / Unknown action");
   }
 
+  roomControl.touch(room, player);
   if (remaining(room).length === 1) {
     awardUncontested(room);
     return;
@@ -1097,6 +1119,7 @@ function showdown(room) {
 }
 
 function skipDisconnectedActor(room) {
+  if (roomControl.paused(room)) return;
   let guard = room.players.length + 1;
   while (room.actor >= 0 && !room.players[room.actor].isBot && !room.players[room.actor].connected && guard > 0) {
     const index = room.actor;
@@ -1123,6 +1146,7 @@ function publicState(room, clientId) {
     type: "state",
     room: {
       code: room.code,
+      control: roomControl.snapshot(room, room.players[viewerIndex]),
       hostId: room.hostId,
       originalHostId: room.originalHostId,
       maxPlayers: room.maxPlayers,
@@ -1169,6 +1193,7 @@ function publicState(room, clientId) {
         allIn: player.allIn,
         connected: player.connected,
         isBot: Boolean(player.isBot),
+        vacant: Boolean(player.vacant), auto: Boolean(player.auto),
         cardCount: player.hand.length,
         hand: index === viewerIndex || player.showCards || (showdownVisible && !player.folded) ? player.hand : [],
       })),
@@ -1177,6 +1202,7 @@ function publicState(room, clientId) {
 }
 
 function broadcast(room) {
+  roomControl.sync(room);
   room.players.forEach((player) => {
     if (player.connected && player.socket) {
       send(player.socket, publicState(room, player.clientId));
@@ -1192,22 +1218,15 @@ function leaveClient(client) {
   const index = room.players.findIndex((player) => player.clientId === client.clientId);
   if (index < 0) return;
   const player = room.players[index];
+  if (player.socket !== client) return;
   player.connected = false;
   player.socket = null;
-  if (room.hostId === client.clientId) {
-    const nextHost = room.players.find((candidate) => (
-      candidate.clientId !== client.clientId && candidate.connected
-    ));
-    if (nextHost && room.status === "lobby") room.hostId = nextHost.clientId;
-  }
+  roomControl.elect(room);
   if (room.status === "lobby") {
     room.players.splice(index, 1);
     if (!room.players.length) {
       rooms.delete(room.code);
       return;
-    }
-    if (!room.players.some((candidate) => candidate.clientId === room.hostId)) {
-      room.hostId = room.players[0].clientId;
     }
   } else if (room.actor === index) {
     skipDisconnectedActor(room);
@@ -1220,6 +1239,7 @@ function handleMessage(client, message) {
   const data = JSON.parse(message);
   const avatar = ["hello", "create", "join", "profile"].includes(data.type) && Object.hasOwn(data, "avatar") ? AvatarData.normalize(data.avatar) : undefined;
   if (data.type === "hello") {
+    if (client.clientId) throw new Error("连接已初始化 / Already connected");
     client.clientId = String(data.clientId || crypto.randomUUID()).slice(0, 64);
     client.avatar = avatar || null;
     return;
@@ -1231,23 +1251,26 @@ function handleMessage(client, message) {
     const room = makeRoom(client, data);
     addPlayer(room, client, data.name, avatar);
     client.roomCode = room.code;
+    roomControl.sync(room);
     send(client, publicState(room, client.clientId));
     return;
   }
   if (data.type === "join") {
-    leaveClient(client);
     const code = String(data.code || "").trim().toUpperCase();
     const room = rooms.get(code);
     if (!room) throw new Error("找不到房间 / Room not found");
+    if (client.roomCode !== code) leaveClient(client);
     addPlayer(room, client, data.name, avatar);
     client.roomCode = room.code;
-    broadcast(room);
+    resumeRoom(room);
     return;
   }
 
   const room = rooms.get(client.roomCode);
   if (!room) throw new Error("你还没有加入房间 / Join a room first");
   const playerIndex = room.players.findIndex((player) => player.clientId === client.clientId);
+  if (playerIndex < 0 || room.players[playerIndex].socket !== client) throw new Error("连接已失效 / No active seat");
+  if (roomControl.handle(room, room.players[playerIndex], data)) return;
   if (data.type === "profile") {
     if (playerIndex < 0 || avatar === undefined) throw new Error("请选择头像 / Choose an avatar");
     room.players[playerIndex].avatar = avatar; client.avatar = avatar; broadcast(room); return;
@@ -1259,6 +1282,8 @@ function handleMessage(client, message) {
     const event = Social.reaction(room, room.players, room.players[playerIndex], data);
     room.players.forEach((p) => { if (p.connected && p.socket) send(p.socket, event); }); return;
   }
+
+  if (!["chat", "leave"].includes(data.type)) roomControl.guard(room);
 
   if (data.type === "start") {
     if (!canManageRoom(room, client.clientId)) throw new Error("只有房主可以开局 / Host only");
@@ -1384,6 +1409,7 @@ function parseFrames(client, chunk) {
       client.socket.write(Buffer.concat([Buffer.from([0x8a, pong.length]), pong]));
       continue;
     }
+    if (opcode === 0xa) { client.alive = true; continue; }
     if (opcode !== 0x1) continue;
     try {
       handleMessage(client, payload.toString("utf8"));
@@ -1488,7 +1514,7 @@ server.on("upgrade", (request, socket, head) => {
     `Sec-WebSocket-Accept: ${accept}`,
     "\r\n",
   ].join("\r\n"));
-  const client = { socket, buffer: Buffer.alloc(0), clientId: "", roomCode: "" };
+  const client = { socket, buffer: Buffer.alloc(0), clientId: "", roomCode: "", alive: true };
   clients.add(client);
   socket.on("data", (chunk) => parseFrames(client, chunk));
   socket.on("close", () => {
@@ -1497,6 +1523,15 @@ server.on("upgrade", (request, socket, head) => {
   });
   socket.on("error", () => socket.destroy());
 });
+
+const pokerHeartbeat = setInterval(() => {
+  for (const client of clients) {
+    if (!client.alive) client.socket.destroy();
+    else { client.alive = false; client.socket.write(Buffer.from([0x89, 0])); }
+  }
+}, 30000);
+pokerHeartbeat.unref();
+server.on("close", () => { roomControl.close(); clearInterval(pokerHeartbeat); });
 
 server.listen(PORT, "0.0.0.0", () => {
   const localUrl = `http://127.0.0.1:${PORT}/index.html`;

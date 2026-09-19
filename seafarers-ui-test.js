@@ -70,6 +70,8 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
     const phoneContext = await browser.newContext({ viewport: { width: 393, height: 735 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
     const phone = await phoneContext.newPage(); phone.on("pageerror", (e) => errors.push(e.message));
     await phone.goto(`http://127.0.0.1:${server.address().port}/catan.html?edition=seafarers`);
+    assert.equal(await phone.locator("dialog[open]").count(), 0, "Entering Seafarers never opens rules automatically");
+    await phone.locator("#seafarerRules").click();
     await phone.locator("#sailingDialog").waitFor();
     for (const [width, height] of [[393,735], [320,568], [844,390], [1440,1000]]) {
       await phone.setViewportSize({ width, height });
@@ -84,10 +86,14 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
     await phone.waitForFunction(() => document.getElementById("sailingContent").scrollTop > 0);
     await touch.detach();
     await phone.locator("#sailingAcknowledge").click();
+    assert.equal(await phone.locator("dialog[open]").count(), 0, "Closing general rules does not open map rules");
+    await phone.locator("#mapRules").click();
     await phone.locator("#sailingContent .map-rules-preview svg").waitFor();
     await phone.locator("#sailingAcknowledge").click();
     for (const map of Maps.maps) {
       await phone.locator("#mapChoice").selectOption(map.id);
+      assert.equal(await phone.locator("dialog[open]").count(), 0, "Changing map leaves rules closed");
+      await phone.locator("#mapRules").click();
       await phone.locator("#sailingContent .map-rules-preview svg").waitFor();
       for (const [width, height] of [[320,568], [393,735], [844,390]]) {
         await phone.setViewportSize({ width, height });
@@ -96,6 +102,8 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
       await phone.locator("#sailingAcknowledge").click();
     }
     await phone.locator('[data-edition="base"]').click();
+    assert.equal(await phone.locator("dialog[open]").count(), 0);
+    await phone.locator("#baseRules").click();
     for (const [width, height] of [[320,568], [393,735], [844,390]]) {
       await phone.setViewportSize({ width, height });
       await checkRuleDialog(phone, "helpDialog", `base-${width}`);
@@ -103,8 +111,9 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
     await phone.locator('[data-close="helpDialog"]').click();
     assert.equal(await phone.locator("#helpDialog").isVisible(), false);
     await phoneContext.close();
-    async function checkRuleToolbar(p, expected, name, width) {
-      assert.deepEqual(await p.locator(".game-rule-links button:visible").evaluateAll((buttons) => buttons.map((b) => b.id)), expected);
+    async function checkRuleToolbar(p, expected, name, width, target = 10) {
+      await checkVictoryTarget(p, target, `${name}-${width}`);
+      assert.deepEqual(await p.locator(".game-rule-links > button:visible").evaluateAll((buttons) => buttons.map((b) => b.id)), expected);
       assert.equal(await p.locator(".game-topbar").evaluate((bar) => {
         const bounds = bar.getBoundingClientRect();
         const children = [...bar.children].map((el) => el.getBoundingClientRect());
@@ -113,12 +122,23 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
           && children.every((b, j) => i === j || a.right <= b.left + 1 || b.right <= a.left + 1 || a.bottom <= b.top + 1 || b.bottom <= a.top + 1))
           && buttons.every((b) => b.scrollWidth <= b.clientWidth && b.scrollHeight <= b.clientHeight);
       }), true, "Toolbar groups and labels must not overlap or clip");
-      assert.equal(await p.locator(".game-rule-links button:visible").evaluateAll((buttons) => {
+      assert.equal(await p.locator(".game-rule-links > button:visible").evaluateAll((buttons) => {
         const first = buttons[0].getBoundingClientRect();
         return buttons.every((button) => Math.abs(button.getBoundingClientRect().top - first.top) < 1);
       }), true, "Rule entry points stay together on one row");
       assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       await p.locator(".game-topbar").screenshot({ path: `test-results/${name}-rule-toolbar-${width}.png` });
+    }
+    async function checkVictoryTarget(p, target, label) {
+      assert.equal(await p.locator("#victoryTargetValue").textContent(), String(target));
+      assert.match(await p.locator("#victoryTarget").textContent(), /胜利目标 \/ Target/);
+      assert.equal(await p.locator("#victoryTarget svg").count(), 1);
+      assert.equal(await p.locator("#victoryTarget").evaluate(el => {
+        const r = el.getBoundingClientRect(), board = document.querySelector("#boardViewport").getBoundingClientRect();
+        const phase = document.querySelector("#phaseLabel").getBoundingClientRect();
+        return r.width > 0 && r.left >= 0 && r.right <= innerWidth && r.bottom <= board.top + 1 && (phase.width === 0 || phase.right <= r.left) && el.scrollWidth <= el.clientWidth;
+      }), true, "Victory target fits above the board, clear of stage text and map");
+      await p.locator(".board-toolbar").screenshot({path:`test-results/victory-target-${label}.png`});
     }
     async function checkPlayerSummary(p, game, name, width) {
       const seafarers = Boolean(game.board.islands), visible = E.publicGame(game, 0);
@@ -160,7 +180,7 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
       await p.locator("#setup").waitFor({ state: "visible" });
       await p.locator("#create").click();
       await p.locator("#lobby").waitFor({ state: "visible" });
-      if (edition === "seafarers") await p.locator("#sailingAcknowledge").click();
+      assert.equal(await p.locator("dialog[open]").count(), 0, "New rooms do not force rules reading");
       const room = catan.rooms.get(await p.locator("#copyCode").textContent());
       await p.locator("#fillBots").click(); await p.locator("#start:not([disabled])").click();
       await p.locator('#game[data-phase="setupSettlement"]').waitFor();
@@ -214,9 +234,11 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
     }
     // Switching editions keeps their distinct rule entry points and supports rereading.
     await base.locator('[data-edition="seafarers"]').click();
-    await base.locator("#sailingAcknowledge").click(); await base.locator("#sailingAcknowledge").click();
+    assert.equal(await base.locator("dialog[open]").count(), 0);
     assert.equal(await base.locator("#baseRules").isVisible(), false);
     await base.locator('[data-edition="base"]').click();
+    assert.equal(await base.locator("dialog[open]").count(), 0);
+    await base.locator("#baseRules").click();
     await base.locator("#helpDialog").waitFor({ state: "visible" });
     await base.locator('[data-close="helpDialog"]').click();
     await base.locator("#name").fill("Reader"); await base.locator("#create").click();
@@ -245,13 +267,16 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
     await baseContext.close(); clearTimeout(baseRoom.timer);
     await page.goto(`http://127.0.0.1:${server.address().port}/catan.html?edition=seafarers`);
     await page.getByText("已连接 / Connected", { exact: true }).waitFor();
+    assert.equal(await page.locator("dialog[open]").count(), 0);
+    await page.locator("#seafarerRules").click();
     await page.locator("#sailingTitle").getByText("航海家规则", { exact: false }).waitFor();
     await page.locator("#sailingAcknowledge").click();
+    await page.locator("#mapRules").click();
     await page.locator("#sailingTitle").getByText("扬帆出海1", { exact: false }).waitFor();
     await page.locator("#sailingAcknowledge").click();
     for (const map of Maps.maps) {
       await page.locator("#mapChoice").selectOption(map.id);
-      if (await page.locator("#sailingDialog").isVisible()) await page.locator("#sailingAcknowledge").click();
+      assert.equal(await page.locator("dialog[open]").count(), 0);
       for (const layout of ["default", "random"]) {
         await page.locator(`#layoutChoice [data-layout="${layout}"]`).click();
         await page.waitForFunction(({id,count,layout}) => document.getElementById("previewBoard").dataset.map === id && document.getElementById("previewBoard").dataset.layout === layout && document.querySelectorAll("#previewBoard .hex-tile").length === count, {id:map.id,count:map.tiles.length,layout});
@@ -265,9 +290,10 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
       }
     }
     await page.setViewportSize({width:390,height:844});await page.locator('#layoutChoice [data-layout="default"]').click();
-    await page.locator("#mapChoice").selectOption("shores-2"); await page.locator("#sailingAcknowledge").click();
+    await page.locator("#mapChoice").selectOption("shores-2");
     await page.locator("#name").fill("Captain"); await page.locator("#create").click();
-    await page.locator("#lobby").waitFor({ state: "visible" }); await page.locator("#sailingAcknowledge").click();
+    await page.locator("#lobby").waitFor({ state: "visible" });
+    assert.equal(await page.locator("dialog[open]").count(), 0);
     const code = await page.locator("#copyCode").textContent();
     let room = catan.rooms.get(code);
     assert.equal(room.mapId, "shores-2"); assert.equal(room.maxPlayers, 4);
@@ -304,7 +330,7 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
       assert.equal(E.legal(g, 0).cancelDevelopment, true, "Switching to ships is not a placement");
       if (phase === "roll") {
         await page.reload(); await page.locator("[data-cancel-development]").waitFor();
-        while (await page.locator("#sailingDialog").isVisible()) { await page.locator("#sailingAcknowledge").click(); await page.waitForTimeout(100); }
+        assert.equal(await page.locator("dialog[open]").count(), 0, "Reconnecting does not interrupt play with rules");
         assert.equal(await page.evaluate(() => window.testState.game.legal.cancelDevelopment), true, "Reconnecting preserves a pending cancellation");
       }
       await page.locator("[data-cancel-development]").scrollIntoViewIfNeeded();
@@ -328,7 +354,7 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
     for (const width of [320,390,1440]) {
       await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
       const beforeRules = g.revision;
-      await checkRuleToolbar(page, ["gameMapRules", "gameBaseRules", "gameSailingRules"], "seafarers", width);
+      await checkRuleToolbar(page, ["gameMapRules", "gameBaseRules", "gameSailingRules"], "seafarers", width, g.target);
       await page.locator("#gameMapRules").click();
       assert.match(await page.locator("#sailingTitle").textContent(), /New Shores 2/);
       await page.locator("#sailingAcknowledge").click();
@@ -361,10 +387,11 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
     // Host can reconnect, keeping chosen map, permissions, seat and private hand.
     const avatar = room.seats[0].avatar;
     await page.reload(); await page.waitForFunction(() => window.testState?.game?.phase === "roll");
-    while (await page.locator("#sailingDialog").isVisible()) { await page.locator("#sailingAcknowledge").click(); await page.waitForTimeout(100); }
+    assert.equal(await page.locator("dialog[open]").count(), 0, "Reconnecting keeps rules closed");
+    assert.equal(await page.locator("#supplyDetails").evaluate(el => el.open), true, "Bank is expanded after reconnecting");
     await page.locator('#game[data-phase="roll"]').waitFor();
     assert.equal(room.mapId, "shores-2"); assert.deepEqual(room.seats[0].avatar, avatar);
-    await checkRuleToolbar(page, ["gameMapRules", "gameBaseRules", "gameSailingRules"], "seafarers-reconnect", 1440);
+    await checkRuleToolbar(page, ["gameMapRules", "gameBaseRules", "gameSailingRules"], "seafarers-reconnect", 1440, g.target);
     assert.equal(await page.evaluate(() => window.testState.host === window.testState.you), true);
     assert.equal(await page.evaluate(() => window.testState.game.players[1].resources), null);
     // Pirate target circles, and ship-owner stealing by clicking highlighted ships.
@@ -383,8 +410,8 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
     g.current = 1; g.phase = "gold"; g.goldQueue = [{ id: 0, count: 8 }]; g.goldResume = "main";
     room.seats[1].bot = false; room.seats[1].auto = false; room.seats[1].disconnectedAt = Date.now();
     const originalBank = [...g.bank]; g.bank = [2,0,5,5,5]; await sync();
-    const addGold = (r) => page.locator(`[data-add-gold="${r}"]`);
-    const selectedGold = () => page.locator("#goldSelected [data-remove-gold]").evaluateAll((cards) => cards.map((card) => Number(card.dataset.removeGold)));
+    const addGold = (r) => page.locator(`[data-add-resource="${r}"]`);
+    const selectedGold = () => page.locator("#resourceSelected [data-remove-resource]").evaluateAll((cards) => cards.map((card) => Number(card.dataset.removeResource)));
     for (const [width, height] of [[320,568], [390,844], [1440,1000]]) {
       await page.setViewportSize({ width, height });
       await page.locator('[data-special="gold"]').click();
@@ -394,7 +421,7 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
       assert.equal(await addGold(1).isDisabled(), true, "Empty supply cannot be selected");
       await addGold(0).tap(); await addGold(0).tap();
       assert.equal(await addGold(0).isDisabled(), true, "Cannot choose more than the bank holds");
-      await page.locator('[data-remove-gold="0"]').first().tap();
+      await page.locator('[data-remove-resource="0"]').first().tap();
       assert.equal(await addGold(0).isDisabled(), false);
       await addGold(0).tap();
       for (let n = 0; n < 5; n++) await addGold(2).tap();
@@ -402,14 +429,14 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
       await addGold(3).tap();
       assert.deepEqual(await selectedGold(), [0,0,2,2,2,2,2,3]);
       assert.equal(await page.locator("#confirmResources").isEnabled(), true);
-      assert.equal(await page.locator("#goldSupply button:not(:disabled)").count(), 0, "No adding beyond the awarded count");
-      await page.locator('[data-remove-gold="0"]').first().tap();
+      assert.equal(await page.locator("#resourceSupply button:not(:disabled)").count(), 0, "No adding beyond the awarded count");
+      await page.locator('[data-remove-resource="0"]').first().tap();
       assert.equal(await page.locator("#confirmResources").isDisabled(), true, "Removing a card updates confirmation immediately");
       await addGold(3).tap();
       const layout = await page.locator("#resourceDialog").evaluate((dialog) => {
-        const box = dialog.getBoundingClientRect(), choices = document.getElementById("goldChoices").getBoundingClientRect();
+        const box = dialog.getBoundingClientRect(), choices = document.getElementById("resourceChoices").getBoundingClientRect();
         const hint = document.getElementById("resourceHint").getBoundingClientRect(), confirm = document.getElementById("confirmResources").getBoundingClientRect();
-        const cards = [...document.querySelectorAll("#goldSelected button")].map((el) => el.getBoundingClientRect());
+        const cards = [...document.querySelectorAll("#resourceSelected button")].map((el) => el.getBoundingClientRect());
         return box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight
           && choices.bottom <= hint.top && hint.bottom <= confirm.top && confirm.bottom <= box.bottom
           && dialog.scrollWidth <= dialog.clientWidth
@@ -417,7 +444,7 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
           && cards.every((a, i) => cards.every((b, j) => i === j || a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top));
       });
       assert.equal(layout, true, `Gold picker and confirmation fit at ${width}px`);
-      if (width < 400) assert.ok(await page.locator("#goldSelected button").evaluateAll((cards) => new Set(cards.map((card) => Math.round(card.getBoundingClientRect().top))).size > 1), "Selected gold resources wrap on phones");
+      if (width < 400) assert.ok(await page.locator("#resourceSelected button").evaluateAll((cards) => new Set(cards.map((card) => Math.round(card.getBoundingClientRect().top))).size > 1), "Selected gold resources wrap on phones");
       await page.screenshot({ path: `test-results/seafarers-gold-picker-${width}.png` });
       await page.locator('[data-close="resourceDialog"]').click();
     }
@@ -474,16 +501,18 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
       await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
       await checkPlayerSummary(page, g, "seafarers-long-route", width);
     }
-    for(const map of Maps.maps.slice(4)) {
+    for(const map of Maps.maps) {
       const p=await context.newPage();p.on("pageerror",(e)=>errors.push(e.message));
       await p.goto(`http://127.0.0.1:${server.address().port}/catan.html`);
       await p.getByText("已连接 / Connected",{exact:true}).waitFor();
       await p.locator('[data-edition="seafarers"]').click();
-      await p.locator("#sailingAcknowledge").click();await p.locator("#sailingAcknowledge").click();
-      await p.locator("#mapChoice").selectOption(map.id);await p.locator("#sailingAcknowledge").click();
+      assert.equal(await p.locator("dialog[open]").count(), 0);
+      await p.locator("#mapChoice").selectOption(map.id);
       await p.locator('#layoutChoice [data-layout="random"]').click();await p.locator("#name").fill("Explorer");
       await p.locator("#create").click();await p.locator("#lobby").waitFor();
-      assert.match(await p.locator("#sailingContent").textContent(),map.family==="fog"?/No island bonus VP/:/four foreign territories/);
+      assert.equal(await p.locator("dialog[open]").count(), 0);
+      await p.locator("#lobbyMapRules").click();
+      if (["fog", "desert"].includes(map.family)) assert.match(await p.locator("#sailingContent").textContent(),map.family==="fog"?/No island bonus VP/:/four foreign territories/);
       assert.match(await p.locator("#sailingContent").textContent(),/Random/);
       await p.locator("#sailingAcknowledge").click();
       const newRoom=catan.rooms.get(await p.locator("#copyCode").textContent());
@@ -494,8 +523,9 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
       await p.locator("#gameMapRules").click();await p.locator("#sailingAcknowledge").click();
       assert.equal(await p.locator("#board [data-vertex]").count(),E.legal(newRoom.game,0).settlements.length);
       assert.equal(await p.locator("#board .fog-tile").count(),map.family==="fog"?12:0);
-      for(const width of [390,1440]) {
+      for(const width of [320,390,1440]) {
         await p.setViewportSize({width,height:width===1440?1000:844});
+        await checkVictoryTarget(p,map.target,`${map.id}-${width}`);
         await p.locator("#boardViewport").screenshot({path:`test-results/${map.id}-random-game-${width}.png`});
         assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
       }

@@ -444,6 +444,9 @@ function act(g, id, a, rng = random) {
     } else throw new Error("未知行动 / Unknown action");
   }
   g.revision++; checkWin(g);
+  const sound = g.winner >= 0 ? "victory" : type === "playDevelopment" ? a.card
+    : ({ road: "road", ship: "ship", moveShip: "ship", settlement: "settlement", city: "city", robber: "robber", pirate: "pirate", roll: "dice", acceptTrade: "exchange", bankTrade: "exchange", cancelDevelopment: "cancel" })[type];
+  g.effect = sound ? { id: g.revision, sound } : null;
   return g;
 }
 
@@ -451,7 +454,7 @@ function publicGame(g, id) {
   return {
     board: g.board, mapId: g.mapId, layout: g.layout, target: g.target, thief: g.thief, goldQueue: g.goldQueue, bank: g.bank, deckCount: g.deck.length, phase: g.phase, current: g.current, turn: g.turn,
     dice: g.dice, longest: g.longest, largest: g.largest, roadLengths: g.roadLengths, winner: g.winner,
-    log: g.log, revision: g.revision, trade: g.trade, discard: g.discard, freeRoads: g.freeRoads,
+    log: g.log, revision: g.revision, effect: g.effect || null, trade: g.trade, discard: g.discard, freeRoads: g.freeRoads,
     players: g.players.map((p) => ({ id: p.id, name: p.name, resourceCount: sum(p.resources), developmentCount: p.development.length,
       resources: p.id === id || g.phase === "over" ? p.resources : null,
       development: p.id === id || g.phase === "over" ? p.development : null,

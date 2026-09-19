@@ -7,8 +7,9 @@
   const nameInput=$("#playerName");nameInput.value=localStorage.getItem("boardclub-name")||"";$("#roomInput").value=new URLSearchParams(location.search).get("room")||"";UI.mountAvatarPicker($("#avatarPicker"),nameInput);
   const icons=()=>window.lucide?.createIcons();
   const social=UI.mountInteractions(()=>state&&({code:state.code,players:state.seats,you:state.seats[state.you]?.socialId,connected:online}),send);
+  const management=UI.mountRoomControl(()=>state?.control,send,()=>$("#roomPanel .room-heading"));
   function toast(text){$("#toast").textContent=text;$("#toast").hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$("#toast").hidden=true,5000);}
-  function send(data){if(!online||socket.readyState!==WebSocket.OPEN){toast("尚未连接服务器 / Server not connected");return false;}socket.send(JSON.stringify(data));return true;}
+  function send(data){if(state?.control?.paused&&["action","start"].includes(data.type)){toast("空位待补齐，游戏暂停 / Waiting for replacement");return false;}if(!online||socket.readyState!==WebSocket.OPEN){toast("尚未连接服务器 / Server not connected");return false;}socket.send(JSON.stringify(data));return true;}
   function action(data,close=false){if(!state?.game)return;if(send({type:"action",revision:state.game.revision,action:data})&&close)closeModal();}
   function connect(){
     if(location.protocol==="file:"){$("#connection").textContent="请从游戏服务器打开 / Open via game server";toast("请打开服务器网址，文件模式不能联机 / Use the server URL");return;}
@@ -18,7 +19,7 @@
       if(data.type==="reaction"){social.receive(data);return;}
       if(data.type==="welcome"){online=true;sessionStorage.setItem("boardclub-richman-session",data.token);$("#connection").textContent="已连接 / Connected";$("#connection").dataset.connected="true";return;}
       if(data.type==="error"){toast(data.message);return;}
-      if(data.type==="left"){state=null;clearTimeout(animationTimer);animating=false;positions={};closeModal();history.replaceState({},"",location.pathname);render();return;}
+      if(data.type==="left"){state=null;clearTimeout(animationTimer);animating=false;positions={};closeModal();history.replaceState({},"",location.pathname);render();if(data.reason)toast(data.reason);return;}
       if(data.type!=="state")return;
       const old=state,newMove=data.game?.lastMove;state=data;history.replaceState({},"",`${location.pathname}?room=${data.code}`);
       if(old?.code===data.code&&old.game&&newMove&&newMove.id!==old.game.lastMove?.id&&!matchMedia("(prefers-reduced-motion: reduce)").matches){
@@ -46,7 +47,8 @@
   const button=(type,zh,en,ico,disabled=false,primary=false)=>`<button data-act="${type}" ${disabled||animating?"disabled":""} class="${primary?"primary":""}">${ico?icon(ico):""}<span>${label(zh,en)}</span></button>`;
   function renderActions(){
     const g=state.game,p=g.players[state.you],mine=g.current===state.you&&!p.out&&!state.seats[state.you].auto,t=g.tiles[p.pos];let html="";
-    if(g.phase==="over")html=state.you===state.host?`<button data-room-start class="primary">${icon("rotate-cw")}${label("再来一局","New game")}</button>`:"等待房主重新开局 / Waiting for host";
+    if(state.control?.paused)html="空位待补齐，游戏暂停 / Waiting for replacement";
+    else if(g.phase==="over")html=state.you===state.host?`<button data-room-start class="primary">${icon("rotate-cw")}${label("再来一局","New game")}</button>`:"等待房主重新开局 / Waiting for host";
     else if(!mine)html=`<span>${state.seats[state.you].auto?"正在托管 / Auto is on":p.out?"你已破产，仍可观战和聊天 / Bankrupt; watching":"等待其他玩家行动 / Waiting for the current player"}</span>`;
     else if(g.phase==="roll")html=`${p.vehicle>1?`<label>${icon("dices")}<select id="diceCount">${Array.from({length:p.vehicle},(_,i)=>`<option value="${i+1}">${i+1} 骰 / Dice</option>`).join("")}</select></label>`:""}${button("roll","掷骰前进","Roll & move","dices",false,true)}`;
     else if(g.phase==="property")html=`<span>${label(t.name,t.en)}</span>${button(t.owner<0?"buy":"upgrade",`${t.owner<0?"买地":"加盖"} ${num(t.owner<0?g.buyPrice:Math.round(t.price*.6*g.index))}`,t.owner<0?"Buy land":"Upgrade","house-plus",p.cash<(t.owner<0?g.buyPrice:Math.round(t.price*.6*g.index)),true)}${button("done","跳过","Pass","arrow-right")}`;
@@ -65,10 +67,11 @@
   }
   function render(){
     social.sync();
+    management.sync();
     $(".rich-layout").classList.toggle("in-room",!!state);$("#setup").hidden=!!state;$("#roomPanel").hidden=!state;["actions","gameTools","handSection"].forEach(id=>$("#"+id).hidden=!state?.game);renderBoard();
     if(!state){$("#players").innerHTML="";$("#calendar").innerHTML="<span>晴湾 / Sunny Bay</span><span>虚拟游戏币 / Game currency</span>";$("#turnStatus").innerHTML=label("大富翁","Richman");icons();return;}
     $("#roomCode").textContent=state.code;renderLobby();
-    $("#messages").innerHTML=state.chat.map(m=>`<p><strong>${esc(state.seats[m.playerId]?.name)}</strong>${esc(m.text)}</p>`).join("");$("#messages").scrollTop=$("#messages").scrollHeight;
+    $("#messages").innerHTML=state.chat.map(m=>`<p><strong>${esc(m.name||state.seats[m.playerId]?.name)}</strong>${esc(m.text)}</p>`).join("");$("#messages").scrollTop=$("#messages").scrollHeight;
     const g=state.game;
     if(g){
       const p=g.players[state.you],current=g.players[g.current];$("#calendar").innerHTML=`<span>${dateText(g)}</span><span>第 ${g.day} 天 / Day ${g.day}${g.limitDays?" / "+g.limitDays:""} · 物价 / Index ×${g.index}</span>`;

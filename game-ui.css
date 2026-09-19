@@ -49,3 +49,24 @@
 .avatar-dialog button:disabled {opacity: .45; cursor: default;}
 @media (max-width: 740px) {.turn-avatar {--avatar-text: 15px; --avatar-emoji: 19px;}}
 @media (max-width: 520px) {.seat-avatar {--avatar-text: 9px; --avatar-emoji: 12px;}.lobby-player > .seat-avatar {--avatar-text: 17px; --avatar-emoji: 22px;}}
+/* Shared room controls are separate from each game's board and action layout. */
+.room-control-bar { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0; width:auto; min-width:0; }
+.room-control-bar[hidden], .room-control-bar [hidden] { display:none; }
+.room-control-bar button { min-height:44px; font:inherit; font-size:13px; padding:6px 10px; }
+.room-control-bar [data-room-manage] { display:inline-grid; place-items:center; width:44px; height:44px; min-width:44px; flex:none; padding:9px; color:inherit; background:transparent; border:1px solid currentColor; border-radius:6px; }
+.room-control-bar [data-room-manage] svg { width:22px; height:22px; }
+.room-control-bar [data-room-paused] { flex:1 1 180px; font-size:14px; overflow-wrap:anywhere; }
+dialog.room-control-dialog { box-sizing:border-box; width:560px; min-width:0; max-width:calc(100vw - 24px); max-height:calc(100vh - 24px); max-height:calc(100dvh - 24px); padding:18px; overflow:auto; border:1px solid #b7cec6; border-radius:8px; background:#edf5ef; color:#224b5c; font-family:inherit; }
+.room-control-dialog::backdrop { background:#102b3c88; }
+.room-control-dialog header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.room-control-dialog h2 { margin:0 0 12px; font-size:20px; }
+.room-control-dialog small { display:block; font-size:13px; line-height:1.5; font-weight:normal; }
+.room-control-dialog button { min-height:44px; min-width:44px; max-width:100%; font:inherit; font-size:14px; padding:8px 10px; white-space:normal; overflow-wrap:anywhere; background:#f9fcf8; color:#214f59; border:1px solid #afc9bc; border-radius:6px; cursor:pointer; }
+.room-control-seats { margin-top:12px; }
+.room-control-seat { display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between; gap:8px; padding:10px 0; border-bottom:1px solid #cbded5; }
+.room-control-seat > span { flex:1 1 110px; min-width:0; overflow-wrap:anywhere; }
+.room-control-seat > div, .host-request > div { display:flex; flex-wrap:wrap; gap:6px; }
+.room-kick-confirm, .room-paused-note, .host-request { padding:10px 0; overflow-wrap:anywhere; }
+.room-kick-confirm { border-top:2px solid #d99967; }
+.idle-warning button { width:100%; background:#ffdf85; }
+.vacant-avatar { opacity:.65; }

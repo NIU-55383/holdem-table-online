@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node integration-test.js && node --test catan-test.js avatar-test.js social-test.js seafarers-test.js seafarers-expansion-test.js duel-test.js richman-test.js"
+    "test": "node integration-test.js && node --test catan-test.js catan-audio-test.js avatar-test.js social-test.js seafarers-test.js seafarers-expansion-test.js duel-test.js richman-test.js room-control-test.js"
   },
   "engines": {
     "node": ">=20"

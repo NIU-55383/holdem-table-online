@@ -15,8 +15,10 @@
     <a class="back-link" href="index.html" title="返回桌游大厅 / Back to lobby" aria-label="返回桌游大厅 / Back to lobby">←</a>
     <a class="island-brand" href="catan.html"><span class="hex-logo">C</span><span>卡坦岛 <small>CATAN</small></span></a>
     <span id="connection" class="connection" role="status">连接中 / Connecting</span>
+    <button class="icon-button" id="soundToggle" type="button" title="关闭音效 / Mute sounds" aria-label="关闭音效 / Mute sounds" aria-pressed="true"><i data-lucide="volume-2" aria-hidden="true"></i></button>
     <button class="icon-button" id="helpButton" title="规则 / Rules" aria-label="规则 / Rules">?</button>
   </header>
+  <aside id="incomingTradeAlert" class="incoming-trade-alert" role="status" aria-live="polite" hidden><i data-lucide="handshake" aria-hidden="true"></i><div><strong id="incomingTradeName"></strong><small>向你发起交易 / Trade offer</small></div><button id="viewIncomingTrade" type="button" class="primary">查看<small>View</small></button></aside>
   <main>
     <div id="notice" role="alert" hidden></div>
     <section id="setup" class="setup-layout">
@@ -55,7 +57,7 @@
       <div id="victory" class="victory" hidden><h1 id="winnerText"></h1><button class="primary" id="rematch">再来一局 / Play Again</button></div>
       <div class="game-layout">
         <section class="board-section">
-          <div class="board-toolbar"><span id="phaseLabel"></span></div>
+          <div class="board-toolbar"><span id="phaseLabel"></span><div id="victoryTarget" class="victory-target" title="在自己的回合达到目标分数即可获胜 / Reach the target on your own turn to win"><i data-lucide="trophy" aria-hidden="true"></i><span>胜利目标 / Target</span><strong><b id="victoryTargetValue">10</b><small> 分 / VP</small></strong></div></div>
           <div class="board-viewport" id="boardViewport" tabindex="0" role="region" aria-label="卡坦岛棋盘，双指缩放；键盘加减号缩放，0 复位 / Catan board: pinch to zoom; keyboard plus/minus to zoom, 0 to reset"><div id="board"></div></div>
           <div class="turn-banner"><div class="numbered-avatar" id="turnAvatar"></div><div id="turnPrompt" aria-live="polite"></div><div id="dice" class="dice-pair"></div></div>
           <div id="selection" class="selection" hidden><span id="selectionLabel"></span><button class="primary" id="confirmBuild">确认 / Confirm</button><button class="icon-button" id="cancelBuild" title="取消 / Cancel" aria-label="取消 / Cancel">×</button></div>
@@ -64,7 +66,7 @@
           <section class="hand-section"><h2>你的资源 <small>Your Resources</small><span id="handTotal" hidden></span></h2><div id="resources" class="resource-hand"></div><div id="development" class="development-hand"></div></section>
           <div class="action-grid" id="actions"></div>
           <div id="special" class="special-actions" hidden></div>
-          <div id="tradeOffer" class="trade-offer" hidden></div>
+          <div id="tradeOffer" class="trade-offer" tabindex="-1" hidden></div>
           <section class="player-overview" aria-label="玩家概况 / Player overview">
             <table class="player-summary"><thead><tr>
               <th scope="col">玩家<small>Player</small></th>
@@ -103,10 +105,9 @@
   </dialog>
   <dialog id="resourceDialog" aria-labelledby="resourceTitle">
     <div class="dialog-heading"><h2 id="resourceTitle"></h2><button class="icon-button" data-close="resourceDialog" aria-label="关闭 / Close">×</button></div>
-    <div id="resourceChoices" class="resource-inputs"></div>
-    <div id="goldChoices" hidden>
-      <section class="trade-picker-section" aria-labelledby="goldSupplyLabel"><h3 id="goldSupplyLabel">选择资源 <small>Choose Resources</small></h3><div id="goldSupply" class="trade-resource-picker"></div></section>
-      <section class="trade-picker-section" aria-labelledby="goldSelectedLabel"><h3 id="goldSelectedLabel">已选资源 <small>Selected Resources</small></h3><div id="goldSelected" class="trade-card-list"></div></section>
+    <div id="resourceChoices" hidden>
+      <section class="trade-picker-section" aria-labelledby="resourceSupplyLabel"><h3 id="resourceSupplyLabel">选择资源 <small>Choose Resources</small></h3><div id="resourceSupply" class="trade-resource-picker"></div></section>
+      <section class="trade-picker-section" aria-labelledby="resourceSelectedLabel"><h3 id="resourceSelectedLabel">已选资源 <small>Selected Resources</small></h3><div id="resourceSelected" class="trade-card-list"></div></section>
     </div>
     <div id="discardChoices" hidden>
       <section aria-labelledby="discardHandLabel"><h3 id="discardHandLabel">保留手牌 <small>Keep</small></h3><div id="discardHand" class="discard-hand"></div></section>
@@ -163,6 +164,6 @@
   </dialog>
   <dialog id="leaveDialog"><div class="dialog-heading"><h2>离开岛屿？<small>Leave the island?</small></h2><button class="icon-button" data-close="leaveDialog" aria-label="关闭 / Close">×</button></div><p>正在进行的对局会由机器人接手。<small>A bot will take over your seat in the current game.</small></p><button id="confirmLeave" class="primary wide">离开房间 / Leave Room</button></dialog>
   <dialog id="sailingDialog" aria-labelledby="sailingTitle"><div class="dialog-heading"><h2 id="sailingTitle"></h2><button class="icon-button" data-close="sailingDialog" aria-label="关闭 / Close">×</button></div><div id="sailingContent" class="rules-content" tabindex="0" role="region" aria-label="航海规则与地图规则 / Seafarers and map rules"></div><button class="primary wide" id="sailingAcknowledge">已阅读 / Got it</button></dialog>
-  <script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-ui.js"></script><script src="catan-maps.js"></script><script src="catan-board.js"></script><script src="catan.js"></script>
+  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-ui.js"></script><script src="catan-maps.js"></script><script src="catan-board.js"></script><script src="catan-audio.js"></script><script src="catan.js"></script>
 </body>
 </html>

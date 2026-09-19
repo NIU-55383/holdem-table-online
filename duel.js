@@ -12,7 +12,9 @@
   const requestLabels = { undo:"悔棋 / Undo", draw:"和棋 / Draw", swap:"交换执子 / Swap sides", rematch:"换边再来一局 / Rematch with swapped sides" };
   const icons = () => window.lucide.createIcons();
   const social = UI.mountInteractions(() => state && ({ code: state.code, players: state.seats, you: state.seats[state.you]?.socialId, connected: socket?.readyState === WebSocket.OPEN }), send);
+  const management = UI.mountRoomControl(() => state?.control, send, () => document.querySelector("#roomPanel .room-heading"));
   function send(data) {
+    if (state?.control?.paused && ["move", "request", "respond", "start", "resign"].includes(data.type)) { $("error").textContent = "空位待补齐，游戏暂停 / Waiting for replacement"; return false; }
     if (socket?.readyState !== WebSocket.OPEN) { $("error").textContent = "连接已断开，正在重连 / Disconnected, reconnecting"; return false; }
     socket.send(JSON.stringify(data)); return true;
   }
@@ -37,17 +39,18 @@
     $("rulesContent").innerHTML = `<ul>${items.map(([zh,en])=>`<li>${zh}<small>${en}</small></li>`).join("")}</ul>`; $("rulesDialog").showModal();
   }
   function playerStrip(id) {
-    const p = state?.seats[id]; if (!p) return `<div class="player-name">等待入座 <small>Waiting for a player</small></div><div class="player-side">${dot(id)}${sideLabel(id)}</div>`;
+    const p = state?.seats[id]; if (!p || p.vacant) return `<div class="player-name">等待入座 <small>Waiting for a player</small></div><div class="player-side">${dot(id)}${sideLabel(id)}</div>`;
     const own = id === state.you, bubble = bubbles.get(id), live = p.connected && (p.bot || socket?.readyState === WebSocket.OPEN);
     return `${UI.avatar(p,live,"duel-avatar game-avatar",own)}<div class="player-info"><div class="player-name">${esc(p.name)}${p.bot ? " · AI" : ""}</div><div class="player-meta">${p.bot ? levels[state.difficulty] : own ? "你 / You" : "好友 / Friend"}${id === state.host ? " · 房主 / Host" : ""}</div>${bubble && Date.now()-bubble.time<6000 ? `<div class="player-chat">${esc(bubble.text)}</div>` : ""}</div><div class="player-side">${dot(id)}${sideLabel(id)}</div>`;
   }
   function renderBoard() {
-    const g = state?.game, own = g?.phase === "playing" && g.current === state.you && !busy && socket?.readyState === WebSocket.OPEN;
+    const g = state?.game, own = g?.phase === "playing" && g.current === state.you && !state.control?.paused && !state.seats[state.you]?.auto && !busy && socket?.readyState === WebSocket.OPEN;
     const targets = own && selected >= 0 ? g.legal.filter((m)=>m.from===selected).map((m)=>m.to) : [];
     $("board").innerHTML = B.render(kind,g,{ flip: flipped, selected, targets, interactive: Boolean(own), numbers: $("numbers").checked });
   }
   function render() {
     social.sync();
+    management.sync();
     const g = state?.game, me = state?.you ?? 0, other = 1-me;
     document.querySelector(".duel-layout").classList.toggle("in-room",Boolean(state));
     $("setup").hidden = Boolean(state); $("roomPanel").hidden = !state; $("gameActions").hidden = !g;
@@ -71,7 +74,7 @@
     $("rematchBtn").disabled = !state.seats[other]?.connected || Boolean(state.pending);
     const p = state.pending; $("requestPanel").hidden = !p;
     if (p) $("requestPanel").innerHTML = `<strong>${esc(state.seats[p.from].name)}</strong> · ${requestLabels[p.action]}<div>${p.from===me ? '<button data-request="cancel">撤回 / Cancel</button>' : '<button data-request="accept" class="primary">同意 / Accept</button><button data-request="decline">拒绝 / Decline</button>'}</div>`;
-    $("messages").innerHTML = state.chat.map((m)=>`<p><b>${esc(state.seats[m.playerId]?.name)}</b>${esc(m.text)}</p>`).join("");
+    $("messages").innerHTML = state.chat.map((m)=>`<p><b>${esc(m.name || state.seats[m.playerId]?.name)}</b>${esc(m.text)}</p>`).join("");
     $("moveCount").textContent = g?.moves.length || 0;
     $("moveLog").innerHTML = (g?.moves || []).map((m,n)=>`<li><span>${n+1}</span>${dot(m.side)}${m.piece ? esc(B.names[m.piece][m.side])+" " : ""}${esc(m.text)}${m.captured ? " ×" : ""}${m.check ? " +" : ""}</li>`).join("");
     icons();
@@ -86,7 +89,7 @@
       if (m.type === "reaction") { social.receive(m); return; }
       if (m.type === "welcome") sessionStorage.setItem(sessionKey,m.token);
       if (m.type === "error") { busy=false; $("error").textContent=m.message; renderBoard(); }
-      if (m.type === "left") { state=null; selected=-1; busy=false; flipped=false; bubbles.clear(); firstState=true; render(); }
+      if (m.type === "left") { state=null; selected=-1; busy=false; flipped=false; bubbles.clear(); firstState=true; render(); if(m.reason)$("error").textContent=m.reason; }
       if (m.type === "state") {
         if (state?.code !== m.code) { bubbles.clear(); seenChat.clear(); firstState=true; }
         else if (state.you !== m.you) bubbles.clear();

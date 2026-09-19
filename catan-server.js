@@ -12,6 +12,13 @@ function attachCatan(server) {
     perMessageDeflate: { serverNoContextTakeover: true, clientNoContextTakeover: true,
       threshold: 1024, concurrencyLimit: 4, zlibDeflateOptions: { level: 3 } } });
   const rooms = new Map(), sessions = new Map();
+  const control = require("./room-control").createRoomControl({ rooms,
+    active: (r) => r.game && r.game.phase !== "over", started: (r) => Boolean(r.game),
+    turnKey: (r) => r.game && `${r.game.turn}:${r.game.phase}:${r.game.current}`,
+    actors: (r) => r.game.phase === "discard" ? r.game.players.map((p, i) => r.game.discard[i] ? i : -1) : [r.game.phase === "gold" ? r.game.goldQueue[0].id : r.game.current],
+    stop: (r) => clearTimeout(r.timer), changed: broadcast,
+    remove: (r, p) => { const s = sessions.get(p.token); if (s) s.room = ""; send(p.ws, { type: "left", reason: "房主已将你移出房间 / Removed by the host" }); }
+  });
   const familiar = ["Connie", "Colin", "Angela", "Stephan", "Zoey", "William", "Tim", "Gary", "Alison"];
   const common = ["Emma", "James", "Olivia", "Daniel", "David", "Sophia", "Michael", "Emily", "Alex", "Sarah", "Ryan", "Anna", "Chris", "Laura"];
   const clean = (s, n = 18) => String(s || "").trim().replace(/\s+/g, " ").slice(0, n);
@@ -27,8 +34,8 @@ function attachCatan(server) {
     const swap = room.seatSwap;
     return { type: "state", code: room.code, mapId: room.mapId, layout: room.layout, maxPlayers: room.maxPlayers, you, targetedTrades: true, seatSelection: true,
       host: room.seats.findIndex((p) => p.token === room.host),
-      skins: room.skins,
-      seats: room.seats.map((p) => ({ socialId: Social.publicId(p), name: p.name, position: p.position, avatar: p.avatar || null, bot: p.bot, connected: p.bot || Boolean(p.ws), auto: p.auto })),
+      skins: room.skins, control: control.snapshot(room, session),
+      seats: room.seats.map((p) => ({ socialId: Social.publicId(p), name: p.name, position: p.position, avatar: p.avatar || null, bot: p.bot, vacant: Boolean(p.vacant), connected: !p.vacant && (p.bot || Boolean(p.ws)), auto: p.auto })),
       seatSwap: swap ? { id: swap.id, from: room.seats.findIndex((p) => p.token === swap.from), to: room.seats.findIndex((p) => p.token === swap.to) } : null,
       game: room.game ? E.publicGame(room.game, you) : null, previewBoard: room.game ? null : room.previewBoard, chat: room.chat,
     };
@@ -61,14 +68,15 @@ function attachCatan(server) {
     }
   }
   function broadcast(room) {
+    control.sync(room);
     room.updated = Date.now();
     room.seats.forEach((p) => { if (!p.bot && p.ws) send(p.ws, snapshot(room, p)); });
     schedule(room);
   }
-  function controlled(p) { return p.bot || p.auto || (!p.ws && Date.now() - p.disconnectedAt > 30000); }
+  function controlled(p) { return p && !p.vacant && (p.bot || p.auto || (!p.ws && Date.now() - p.disconnectedAt > 30000)); }
   function schedule(room) {
     clearTimeout(room.timer);
-    if (!room.game || room.game.phase === "over" || !room.seats.some((p) => !p.bot && p.ws)) return;
+    if (control.paused(room) || !room.game || room.game.phase === "over" || !room.seats.some((p) => !p.bot && p.ws)) return;
     const g = room.game;
     let actor = -1;
     if (g.phase === "discard") actor = room.seats.findIndex((p, i) => g.discard[i] && controlled(p));
@@ -81,7 +89,7 @@ function attachCatan(server) {
     }
     const revision = g.revision;
     room.timer = setTimeout(() => {
-      if (!rooms.has(room.code) || room.game !== g || g.revision !== revision) return schedule(room);
+      if (control.paused(room) || !rooms.has(room.code) || room.game !== g || g.revision !== revision) return schedule(room);
       try {
         const action = E.chooseBotAction(g, actor);
         if (action) { E.act(g, actor, action); broadcast(room); }
@@ -99,12 +107,9 @@ function attachCatan(server) {
     if (index < 0) return;
     const seat = room.seats[index];
     seat.ws = null; seat.disconnectedAt = explicit ? 0 : Date.now();
+    control.elect(room);
     clearSeatSwap(room, seat.token);
     if (!room.game && explicit) { const before = [...room.seats]; room.seats.splice(index, 1); remapChat(room, before); }
-    if (room.host === session.token) {
-      const next = room.seats.find((p) => !p.bot && p.ws);
-      if (next) room.host = next.token;
-    }
     if (explicit) session.room = "";
     if (!room.seats.some((p) => !p.bot)) { clearTimeout(room.timer); rooms.delete(room.code); }
     else broadcast(room);
@@ -159,10 +164,13 @@ function attachCatan(server) {
           const room = rooms.get(clean(data.code, 5).toUpperCase()), name = clean(data.name);
           fail(room, "找不到卡坦岛房间 / Catan room not found"); fail(name, "请输入名字 / Enter your name");
           const existing = room.seats.find((p) => p.token === session.token);
-          fail(existing || (!room.game && room.seats.length < room.maxPlayers), "房间已满或已开局 / Room is full or already started");
+          fail(existing || control.vacancy(room) >= 0 || (!room.game && room.seats.length < room.maxPlayers), "房间已满或已开局 / Room is full or already started");
           if (session.room !== room.code) detach(session, true);
           if (existing) { existing.ws = ws; existing.auto = false; if (avatar !== undefined) existing.avatar = avatar; }
-          else room.seats.push({ token: session.token, name, position: openPosition(room), avatar: avatar === undefined ? session.avatar || null : avatar, bot: false, auto: false, ws });
+          else {
+            const player = { token: session.token, name, position: openPosition(room), avatar: avatar === undefined ? session.avatar || null : avatar, bot: false, auto: false, ws };
+            if (control.vacancy(room) >= 0) control.fill(room, control.vacancy(room), player); else room.seats.push(player);
+          }
           session.room = room.code;
           if (!room.seats.some((p) => p.token === room.host && p.ws)) room.host = session.token;
           broadcast(room); return;
@@ -171,12 +179,14 @@ function attachCatan(server) {
         fail(room, "请先加入房间 / Join a room first");
         const you = room.seats.findIndex((p) => p.token === session.token);
         fail(you >= 0, "座位不存在 / Seat not found");
+        if (control.handle(room, room.seats[you], data)) return;
         if (data.type === "reaction") {
           const event = Social.reaction(room, room.seats, room.seats[you], data);
           room.seats.forEach((p) => { if (!p.bot) send(p.ws, event); }); return;
         }
         const host = () => fail(room.host === session.token, "仅房主可操作 / Host only");
         if (data.type === "leave") { detach(session, true); send(ws, { type: "left" }); return; }
+        if (!["profile", "chat", "auto"].includes(data.type)) control.guard(room);
         if (data.type === "profile") { fail(avatar !== undefined, "请选择头像 / Choose an avatar"); room.seats[you].avatar = avatar; session.avatar = avatar; }
         else if (data.type === "chooseSeat") { chooseSeat(room, room.seats[you], data.position); }
         else if (data.type === "respondSeatSwap") {
@@ -203,7 +213,7 @@ function attachCatan(server) {
           room.game = E.createGame(room.seats.map((p) => p.name), undefined, room.mapId, room.layout, room.previewBoard);
         }
         else if (data.type === "rematch") { host(); fail(room.game?.phase === "over", "游戏尚未结束 / Game not over"); room.game = E.createGame(room.seats.map((p) => p.name), undefined, room.mapId, room.layout); room.game.board.skins = room.skins; }
-        else if (data.type === "action") { fail(room.game, "游戏尚未开始 / Game not started"); E.act(room.game, you, data.action || {}); }
+        else if (data.type === "action") { fail(room.game, "游戏尚未开始 / Game not started"); E.act(room.game, you, data.action || {}); control.touch(room, room.seats[you]); }
         else if (data.type === "auto") { room.seats[you].auto = Boolean(data.enabled); }
         else if (data.type === "chat") {
           const text = clean(data.text, 160);
@@ -221,7 +231,7 @@ function attachCatan(server) {
     for (const [token, s] of sessions) if (!s.ws && Date.now() - s.updated > 24 * 3600000) sessions.delete(token);
   }, 30000);
   heartbeat.unref();
-  server.on("close", () => { clearInterval(heartbeat); rooms.forEach((r) => clearTimeout(r.timer)); wss.clients.forEach((ws) => ws.terminate()); wss.close(); });
+  server.on("close", () => { control.close(); clearInterval(heartbeat); rooms.forEach((r) => clearTimeout(r.timer)); wss.clients.forEach((ws) => ws.terminate()); wss.close(); });
   const previews = new Map([["base", E.makeBoard()], ...Maps.maps.map((map) => [map.id, E.makeBoard(undefined, map.id)])]);
   Maps.maps.forEach((map) => previews.set(`${map.id}:random`, E.makeBoard(undefined, map.id, "random")));
   return { upgrade(request, socket, head) { wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request)); }, rooms, preview: previews.get("base"), previews };

@@ -4,20 +4,26 @@ const E=require("./richman-engine"),Avatar=require("./avatar-data");
 const Social=require("./game-social");
 function attachRichman(server,options={}){
   const rooms=new Map(),sessions=new Map(),wss=new WebSocketServer({noServer:true,maxPayload:32768});
+  const control=require("./room-control").createRoomControl({rooms,
+    active:r=>r.game&&r.game.phase!=="over",started:r=>Boolean(r.game),
+    turnKey:r=>r.game&&`${r.game.day}:${r.game.phase}:${r.game.current}`,actors:r=>[r.game.current],
+    stop,changed:r=>{broadcast(r);schedule(r);},
+    remove:(r,p)=>{const s=sessions.get(p.token);if(s)s.room="";send(p.ws,{type:"left",reason:"房主已将你移出房间 / Removed by the host"});}
+  });
   const ensure=E.requireRule,clean=(s,n=18)=>String(s||"").trim().replace(/\s+/g," ").slice(0,n);
   const send=(ws,data)=>{if(ws?.readyState===WebSocket.OPEN)ws.send(JSON.stringify(data));};
   const connected=p=>Boolean(p&&(p.bot||p.ws?.readyState===WebSocket.OPEN));
   const present=room=>room.seats.some(p=>p&&!p.bot&&connected(p));
-  function state(room,token){return{type:"state",code:room.code,options:room.options,you:room.seats.findIndex(p=>p?.token===token),host:room.seats.findIndex(p=>p?.token===room.host),seats:room.seats.map(p=>p?{socialId:Social.publicId(p),name:p.name,avatar:p.avatar,bot:p.bot,connected:connected(p),ready:p.ready,auto:!!p.auto}:null),game:room.game?E.snapshot(room.game,room.seats.findIndex(p=>p?.token===token)):null,chat:room.chat};}
-  function broadcast(room){room.updated=Date.now();for(const p of room.seats)if(p&&!p.bot)send(p.ws,state(room,p.token));}
+  function state(room,token){return{type:"state",code:room.code,options:room.options,you:room.seats.findIndex(p=>p?.token===token),host:room.seats.findIndex(p=>p?.token===room.host),seats:room.seats.map(p=>p?{socialId:Social.publicId(p),name:p.name,avatar:p.avatar,bot:p.bot,vacant:!!p.vacant,connected:connected(p),ready:p.ready,auto:!!p.auto}:null),control:control.snapshot(room,room.seats.find(p=>p?.token===token)),game:room.game?E.snapshot(room.game,room.seats.findIndex(p=>p?.token===token)):null,chat:room.chat};}
+  function broadcast(room){control.sync(room);room.updated=Date.now();for(const p of room.seats)if(p&&!p.bot&&p.ws)send(p.ws,state(room,p.token));}
   function stop(room){clearTimeout(room.timer);room.timer=null;}
   function schedule(room){
-    if(room.timer||!room.game||room.game.phase==="over"||!present(room))return;
+    if(control.paused(room)||room.timer||!room.game||room.game.phase==="over"||!present(room))return;
     const p=room.seats[room.game.current];
     if(!p.bot&&!p.auto&&connected(p))return;
     const delay=options.botDelay??(!p.bot&&!p.auto?30000:1000+(room.game.lastMove?.path.length||0)*135);
     room.timer=setTimeout(()=>{
-      room.timer=null;if(!present(room)||room.game.phase==="over")return;
+      room.timer=null;if(control.paused(room)||!present(room)||room.game.phase==="over")return;
       const seat=room.seats[room.game.current];if(!seat.bot&&!seat.auto&&connected(seat))return;
       try{E.apply(room.game,room.game.current,E.botAction(room.game,room.game.current,room.options.difficulty));}
       catch(error){console.error("Richman AI:",error.message);try{E.apply(room.game,room.game.current,{type:room.game.phase==="roll"?"roll":"done"});}catch(failure){console.error("Richman fallback:",failure.message);return;}}
@@ -34,8 +40,8 @@ function attachRichman(server,options={}){
     const room=rooms.get(session.room);if(!room)return;
     const id=room.seats.findIndex(p=>p?.token===session.token),seat=room.seats[id];if(!seat)return;
     seat.ws=null;
+    control.elect(room);
     if(explicit){session.room="";if(!room.game)room.seats[id]=null;else seat.auto=true;}
-    if(room.host===session.token){const next=room.seats.find(p=>p&&!p.bot&&connected(p));if(next)room.host=next.token;}
     stop(room);broadcast(room);schedule(room);
   }
   wss.on("connection",ws=>{
@@ -63,16 +69,18 @@ function attachRichman(server,options={}){
       }
       if(data.type==="join"){
         const room=rooms.get(clean(data.code,6).toUpperCase()),name=clean(data.name);ensure(room,"找不到房间 / Room not found");ensure(name,"请输入名字 / Enter a name");
-        const former=room.seats.findIndex(p=>p?.token===session.token);ensure(former>=0||!room.game&&room.seats.includes(null),"房间已满或已开局 / Full or started");
+        const former=room.seats.findIndex(p=>p?.token===session.token);ensure(former>=0||control.vacancy(room)>=0||!room.game&&room.seats.includes(null),"房间已满或已开局 / Full or started");
         if(session.room&&session.room!==room.code)detach(session,true);
-        if(former>=0){room.seats[former].ws=ws;room.seats[former].auto=false;}else room.seats[room.seats.indexOf(null)]={token:session.token,name,avatar:avatar||null,bot:false,ws,ready:false};
+        if(former>=0){room.seats[former].ws=ws;room.seats[former].auto=false;}else{const player={token:session.token,name,avatar:avatar||null,bot:false,ws,ready:!!room.game};if(control.vacancy(room)>=0)control.fill(room,control.vacancy(room),player);else room.seats[room.seats.indexOf(null)]=player;}
         session.room=room.code;if(!room.seats.some(p=>p?.token===room.host&&connected(p)))room.host=session.token;
         stop(room);broadcast(room);schedule(room);return;
       }
       const room=rooms.get(session.room);ensure(room,"请先加入房间 / Join a room");const id=room.seats.findIndex(p=>p?.token===session.token);ensure(id>=0,"没有座位 / No seat");
+      if(control.handle(room,room.seats[id],data))return;
       if(data.type==="reaction"){const event=Social.reaction(room,room.seats,room.seats[id],data);room.seats.forEach(p=>{if(p&&!p.bot)send(p.ws,event);});return;}
       const host=()=>ensure(room.host===session.token,"仅房主可操作 / Host only");
       if(data.type==="leave"){detach(session,true);send(ws,{type:"left"});return;}
+      if(!["profile","chat","auto"].includes(data.type))control.guard(room);
       if(data.type==="profile"){ensure(avatar!==undefined,"请选择头像 / Choose avatar");room.seats[id].avatar=avatar;}
       else if(data.type==="ready"){ensure(!room.game||room.game.phase==="over","游戏已开始 / Game started");room.seats[id].ready=!!data.ready;}
       else if(data.type==="bots"){host();ensure(!room.game,"游戏已开始 / Game started");if(data.remove!==undefined){ensure(room.seats[data.remove]?.bot,"只能移除机器人 / Bots only");room.seats[data.remove]=null;}else{ensure(room.seats.includes(null),"座位已满 / Room full");addBot(room);if(data.fill)while(room.seats.includes(null))addBot(room);}}
@@ -81,7 +89,7 @@ function attachRichman(server,options={}){
       else if(data.type==="action"){
         ensure(room.game&&data.action&&typeof data.action==="object","尚未开局 / Not started");
         ensure(data.action.type==="stock"||data.revision===room.game.revision,"棋盘已更新，请重试 / Board changed; try again");
-        ensure(!room.seats[id].auto,"请先取消托管 / Turn off auto first");E.apply(room.game,id,data.action);stop(room);
+        ensure(!room.seats[id].auto,"请先取消托管 / Turn off auto first");E.apply(room.game,id,data.action);control.touch(room,room.seats[id]);stop(room);
       }
       else if(data.type==="chat"){const text=clean(data.text,160);if(text){room.chat.push({id:crypto.randomUUID(),playerId:id,text,time:Date.now()});room.chat=room.chat.slice(-50);}}
       else throw Error("未知操作 / Unknown action");broadcast(room);schedule(room);
@@ -93,7 +101,7 @@ function attachRichman(server,options={}){
     for(const[code,room]of rooms)if(!present(room)&&Date.now()-room.updated>3600000){stop(room);rooms.delete(code);}
     for(const[token,s]of sessions)if(!s.ws&&Date.now()-s.updated>12*3600000)sessions.delete(token);
   },30000);heartbeat.unref();
-  server.on("close",()=>{clearInterval(heartbeat);rooms.forEach(stop);wss.clients.forEach(ws=>ws.terminate());wss.close();});
+  server.on("close",()=>{control.close();clearInterval(heartbeat);rooms.forEach(stop);wss.clients.forEach(ws=>ws.terminate());wss.close();});
   return{rooms,upgrade:(r,s,h)=>wss.handleUpgrade(r,s,h,ws=>wss.emit("connection",ws,r))};
 }
 module.exports={attachRichman};

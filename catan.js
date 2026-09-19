@@ -7,10 +7,29 @@
   const costs = { road: [0, 1], ship: [0, 2], settlement: [0, 1, 2, 3], city: [3, 3, 4, 4, 4], development: [2, 3, 4] };
   const state = { socket: null, room: null, seats: 4, mode: "", selected: null, tradeMode: "bank", resourceMode: "", pending: false, phaseKey: "", diceKey: "", reconnect: null, noticeTimer: null, cardBaseline: false, cardChanges: new Map(), cardChangeTimer: null };
   const CARD_CHANGE_DURATION = 3500;
+  const audio = window.CatanAudio.create(), soundEvents = window.CatanAudio.tracker(kind => audio.play(kind));
+  let viewedTradeKey = "", alertTradeKey = "";
+  function renderSoundToggle() {
+    const button = $("soundToggle"), label = audio.muted ? "开启音效 / Enable sounds" : "关闭音效 / Mute sounds";
+    button.title = label; button.setAttribute("aria-label", label); button.setAttribute("aria-pressed", String(!audio.muted));
+    button.innerHTML = `<i data-lucide="${audio.muted ? "volume-x" : "volume-2"}" aria-hidden="true"></i>`;
+    window.lucide?.createIcons();
+  }
+  $("soundToggle").onclick = () => { audio.setMuted(!audio.muted); renderSoundToggle(); };
+  renderSoundToggle();
+  document.addEventListener("pointerdown", () => audio.unlock(), { capture: true, passive: true });
+  document.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") audio.unlock(); }, true);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) audio.stop(); });
+  document.addEventListener("click", event => {
+    const button = event.target.closest("button");
+    if (!button || button.disabled || button.id === "soundToggle") return;
+    if (button.matches("[data-close],[data-edition],[data-layout],[data-skin],[data-add-resource],[data-remove-resource],[data-add-trade],[data-remove-trade],[data-discard-side],[data-trade-mode],[data-action],[data-dev],#viewIncomingTrade,#helpButton,#baseRules,#seafarerRules,#mapRules,#lobbyMapRules,#gameMapRules,#gameBaseRules,#gameSailingRules")) audio.play("click");
+  }, true);
   state.mapId = "base"; state.layout = "default"; state.moveFrom = null;
   try { state.skins = window.GameSocialData.normalizeSkins(JSON.parse(localStorage.getItem("catan-piece-skins") || "null")); }
   catch { state.skins = window.GameSocialData.normalizeSkins(); }
   const social = window.BoardGameUI.mountInteractions(() => state.room && ({ code: state.room.code, players: state.room.seats, you: state.room.seats[state.room.you]?.socialId, connected: state.socket?.readyState === WebSocket.OPEN }), send);
+  const management = window.BoardGameUI.mountRoomControl(() => state.room?.control, send, () => document.querySelector(state.room?.game ? ".game-rule-links" : "#lobby .room-heading"));
   function renderSkins() {
     $("pieceSkins").innerHTML = Object.entries(window.GameSocialData.skins).map(([kind, choices]) => `<fieldset ${kind === "pirate" && state.mapId === "base" ? "hidden" : ""}><legend>${kind === "robber" ? "恶魔（强盗）/ Robber" : "海盗 / Pirate"}</legend><div class="skin-options">${choices.map((s) => `<button type="button" data-skin-kind="${kind}" data-skin="${s.id}" title="${s.label}" aria-label="${s.label}" aria-pressed="${state.skins[kind] === s.id}">${s.emoji || `<svg viewBox="0 0 48 48" aria-hidden="true">${B.icon(s.art)}</svg>`}</button>`).join("")}</div></fieldset>`).join("");
   }
@@ -21,8 +40,8 @@
     chooseMap(state.mapId);
   };
   const layoutName = (layout) => layout === "random" ? "随机地图 / Random" : "默认地图 / Default";
-  let previewRequest = 0, rulesNext = null, roomRulesKey = "";
-  function showSailingRules(mapId, general = false, thenMap = false) {
+  let previewRequest = 0, supplyRoomKey = "";
+  function showSailingRules(mapId, general = false) {
     const map = Maps.get(mapId);
     if (!map && !general) return;
     $("sailingTitle").innerHTML = general ? "航海家规则<small>Seafarers Rules</small>" : `${B.escape(map.name)}<small>${B.escape(map.english)} · ${map.players} Players · ${map.target} VP</small>`;
@@ -35,12 +54,10 @@
       if (roomBoard) preview.innerHTML = B.render(roomBoard, { preview: true });
       else fetch(`/api/catan-preview?map=${encodeURIComponent(mapId)}&layout=${state.layout}`).then((r) => r.json()).then((board) => { if (preview.isConnected) preview.innerHTML = B.render({ ...board, skins: state.room?.skins || state.skins }, { preview: true }); }).catch(() => {});
     }
-    rulesNext = thenMap ? mapId : null;
     if (!$("sailingDialog").open) $("sailingDialog").showModal();
     $("sailingContent").scrollTop = 0;
   }
   $("sailingAcknowledge").onclick = () => $("sailingDialog").close();
-  $("sailingDialog").addEventListener("close", () => { const next = rulesNext; rulesNext = null; if (next) showSailingRules(next); });
   function showBaseRules() {
     const map = Maps.get(state.room?.mapId || state.mapId), target = state.room?.game?.target || map?.target || 10;
     $("helpTitle").innerHTML = map ? "通用规则与费用<small>Core Rules &amp; Costs</small>" : "基础版规则<small>Base Game Rules</small>";
@@ -66,7 +83,7 @@
   $("baseRules").onclick = showBaseRules;
   $("helpAcknowledge").onclick = () => $("helpDialog").close();
   $("mapChoice").innerHTML = Maps.maps.map((map) => `<option value="${map.id}">${map.name} / ${map.english} · ${map.players}人</option>`).join("");
-  function chooseMap(id, showRules = false) {
+  function chooseMap(id) {
     const map = Maps.get(id); state.mapId = map ? id : "base";
     renderSkins();
     $("baseSetup").hidden = Boolean(map); $("seafarerSetup").hidden = !map; $("playerCountChoice").hidden = Boolean(map);
@@ -77,10 +94,9 @@
     else { state.seats = Number($("seatChoice").querySelector(".selected")?.dataset.seats) || 4; }
     const request = ++previewRequest;
     fetch(`/api/catan-preview?map=${encodeURIComponent(state.mapId)}&layout=${state.layout}`).then((r) => { if (!r.ok) throw new Error("preview"); return r.json(); }).then((board) => { if (request === previewRequest) { $("previewBoard").innerHTML = B.render({ ...board, skins: state.skins }, { preview: true }); $("previewBoard").dataset.layout = board.layout || "default"; $("previewBoard").dataset.map = state.mapId; } }).catch(() => { if (request === previewRequest) $("previewBoard").innerHTML = `<div class="offline-island">${icon("ship")}<p>请使用新版服务器 / Updated server required</p></div>`; });
-    if (showRules && map) showSailingRules(id);
   }
-  $("editionChoice").onclick = (e) => { const b = e.target.closest("[data-edition]"); if (!b) return; const sailing = b.dataset.edition === "seafarers"; chooseMap(sailing ? $("mapChoice").value : "base"); if (sailing) showSailingRules(state.mapId, true, true); else showBaseRules(); };
-  $("mapChoice").onchange = () => chooseMap($("mapChoice").value, true);
+  $("editionChoice").onclick = (e) => { const b = e.target.closest("[data-edition]"); if (!b) return; chooseMap(b.dataset.edition === "seafarers" ? $("mapChoice").value : "base"); };
+  $("mapChoice").onchange = () => chooseMap($("mapChoice").value);
   $("layoutChoice").onclick = (e) => {
     const button = e.target.closest("[data-layout]"); if (!button) return;
     state.layout = button.dataset.layout;
@@ -95,7 +111,7 @@
   $("gameSailingRules").onclick = () => showSailingRules(state.room.mapId, true);
   let tradeDraft = { give: [0, 0, 0, 0, 0], want: [0, 0, 0, 0, 0] };
   let discardDraft = [0, 0, 0, 0, 0];
-  let goldDraft = [0, 0, 0, 0, 0];
+  let resourceDraft = [0, 0, 0, 0, 0];
   const chatBubbles = new Map();
   let chatRoomKey = "", seenChat = new Set(), chatBubbleTimer = null;
   const icon = (kind, cls = "") => `<svg class="${cls}" viewBox="0 0 48 48" aria-hidden="true">${["robber", "pirate"].includes(kind) ? B.piece(kind, 0, 0, 48, state.room?.skins || state.skins) : B.icon(kind)}</svg>`;
@@ -105,10 +121,10 @@
     return Boolean(seat && (seat.bot || (seat.connected && (id !== state.room.you || state.socket?.readyState === WebSocket.OPEN))));
   };
   const seatNumber = (position) => `<b class="seat-number" title="${position + 1} 号位 / Seat ${position + 1}">${position + 1}</b>`;
-  const numberedAvatar = (player, id, className) => `<span class="numbered-avatar">${window.BoardGameUI.avatar({ ...player, socialId: state.room.seats[id]?.socialId }, seatConnected(id), className, id === state.room.you)}${seatNumber(player.position ?? id)}</span>`;
+  const numberedAvatar = (player, id, className) => `<span class="numbered-avatar">${window.BoardGameUI.avatar({ ...player, vacant: state.room.seats[id]?.vacant, socialId: state.room.seats[id]?.socialId }, seatConnected(id), className, id === state.room.you)}${seatNumber(player.position ?? id)}</span>`;
   const total = (a) => a.reduce((n, x) => n + x, 0);
   const mobileLayout = matchMedia("(max-width: 740px)");
-  const compactDetails = () => document.querySelectorAll(".table-detail").forEach((detail) => { detail.open = !mobileLayout.matches; });
+  const compactDetails = () => document.querySelectorAll(".table-detail").forEach((detail) => { detail.open = detail.id === "supplyDetails" || !mobileLayout.matches; });
   compactDetails(); mobileLayout.addEventListener("change", compactDetails);
   let lastChat = "";
   $("chatDetails").addEventListener("toggle", () => { if ($("chatDetails").open) $("chatUnread").hidden = true; });
@@ -118,6 +134,7 @@
     if (text) state.noticeTimer = setTimeout(() => { $("notice").hidden = true; }, 8000);
   }
   function send(data) {
+    if (state.room?.control?.paused && ["action", "start", "rematch"].includes(data.type)) { notice("空位待补齐，游戏暂停 / Waiting for replacement"); return false; }
     if (state.socket?.readyState !== WebSocket.OPEN) { notice("连接尚未恢复 / Waiting for connection"); return false; }
     state.socket.send(JSON.stringify(data)); return true;
   }
@@ -214,13 +231,14 @@
     ws.addEventListener("open", () => { $("connection").textContent = "已连接 / Connected"; $("connection").classList.remove("offline"); send({ type: "hello", token: sessionStorage.getItem("catan-token") || "", avatar: window.BoardGameUI.getAvatar() }); });
     ws.addEventListener("message", (event) => {
       let data; try { data = JSON.parse(event.data); } catch { return; }
-      if (data.type === "welcome") { sessionStorage.setItem("catan-token", data.token); state.cardBaseline = false; clearCardChanges(); renderCardChanges(); clearChatBubbles(); }
+      if (data.type === "welcome") { sessionStorage.setItem("catan-token", data.token); soundEvents.reset(); state.cardBaseline = false; clearCardChanges(); renderCardChanges(); clearChatBubbles(); }
       if (data.type === "reaction") { social.receive(data); return; }
-      if (data.type === "state") { trackCardChanges(data); trackChatBubbles(data); state.room = data; social.sync(); state.pending = false; render(); }
+      if (data.type === "state") { soundEvents.update(data); trackCardChanges(data); trackChatBubbles(data); state.room = data; social.sync(); state.pending = false; render(); }
       if (data.type === "error") { state.pending = false; notice(data.message); renderActions(); }
-      if (data.type === "left") { clearCardChanges(); clearChatBubbles(); resetBoardView(); state.cardBaseline = false; state.room = null; state.phaseKey = ""; state.pending = false; state.mode = ""; state.selected = null; state.moveFrom = null; render(); }
+      if (data.type === "left") { audio.stop(); soundEvents.reset(); viewedTradeKey = ""; clearCardChanges(); clearChatBubbles(); resetBoardView(); state.cardBaseline = false; state.room = null; state.phaseKey = ""; state.pending = false; state.mode = ""; state.selected = null; state.moveFrom = null; document.querySelectorAll("dialog[open]").forEach((d) => d.close()); render(); if (data.reason) notice(data.reason); }
     });
     ws.addEventListener("close", (event) => {
+      audio.stop(); soundEvents.reset(); $("incomingTradeAlert").hidden = true;
       $("connection").textContent = "正在重连 / Reconnecting"; $("connection").classList.add("offline");
       if (state.room) render();
       if (event.code !== 4001) state.reconnect = setTimeout(connect, 1800);
@@ -263,14 +281,15 @@
   function render() {
     const room = state.room, g = room?.game;
     $("setup").hidden = Boolean(room); $("lobby").hidden = !room || Boolean(g); $("game").hidden = !g;
-    if (!room) return;
+    management.sync();
+    if (!room) { supplyRoomKey = ""; $("incomingTradeAlert").hidden = true; alertTradeKey = ""; return; }
     const map = Maps.get(room.mapId);
-    const newRulesKey = `${room.code}:${room.mapId}`;
-    if (map && roomRulesKey !== newRulesKey) { roomRulesKey = newRulesKey; showSailingRules(room.mapId); }
+    if (g && supplyRoomKey !== room.code) { $("supplyDetails").open = true; supplyRoomKey = room.code; }
     $("lobbyMapName").textContent = map ? `${map.name} / ${map.english} · ${map.target} VP · ${layoutName(room.layout)}` : "基础版 / Base Game · 10 VP";
     $("lobbyMapRules").hidden = false; $("gameMapRules").hidden = !map; $("gameSailingRules").hidden = !map;
     $("lobbyMapRules").textContent = map ? "本图规则 / Map Rules" : "基础规则 / Base Rules";
     if (!g) {
+      $("incomingTradeAlert").hidden = true; viewedTradeKey = ""; alertTradeKey = "";
       $("copyCode").textContent = room.code; $("lobbyCount").textContent = `${room.seats.length} / ${room.maxPlayers} 玩家 / Players`;
       $("lobbySeats").innerHTML = Array.from({ length: room.maxPlayers }, (_, id) => {
         const index = room.seats.findIndex((p, i) => (p.position ?? i) === id), p = room.seats[index], own = index === room.you;
@@ -297,6 +316,7 @@
     if (["setupRoad", "freeRoads"].includes(g.phase) && state.mode === "road" && !g.legal.roads.length && g.legal.ships?.length) state.mode = "ship";
     $("roomLabel").textContent = `房间 / Room ${room.code}`;
     $("turnLabel").textContent = `回合 / Turn ${g.turn || "—"}`;
+    $("victoryTargetValue").textContent = g.target || Maps.get(room.mapId)?.target || 10;
     $("autoButton").textContent = room.seats[room.you].auto ? "托管中 / Auto On" : "托管 / Auto";
     $("autoButton").classList.toggle("selected", room.seats[room.you].auto);
     $("victory").hidden = g.winner < 0;
@@ -307,12 +327,13 @@
     lastChat = chatKey;
     $("chatMessages").innerHTML = room.chat.map((m) => `<p><b>${B.escape(m.name)}</b> ${B.escape(m.text)}</p>`).join("");
     $("gameLog").innerHTML = [...g.log].reverse().map((m) => `<p>${B.escape(m.text)}</p>`).join("");
+    if (room.control?.paused) { $("tradeDialog").close(); $("resourceDialog").close(); }
     if (!g.legal.trade) $("tradeDialog").close();
     else if ($("tradeDialog").open) updateTrade();
     if ($("resourceDialog").open && state.resourceMode !== "discard" && g.phase !== state.resourceMode) $("resourceDialog").close();
-    if ($("resourceDialog").open && state.resourceMode === "gold") {
-      if (!g.legal.gold) $("resourceDialog").close();
-      else renderGold();
+    if ($("resourceDialog").open && ["gold", "plenty", "monopoly"].includes(state.resourceMode)) {
+      if (state.resourceMode === "gold" ? !g.legal.gold : room.you !== g.current) $("resourceDialog").close();
+      else renderResourceChoices();
     }
     if ($("resourceDialog").open && state.resourceMode === "discard") {
       if (!g.legal.discard) $("resourceDialog").close();
@@ -323,7 +344,7 @@
     const g = state.room?.game; if (!g) return;
     if (state.moveFrom !== null && !g.legal.moveShips?.includes(state.moveFrom)) state.moveFrom = null;
     $("boardViewport").style.aspectRatio = g.board.bounds ? `${g.board.bounds[2]} / ${g.board.bounds[3]}` : "620 / 570";
-    const options = { legal: g.legal, mode: state.mode, selected: state.selected, dice: g.dice, moveFrom: state.moveFrom, thief: g.thief };
+    const options = { legal: state.room.control?.paused ? {} : g.legal, mode: state.mode, selected: state.selected, dice: g.dice, moveFrom: state.moveFrom, thief: g.thief };
     const boardKey = JSON.stringify([state.room.code, state.room.you, g.board, options]);
     // Chat, presence and resource-only changes must not rebuild the SVG scene.
     if (state.boardRenderKey !== boardKey) {
@@ -564,8 +585,8 @@
     if (g.board.islands) items.splice(1, 0,
       ["ship", "ship", "造船", "Ship", g.legal.ships?.length, "木 + 羊 / Lumber + Wool"],
       ["moveShip", "ship", "移船", "Move ship", g.legal.moveShips?.length, "每回合一次 / Once per turn"]);
-    $("actions").innerHTML = items.map(([type, image, zh, en, enabled, cost]) => `<button data-action="${type}" title="${zh} / ${en} · ${cost}" class="${state.mode === type ? "selected" : ""}" ${enabled && !state.pending ? "" : "disabled"}>${icon(image)}<span>${zh}<small>${en}</small><small class="action-cost">${cost}</small></span></button>`).join("")
-      + `<button class="turn-action" data-action="${l.roll ? "roll" : "end"}" ${!state.pending && (l.roll || l.end) ? "" : "disabled"}><span>${l.roll ? "掷骰子" : "结束回合"}<small>${l.roll ? "Roll Dice" : "End Turn"}</small></span><span aria-hidden="true">→</span></button>`;
+    $("actions").innerHTML = items.map(([type, image, zh, en, enabled, cost]) => `<button data-action="${type}" title="${zh} / ${en} · ${cost}" class="${state.mode === type ? "selected" : ""}" ${enabled && !state.pending && (type === "help" || !state.room.control?.paused) ? "" : "disabled"}>${icon(image)}<span>${zh}<small>${en}</small><small class="action-cost">${cost}</small></span></button>`).join("")
+      + `<button class="turn-action" data-action="${l.roll ? "roll" : "end"}" ${!state.pending && !state.room.control?.paused && (l.roll || l.end) ? "" : "disabled"}><span>${l.roll ? "掷骰子" : "结束回合"}<small>${l.roll ? "Roll Dice" : "End Turn"}</small></span><span aria-hidden="true">→</span></button>`;
   }
   $("actions").onclick = (e) => {
     const button = e.target.closest("[data-action]"); if (!button || button.disabled) return;
@@ -615,7 +636,15 @@
     })).join("") || '<span class="empty-trade-slot" role="img" aria-label="未选卡牌 / No cards selected"></span>';
   }
   function renderOffer() {
-    const t = state.room.game.trade; $("tradeOffer").hidden = !t;
+    const t = state.room.game.trade, incoming = window.CatanAudio.incoming(state.room);
+    const connected = state.socket?.readyState === WebSocket.OPEN;
+    const key = t ? `${state.room.code}:${state.room.you}:${state.room.game.turn}:${t.id}` : "";
+    $("tradeOffer").hidden = !t; $("tradeOffer").classList.toggle("incoming-offer", incoming);
+    $("incomingTradeAlert").hidden = !incoming || !connected || viewedTradeKey === key;
+    if (incoming && alertTradeKey !== key) {
+      alertTradeKey = key; $("incomingTradeName").textContent = state.room.game.players[t.from].name;
+    }
+    if (!t) alertTradeKey = "";
     if (!t) return;
     const own = t.from === state.room.you, recipient = t.to == null || t.to === state.room.you;
     const target = t.to == null ? "所有玩家 / All players" : B.escape(state.room.game.players[t.to].name);
@@ -624,10 +653,17 @@
       const label = { excluded: ["未参与", "Not invited"], declined: ["已拒绝", "Declined"], pending: ["等待回应", "Waiting"] }[response];
       return `<li data-trade-player="${p.id}" data-response="${response}"><span class="trade-person" style="--player:${B.COLORS[p.id]}"><i class="player-color" aria-hidden="true"></i><span title="${B.escape(p.name)}">${B.escape(p.name)}</span></span><span class="trade-response ${response}">${label[0]}<small>${label[1]}</small></span></li>`;
     }).join("");
-    const buttons = own ? '<button class="secondary" data-offer="cancelTrade">撤回 / Cancel</button>' : recipient ? `<button class="primary" data-offer="acceptTrade" ${t.rejected.includes(state.room.you) || t.want.some((n, r) => me().resources[r] < n) ? "disabled" : ""}>接受 / Accept</button><button class="secondary" data-offer="rejectTrade" ${t.rejected.includes(state.room.you) ? "disabled" : ""}>拒绝 / Decline</button>` : "";
+    const blocked = state.pending || !connected || state.room.control?.paused;
+    const buttons = own ? `<button class="secondary" data-offer="cancelTrade" ${blocked ? "disabled" : ""}>撤回 / Cancel</button>` : recipient ? `<button class="primary" data-offer="acceptTrade" ${blocked || t.rejected.includes(state.room.you) || t.want.some((n, r) => me().resources[r] < n) ? "disabled" : ""}>接受 / Accept</button><button class="secondary" data-offer="rejectTrade" ${blocked || t.rejected.includes(state.room.you) ? "disabled" : ""}>拒绝 / Decline</button>` : "";
     $("tradeOffer").innerHTML = `<h3>${B.escape(state.room.game.players[t.from].name)} 的交易 / Trade offer</h3><p class="offer-target">交易对象 / To: ${target}</p><div class="trade-card-summary"><section aria-label="提供 / Gives"><h3>提供 <small>Gives</small></h3><div class="trade-card-list">${tradeCards(t.give, "give")}</div></section><span class="trade-arrow" aria-hidden="true">→</span><section aria-label="需要 / Wants"><h3>需要 <small>Wants</small></h3><div class="trade-card-list">${tradeCards(t.want, "want")}</div></section></div><ul class="trade-responses" aria-label="交易回应 / Trade responses" aria-live="polite">${responses}</ul>${buttons ? `<div class="offer-buttons">${buttons}</div>` : ""}`;
   }
   $("tradeOffer").onclick = (e) => { const b = e.target.closest("[data-offer]"); if (b && !b.disabled) action({ type: b.dataset.offer, offerId: state.room.game.trade.id }); };
+  $("viewIncomingTrade").onclick = () => {
+    if (!window.CatanAudio.incoming(state.room)) return;
+    viewedTradeKey = alertTradeKey; $("incomingTradeAlert").hidden = true;
+    $("tradeOffer").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "center" });
+    $("tradeOffer").focus({ preventScroll: true });
+  };
   function renderBank() {
     const g = state.room.game;
     $("bank").innerHTML = g.bank.map((n, r) => `<span class="bank-item" title="${labels[r]} / ${english[r]}">${icon(B.RES[r])}${n}</span>`).join("");
@@ -639,8 +675,6 @@
     }
   }
   $("chatForm").onsubmit = (e) => { e.preventDefault(); if (send({ type: "chat", text: $("chatInput").value })) $("chatInput").value = ""; };
-  const inputs = (id, max) => labels.map((name, r) => `<label>${icon(B.RES[r])}${name}<small>${english[r]}</small><input type="number" inputmode="numeric" id="${id}${r}" value="0" min="0" max="${max?.[r] ?? 19}" aria-label="${id === "give" ? "付出" : id === "want" ? "换取" : "选择"} ${english[r]}"></label>`).join("");
-  const values = (prefix) => labels.map((_, r) => Number($(prefix + r).value));
   const valid = (a) => a.every((n) => Number.isInteger(n) && n >= 0 && n <= 95);
   for (const [id, side] of [["offerGive", "give"], ["offerWant", "want"]]) {
     $(id).innerHTML = labels.map((name, r) => `<button type="button" class="trade-resource-add" data-add-trade="${side}" data-resource="${r}" style="--resource:${colors[r]}">${icon(B.RES[r])}<span>${name}<small>${english[r]}</small></span><i aria-hidden="true">+</i></button>`).join("");
@@ -709,61 +743,63 @@
   };
   function resourceDialog(mode) {
     const g = state.room.game; state.resourceMode = mode;
-    const discard = mode === "discard", gold = mode === "gold";
+    const discard = mode === "discard";
     $("resourceTitle").innerHTML = `${phases[mode][0]}<small>${phases[mode][1]}</small>`; $("resourceError").textContent = "";
     $("resourceDialog").classList.toggle("is-discard", discard);
-    $("resourceDialog").classList.toggle("is-gold", gold);
-    $("resourceChoices").hidden = discard || gold; $("discardChoices").hidden = !discard; $("goldChoices").hidden = !gold;
+    $("resourceDialog").classList.toggle("is-pick", !discard);
+    $("resourceChoices").hidden = discard; $("discardChoices").hidden = !discard;
     $("confirmResources").textContent = discard ? "确认弃牌 / Discard" : "确认 / Confirm";
     $("confirmResources").disabled = false;
     $("cancelDevelopment").hidden = mode !== "plenty" || !g.legal.cancelDevelopment;
     $("cancelDevelopment").disabled = state.pending;
     if (discard) {
-      discardDraft = [0, 0, 0, 0, 0]; $("resourceChoices").innerHTML = ""; renderDiscard();
+      discardDraft = [0, 0, 0, 0, 0]; renderDiscard();
       for (const id of ["discardHand", "discardSelected"]) $(id).scrollTop = 0;
-    } else if (gold) {
-      goldDraft = [0, 0, 0, 0, 0]; $("resourceChoices").innerHTML = "";
-      $("goldSupply").innerHTML = labels.map((name, r) => `<button type="button" class="trade-resource-add" data-add-gold="${r}" style="--resource:${colors[r]}">${icon(B.RES[r])}<span>${name}<small>${english[r]}</small></span><i aria-hidden="true">+</i></button>`).join("");
-      renderGold(); $("goldChoices").scrollTop = 0; $("goldSelected").scrollTop = 0;
     } else {
-      $("resourceChoices").innerHTML = inputs("choose", mode === "plenty" ? g.bank : [1, 1, 1, 1, 1]);
-      const count = mode === "plenty" ? Math.min(2, total(g.bank)) : 1;
-      $("resourceHint").textContent = `选择 ${count} ${mode === "monopoly" ? "种" : "张"} / Select ${count}`;
+      resourceDraft = [0, 0, 0, 0, 0];
+      $("resourceSupply").innerHTML = labels.map((name, r) => `<button type="button" class="trade-resource-add" data-add-resource="${r}" style="--resource:${colors[r]}">${icon(B.RES[r])}<span>${name}<small>${english[r]}</small></span><i aria-hidden="true">+</i></button>`).join("");
+      renderResourceChoices(); $("resourceChoices").scrollTop = 0; $("resourceSelected").scrollTop = 0;
     }
     $("resourceDialog").showModal();
   }
-  function renderGold() {
-    const g = state.room.game, required = g.legal.gold;
+  function resourceLimits() {
+    const g = state.room.game, mode = state.resourceMode;
+    return { required: mode === "gold" ? g.legal.gold : mode === "plenty" ? Math.min(2, total(g.bank)) : 1, supply: mode === "monopoly" ? [1, 1, 1, 1, 1] : g.bank };
+  }
+  function renderResourceChoices() {
+    const { required, supply } = resourceLimits(), monopoly = state.resourceMode === "monopoly";
     let remaining = required, adjusted = false;
-    goldDraft = goldDraft.map((n, r) => {
-      const kept = Math.min(n, g.bank[r], remaining);
+    resourceDraft = resourceDraft.map((n, r) => {
+      const kept = Math.min(n, supply[r], remaining);
       remaining -= kept; adjusted ||= kept !== n; return kept;
     });
     if (adjusted) $("resourceError").textContent = "可领取资源有变化，已调整选择 / Available resources changed; selection updated";
-    const selected = total(goldDraft);
-    $("goldSupply").querySelectorAll("[data-add-gold]").forEach((button) => {
-      const r = Number(button.dataset.addGold), available = g.bank[r] - goldDraft[r];
-      button.disabled = state.pending || !required || selected >= required || !available;
-      button.title = `${labels[r]} / ${english[r]} · 可选 / Available ${available}`;
-      button.setAttribute("aria-label", `添加 / Add ${labels[r]} / ${english[r]} · ${available}`);
+    const selected = total(resourceDraft);
+    $("resourceSupply").querySelectorAll("[data-add-resource]").forEach((button) => {
+      const r = Number(button.dataset.addResource), available = supply[r] - resourceDraft[r];
+      button.disabled = state.pending || !available || (!monopoly && selected >= required);
+      button.title = `${labels[r]} / ${english[r]} · ${monopoly ? "选择此资源 / Choose this resource" : `可选 / Available ${available}`}`;
+      button.setAttribute("aria-label", `${monopoly ? "选择 / Choose" : "添加 / Add"} ${labels[r]} / ${english[r]}${monopoly ? "" : ` · ${available}`}`);
+      button.setAttribute("aria-pressed", String(monopoly && resourceDraft[r] > 0));
     });
-    $("goldSelected").innerHTML = goldDraft.flatMap((n, r) => Array.from({ length: n }, () => {
+    $("resourceSelected").innerHTML = resourceDraft.flatMap((n, r) => Array.from({ length: n }, () => {
       const label = `移除 ${labels[r]} / Remove ${english[r]}`;
-      return `<button type="button" class="trade-card" data-remove-gold="${r}" style="--resource:${colors[r]}" ${state.pending ? "disabled" : ""} aria-label="${label}" title="${label}">${icon(B.RES[r])}</button>`;
+      return `<button type="button" class="trade-card" data-remove-resource="${r}" style="--resource:${colors[r]}" ${state.pending ? "disabled" : ""} aria-label="${label}" title="${label}">${icon(B.RES[r])}</button>`;
     })).join("") || '<span class="empty-trade-slot" role="img" aria-label="未选卡牌 / No cards selected"></span>';
     $("resourceHint").textContent = `已选 / Selected ${selected} / ${required}`;
-    $("confirmResources").disabled = state.pending || !required || selected !== required;
+    $("confirmResources").disabled = state.pending || selected !== required;
   }
-  $("goldChoices").onclick = (e) => {
-    const button = e.target.closest("[data-add-gold],[data-remove-gold]");
-    if (!button || button.disabled || state.pending || state.resourceMode !== "gold") return;
-    const adding = button.hasAttribute("data-add-gold"), r = Number(adding ? button.dataset.addGold : button.dataset.removeGold);
-    const g = state.room.game;
-    if (!g.legal.gold || (adding && (total(goldDraft) >= g.legal.gold || goldDraft[r] >= g.bank[r]))) return;
-    goldDraft[r] = Math.max(0, goldDraft[r] + (adding ? 1 : -1));
-    $("resourceError").textContent = ""; renderGold();
+  $("resourceChoices").onclick = (e) => {
+    const button = e.target.closest("[data-add-resource],[data-remove-resource]");
+    if (!button || button.disabled || state.pending || !["gold", "plenty", "monopoly"].includes(state.resourceMode)) return;
+    const adding = button.hasAttribute("data-add-resource"), r = Number(adding ? button.dataset.addResource : button.dataset.removeResource);
+    const { required, supply } = resourceLimits();
+    if (adding && state.resourceMode === "monopoly") resourceDraft = [0, 0, 0, 0, 0];
+    if (adding && (total(resourceDraft) >= required || resourceDraft[r] >= supply[r])) return;
+    resourceDraft[r] = Math.max(0, resourceDraft[r] + (adding ? 1 : -1));
+    $("resourceError").textContent = ""; renderResourceChoices();
     if (!adding) {
-      const next = $("goldSelected").querySelector(`[data-remove-gold="${r}"]`) || $("goldSupply").querySelector(`[data-add-gold="${r}"]:not(:disabled)`);
+      const next = $("resourceSelected").querySelector(`[data-remove-resource="${r}"]`) || $("resourceSupply").querySelector(`[data-add-resource="${r}"]:not(:disabled)`);
       next?.focus({ preventScroll: true });
     }
   };
@@ -794,7 +830,7 @@
   };
   $("confirmResources").onclick = () => {
     if (state.pending) return;
-    const g = state.room.game, mode = state.resourceMode, resources = mode === "discard" ? [...discardDraft] : mode === "gold" ? [...goldDraft] : values("choose");
+    const g = state.room.game, mode = state.resourceMode, resources = mode === "discard" ? [...discardDraft] : [...resourceDraft];
     const count = mode === "discard" ? g.legal.discard : mode === "gold" ? g.legal.gold : mode === "plenty" ? Math.min(2, total(g.bank)) : 1;
     const supply = mode === "discard" ? me().resources : ["plenty", "gold"].includes(mode) ? g.bank : [1, 1, 1, 1, 1];
     if (!valid(resources) || total(resources) !== count || resources.some((n, r) => n > supply[r])) { $("resourceError").textContent = "数量不符或资源不足 / Check quantity and availability"; return; }
@@ -803,6 +839,5 @@
   };
   const initialMap = new URLSearchParams(location.search).get("map");
   chooseMap(Maps.get(initialMap) ? initialMap : new URLSearchParams(location.search).get("edition") === "seafarers" ? "shores-1" : "base");
-  if (state.mapId !== "base") showSailingRules(state.mapId, true, true);
   connect();
 })();

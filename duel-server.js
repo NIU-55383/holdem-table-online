@@ -9,6 +9,12 @@ function attachDuel(server) {
   const rooms = new Map(), sessions = new Map(), wss = new WebSocketServer({ noServer: true, maxPayload: 32768 });
   let running = 0, closed = false;
   const queue = [];
+  const control = require("./room-control").createRoomControl({ rooms,
+    active: (r) => r.game?.phase === "playing", started: (r) => Boolean(r.game),
+    turnKey: (r) => r.game && `${r.game.revision}:${r.game.current}`, actors: (r) => [r.game.current],
+    stop, changed: (r) => { broadcast(r); schedule(r); },
+    remove: (r, p) => { const s = sessions.get(p.token); if (s) s.room = ""; send(p.ws, { type: "left", reason: "房主已将你移出房间 / Removed by the host" }); }
+  });
   const clean = (s, n = 18) => String(s || "").trim().replace(/\s+/g, " ").slice(0, n);
   function botName(exclude) {
     const familiar = ["Connie","Colin","Angela","Stephan","Zoey","William","Tim","Gary","Alison"];
@@ -20,10 +26,11 @@ function attachDuel(server) {
   function connected(p) { return p && (p.bot || p.ws?.readyState === WebSocket.OPEN); }
   function snapshot(room, token) {
     return { type: "state", code: room.code, kind: room.kind, difficulty: room.difficulty, you: room.seats.findIndex((p) => p?.token === token),
-      host: room.seats.findIndex((p) => p?.token === room.host), seats: room.seats.map((p) => p ? { socialId: Social.publicId(p), name: p.name, avatar: p.avatar, bot: p.bot, connected: Boolean(connected(p)), ready: p.ready, departed: Boolean(p.departed) } : null),
-      game: room.game ? E.snapshot(room.game) : null, pending: room.pending, chat: room.chat, thinking: Boolean(room.job) };
+      host: room.seats.findIndex((p) => p?.token === room.host), seats: room.seats.map((p) => p ? { socialId: Social.publicId(p), name: p.name, avatar: p.avatar, bot: p.bot, vacant: Boolean(p.vacant), auto: Boolean(p.auto), connected: Boolean(connected(p)), ready: p.ready, departed: Boolean(p.departed) } : null),
+      game: room.game ? E.snapshot(room.game) : null, control: control.snapshot(room, room.seats.find((p) => p?.token === token)), pending: room.pending, chat: room.chat, thinking: Boolean(room.job) };
   }
   function broadcast(room) {
+    control.sync(room);
     room.updated = Date.now();
     room.seats.forEach((p) => { if (p && !p.bot) send(p.ws, snapshot(room, p.token)); });
   }
@@ -41,10 +48,10 @@ function attachDuel(server) {
       let timer, settle;
       const complete = () => {
         if (done) return; done = true; clearTimeout(timer); clearTimeout(settle); worker.terminate(); running--;
-        if (!job.cancelled && room.game === game && game.revision === revision && game.phase === "playing") {
+        if (!job.cancelled && !control.paused(room) && room.game === game && game.revision === revision && game.phase === "playing") {
           room.job = null;
           try { if (best) E.move(game, game.current, best); } catch (error) { console.error("Duel AI:", error.message); const fallback = E.legal(game)[0]; if (fallback) E.move(game, game.current, fallback); }
-          room.pending = null; broadcast(room);
+          room.pending = null; broadcast(room); schedule(room);
         }
         pump();
       };
@@ -56,7 +63,7 @@ function attachDuel(server) {
     }
   }
   function schedule(room) {
-    if (room.job || room.game?.phase !== "playing" || !room.seats[room.game.current]?.bot || !room.seats.some((p) => p && !p.bot && connected(p))) return;
+    if (control.paused(room) || room.job || room.game?.phase !== "playing" || !(room.seats[room.game.current]?.bot || room.seats[room.game.current]?.auto) || !room.seats.some((p) => p && !p.bot && connected(p))) return;
     const job = { room, game: room.game, revision: room.game.revision, cancelled: false };
     room.job = job; queue.push(job); broadcast(room); pump();
   }
@@ -68,12 +75,12 @@ function attachDuel(server) {
     const room = rooms.get(session.room); if (!room) return;
     const id = room.seats.findIndex((p) => p?.token === session.token), seat = room.seats[id]; if (!seat) return;
     seat.ws = null; room.pending = null;
+    control.elect(room);
     if (explicit) {
-      if (room.game?.phase === "playing") { stop(room); E.resign(room.game, id); }
+      if (room.game?.phase === "playing" && !control.paused(room)) { stop(room); E.resign(room.game, id); }
       if (!room.game) room.seats[id] = null; else seat.departed = true;
       session.room = "";
     }
-    if (room.host === session.token) { const other = room.seats.find((p) => p && !p.bot && connected(p)); if (other) room.host = other.token; }
     if (!room.seats.some((p) => p && !p.bot && connected(p))) stop(room);
     if (!room.seats.some((p) => p && !p.bot && !p.departed)) { stop(room); rooms.delete(room.code); }
     else broadcast(room);
@@ -112,25 +119,31 @@ function attachDuel(server) {
         }
         if (data.type === "join") {
           const room = rooms.get(clean(data.code,6).toUpperCase()), name = clean(data.name);
-          ensure(room, "找不到房间 / Room not found"); ensure(!room.game && room.seats.includes(null), "已开局或房间已满 / Started or full"); ensure(name, "请输入名字 / Enter a name");
-          detach(session, true); const id = room.seats.indexOf(null);
-          room.seats[id] = { token: session.token, name, avatar: avatar || null, bot: false, ws, ready: false };
+          ensure(room, "找不到房间 / Room not found");
+          const former = room.seats.find(p => p?.token === session.token && !p.departed);
+          ensure(former || control.vacancy(room) >= 0 || !room.game && room.seats.includes(null), "已开局或房间已满 / Started or full"); ensure(name, "请输入名字 / Enter a name");
+          if (session.room !== room.code) detach(session, true);
+          const player = { token: session.token, name, avatar: avatar || null, bot: false, ws, ready: Boolean(room.game) };
+          if (former) { former.ws = ws; former.auto = false; if (avatar !== undefined) former.avatar = avatar; }
+          else if (control.vacancy(room) >= 0) control.fill(room, control.vacancy(room), player); else room.seats[room.seats.indexOf(null)] = player;
           session.room = room.code;
           if (!room.seats.some((p) => p?.token === room.host && connected(p))) room.host = session.token;
-          broadcast(room); return;
+          broadcast(room); schedule(room); return;
         }
         const room = rooms.get(session.room); ensure(room, "请先加入房间 / Join a room");
         const id = room.seats.findIndex((p) => p?.token === session.token); ensure(id >= 0 && !room.seats[id].departed, "不在此房间 / No seat");
+        if (control.handle(room, room.seats[id], data)) return;
         if (data.type === "reaction") {
           const event = Social.reaction(room, room.seats, room.seats[id], data);
           room.seats.forEach((p) => { if (p && !p.bot && !p.departed) send(p.ws, event); }); return;
         }
         const host = () => ensure(session.token === room.host, "仅房主可操作 / Host only");
         if (data.type === "leave") { detach(session, true); send(ws, { type: "left" }); return; }
+        if (!["profile", "chat"].includes(data.type)) control.guard(room);
         if (data.type === "profile") { ensure(avatar !== undefined, "请选择头像 / Choose avatar"); room.seats[id].avatar = avatar; }
         else if (data.type === "ready") { ensure(!room.game || room.game.phase === "over", "正在对局 / Game in progress"); room.seats[id].ready = Boolean(data.ready); }
         else if (data.type === "start") { host(); ensure(!room.game && !room.pending && room.seats.every((p) => p && connected(p) && p.ready), "等待玩家准备 / Waiting for ready players"); start(room); return; }
-        else if (data.type === "move") { ensure(room.game && data.revision === room.game.revision, "棋盘已更新 / Board changed"); E.move(room.game, id, data); room.pending = null; }
+        else if (data.type === "move") { ensure(room.game && data.revision === room.game.revision, "棋盘已更新 / Board changed"); E.move(room.game, id, data); stop(room); control.touch(room, room.seats[id]); room.pending = null; }
         else if (data.type === "resign") { ensure(room.game, "尚未开局 / Not started"); stop(room); E.resign(room.game,id); room.pending = null; }
         else if (data.type === "request") {
           ensure(!room.pending, "请先处理当前申请 / Resolve pending request");
@@ -170,7 +183,7 @@ function attachDuel(server) {
     for (const [code, room] of rooms) if (!room.seats.some((p) => p && !p.bot && connected(p)) && Date.now()-room.updated > 3600000) { stop(room); rooms.delete(code); }
     for (const [token, s] of sessions) if (!s.ws && Date.now()-s.updated > 12*3600000) sessions.delete(token);
   },30000); heartbeat.unref();
-  server.on("close", () => { closed = true; clearInterval(heartbeat); rooms.forEach(stop); wss.clients.forEach((ws) => ws.terminate()); wss.close(); });
+  server.on("close", () => { closed = true; control.close(); clearInterval(heartbeat); rooms.forEach(stop); wss.clients.forEach((ws) => ws.terminate()); wss.close(); });
   return { rooms, upgrade: (r,s,h) => wss.handleUpgrade(r,s,h,(ws) => wss.emit("connection",ws,r)) };
 }
 module.exports = { attachDuel };

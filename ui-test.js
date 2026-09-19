@@ -652,18 +652,48 @@ const server = spawn(process.execPath, [path.join(__dirname, "server.js")], { en
     assert.equal(await page.locator("#resourceDialog").isVisible(), false, "Auto-resolved discards close the stale selection");
     for (const mode of ["plenty", "monopoly"]) {
       const special = structuredClone(resolvedDiscard); special.game.phase = mode; special.game.current = 0;
-      special.game.bank = [19, 19, 19, 19, 19];
+      special.game.bank = mode === "monopoly" ? [0, 0, 0, 0, 0] : [1, 0, 19, 19, 19];
       await deliverFeedback(special); await page.locator(`[data-special="${mode}"]`).click();
       assert.equal(await page.locator("#discardChoices").isVisible(), false);
-      assert.equal(await page.locator("#resourceChoices input").count(), 5, "Other development-card choices keep their existing controls");
-      assert.equal(await page.locator("#confirmResources").isDisabled(), false);
-      await page.locator("#confirmResources").click();
-      assert.equal(await page.locator("#resourceDialog").isVisible(), true, "Invalid quantities still require correction");
-      assert.match(await page.locator("#resourceError").textContent(), /Check quantity/);
-      await page.locator("#choose4").fill(mode === "plenty" ? "2" : "1");
+      assert.equal(await page.locator('#resourceDialog input[type="number"]').count(), 0, "All resources use card pickers");
+      assert.equal(await page.locator("#resourceSupply button").count(), 5);
+      assert.equal(await page.locator("#confirmResources").isDisabled(), true);
+      const add = (r) => page.locator(`[data-add-resource="${r}"]`);
+      await add(0).click();
+      if (mode === "plenty") {
+        assert.equal(await add(0).isDisabled(), true, "Cannot exceed bank stock");
+        assert.equal(await add(1).isDisabled(), true, "Empty bank resources cannot be chosen for Plenty");
+      }
+      await add(4).click();
+      assert.equal(await page.locator("#resourceSelected button").count(), mode === "plenty" ? 2 : 1, "Monopoly switches resource in one click, even with an empty bank");
+      await page.locator(`#resourceSelected [data-remove-resource="${mode === "plenty" ? 0 : 4}"]`).click();
+      assert.equal(await page.locator("#confirmResources").isDisabled(), true, "Clicking a selected card removes it");
+      await add(4).focus(); await page.keyboard.press("Space");
+      for (const viewport of [{width:320,height:568}, {width:740,height:320}, {width:1440,height:1000}]) {
+        await page.setViewportSize(viewport);
+        assert.equal(await page.locator("#resourceDialog").evaluate(dialog => {
+          const box = dialog.getBoundingClientRect(), confirm = document.getElementById("confirmResources").getBoundingClientRect();
+          const choices = document.getElementById("resourceChoices").getBoundingClientRect();
+          const visibleCards = [...dialog.querySelectorAll("#resourceSupply button, #resourceSelected button")].every(card => {
+            const r = card.getBoundingClientRect(); return r.top >= choices.top && r.bottom <= choices.bottom + 1 && r.left >= choices.left && r.right <= choices.right;
+          });
+          return visibleCards && box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight && confirm.bottom <= box.bottom && confirm.top >= box.top && dialog.scrollWidth <= dialog.clientWidth;
+        }), true, "Card picker and confirmation fit on portrait and landscape phones");
+        await page.screenshot({path:`test-results/catan-${mode}-picker-${viewport.width}.png`});
+      }
       await page.locator("#confirmResources").click();
       assert.deepEqual(await page.evaluate(() => window.testActions.at(-1)), { type: "action", action: mode === "plenty" ? { type: "plenty", resources: [0, 0, 0, 0, 2] } : { type: "monopoly", resource: 4 } });
     }
+    const scarce = structuredClone(resolvedDiscard); scarce.game.phase = "plenty"; scarce.game.current = 0;
+    scarce.game.bank = [0, 1, 0, 0, 0];
+    await deliverFeedback(scarce); await page.locator('[data-special="plenty"]').click();
+    await page.locator('[data-add-resource="1"]').click();
+    assert.equal(await page.locator("#confirmResources").isEnabled(), true, "Plenty can take the bank's last single card");
+    scarce.game.bank = [0, 0, 0, 0, 0]; await deliverFeedback(scarce);
+    assert.equal(await page.locator("#resourceSelected button").count(), 0, "Live supply changes remove unavailable choices");
+    assert.equal(await page.locator("#confirmResources").isEnabled(), true, "An empty bank must not leave Plenty stuck");
+    await page.locator("#confirmResources").click();
+    assert.deepEqual(await page.evaluate(() => window.testActions.at(-1)), {type:"action",action:{type:"plenty",resources:[0,0,0,0,0]}});
     const E = require("./catan-engine");
     const devGame = E.createGame(actualState.seats.map((seat) => seat.name));
     while (devGame.phase.startsWith("setup")) E.act(devGame, devGame.current, E.chooseBotAction(devGame, devGame.current));
@@ -711,7 +741,7 @@ const server = spawn(process.execPath, [path.join(__dirname, "server.js")], { en
       await page.locator("[data-cancel-development]").click(); await applyDevelopmentAction({ type: "cancelDevelopment" });
       assert.deepEqual(devGame.players[0].development, hand); assert.equal(devGame.phase, phase);
       await page.locator('[data-dev="plenty"]').click(); await applyDevelopmentAction({ type: "playDevelopment", card: "plenty" });
-      await page.locator('[data-special="plenty"]').click(); await page.locator("#choose0").fill("1");
+      await page.locator('[data-special="plenty"]').click(); await page.locator('[data-add-resource="0"]').click();
       await page.setViewportSize({ width: 320, height: 640 });
       await page.locator("#cancelDevelopment").scrollIntoViewIfNeeded();
       await page.screenshot({ path: `test-results/catan-plenty-cancel-${phase}.png` });
@@ -724,8 +754,8 @@ const server = spawn(process.execPath, [path.join(__dirname, "server.js")], { en
     }
     await page.locator('[data-dev="plenty"]').click(); await applyDevelopmentAction({ type: "playDevelopment", card: "plenty" });
     await page.locator('[data-special="plenty"]').click();
-    assert.equal(await page.locator("#choose0").inputValue(), "0", "Cancelling clears the old resource choice");
-    await page.locator("#choose4").fill("2"); await page.locator("#confirmResources").click();
+    assert.equal(await page.locator("#resourceSelected button").count(), 0, "Cancelling clears the old resource choice");
+    await page.locator('[data-add-resource="4"]').click(); await page.locator('[data-add-resource="4"]').click(); await page.locator("#confirmResources").click();
     await applyDevelopmentAction({ type: "plenty", resources: [0, 0, 0, 0, 2] });
     assert.equal(await page.locator("[data-cancel-development]").count(), 0);
     assert.equal(devGame.developmentPlayed, true);
@@ -752,7 +782,8 @@ const server = spawn(process.execPath, [path.join(__dirname, "server.js")], { en
           boardBottom: rect("#boardViewport").bottom,
           promptTop: rect(".turn-banner").top,
           minButtonHeight: Math.min(...buttons.map((b) => b.getBoundingClientRect().height)),
-          detailsClosed: [...document.querySelectorAll(".table-detail")].every((d) => !d.open)
+          detailsClosed: [...document.querySelectorAll(".table-detail:not(#supplyDetails)")].every((d) => !d.open),
+          bankOpen: document.getElementById("supplyDetails").open
         };
       });
       assert.equal(layout.overflow, false, `Horizontal overflow at ${viewport.width}`);
@@ -760,7 +791,9 @@ const server = spawn(process.execPath, [path.join(__dirname, "server.js")], { en
       assert.ok(layout.actionsBottom <= layout.playersTop && layout.playersBottom <= layout.bankTop, "Player overview belongs between actions and bank");
       assert.ok(layout.boardBottom <= layout.promptTop + 1 && layout.boardBottom < layout.resourcesTop, "Board must not overlap controls");
       assert.ok(layout.minButtonHeight >= 44, "Touch actions should be at least 44px tall");
-      assert.equal(layout.detailsClosed, true, "Secondary panels start collapsed on mobile");
+      assert.equal(layout.detailsClosed, true, "Other secondary panels start collapsed on mobile");
+      assert.equal(layout.bankOpen, true, "Bank stock stays expanded on mobile");
+      assert.equal(await page.locator("#bank .bank-item").count(), 5);
       await page.screenshot({ path: `test-results/catan-compact-${viewport.width}.png` });
     }
     await page.evaluate(() => {
@@ -831,7 +864,9 @@ const server = spawn(process.execPath, [path.join(__dirname, "server.js")], { en
     assert.equal(await page.locator('[data-chat-bubble="0"]').textContent(), "Compact chat test");
     await page.locator("#chatDetails summary").click();
     await page.locator("#logDetails summary").click(); await page.locator("#gameLog").waitFor({ state: "visible" }); await page.locator("#logDetails summary").click();
-    await page.locator("#supplyDetails summary").click(); await page.locator("#bank").waitFor({ state: "visible" }); await page.locator("#supplyDetails summary").click();
+    await page.locator("#bank").waitFor({ state: "visible" });
+    await page.locator("#supplyDetails summary").click(); assert.equal(await page.locator("#bank").isVisible(), false);
+    await page.locator("#supplyDetails summary").click(); await page.locator("#bank").waitFor({ state: "visible" });
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: "test-results/catan-playing-mobile.png", fullPage: true });
     await page.locator('[data-action="roll"]').click();

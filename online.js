@@ -87,6 +87,7 @@
 
   elements.name.value = localStorage.getItem("holdem-online-name") || "";
   const social = window.BoardGameUI.mountInteractions(() => state.room && ({ code: state.room.code, players: state.room.players, you: state.room.players.find((p) => p.clientId === state.clientId)?.socialId, connected: state.socket?.readyState === WebSocket.OPEN }), send);
+  const management = window.BoardGameUI.mountRoomControl(() => state.room?.control, send, () => state.room?.status === "lobby" ? elements.lobby.querySelector(".lobby-heading") : elements.pokerRoom.querySelector(".toolbar-actions"));
   window.BoardGameUI.mountAvatarPicker(document.getElementById("pokerAvatarPicker"), elements.name);
   window.addEventListener("board-avatar-change", ({ detail }) => {
     if (state.room && state.socket?.readyState === WebSocket.OPEN) send({ type: "profile", avatar: detail.avatar });
@@ -149,6 +150,7 @@
         setError(data.message);
       } else if (data.type === "left") {
         resetToSetup();
+        if (data.reason) setError(data.reason);
       }
     });
     socket.addEventListener("close", () => {
@@ -177,6 +179,7 @@
   }
 
   function send(data) {
+    if (state.room?.control?.paused && ["action", "start", "nextHand", "showCards"].includes(data.type)) { setError("空位待补齐，游戏暂停 / Waiting for replacement"); return false; }
     if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
       setError("服务器尚未连接 / Server is not connected");
       return false;
@@ -349,6 +352,7 @@
       item.classList.toggle("active", item.dataset.replayView === "player");
     });
     state.room = null;
+    management.sync();
     state.desiredRoom = "";
     sessionStorage.removeItem("holdem-online-room");
     elements.setup.hidden = false;
@@ -858,7 +862,7 @@
         </div>
       `;
     }).join("");
-    const isHost = room.canManage || room.hostId === state.clientId || room.originalHostId === state.clientId;
+    const isHost = room.canManage || room.hostId === state.clientId;
     const botCount = room.players.filter((player) => player.isBot).length;
     elements.startButton.hidden = !isHost;
     elements.startButton.disabled = room.players.length < 2;
@@ -1083,7 +1087,7 @@
     elements.heroName.textContent = hero.name;
     elements.heroStack.textContent = `${hero.chips} 筹码 / chips`;
     renderPractice(room);
-    const heroTurn = room.status === "playing" && room.actor === room.viewerIndex;
+    const heroTurn = room.status === "playing" && room.actor === room.viewerIndex && !room.control?.paused && !hero.auto;
     elements.actionPanel.classList.toggle("waiting", !heroTurn);
     [elements.fold, elements.call, elements.raise, elements.raiseInput].forEach((control) => {
       control.disabled = !heroTurn;
@@ -1108,7 +1112,7 @@
     elements.revealPanel.hidden = !canChooseReveal;
     elements.showCards.disabled = !canChooseReveal || hero.showCards;
     elements.muckCards.disabled = !canChooseReveal || !hero.showCards;
-    const isHost = room.canManage || room.hostId === state.clientId || room.originalHostId === state.clientId;
+    const isHost = room.canManage || room.hostId === state.clientId;
     elements.autoNext.hidden = !isHost;
     elements.autoNext.textContent = room.autoNext
       ? "自动下一手：开 / Auto On"
@@ -1140,6 +1144,7 @@
   }
 
   function render() {
+    management.sync();
     if (!state.room) {
       resetToSetup();
     } else if (state.room.status === "lobby") {

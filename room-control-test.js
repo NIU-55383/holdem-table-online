@@ -38,19 +38,33 @@ test("inactivity warns before auto, stay resets the deadline, and empty seats su
   }
 });
 
-test("idle opt-in belongs only to the sender and never follows a vacated seat", () => {
+test("only the host controls room-wide idle auto; disabling preserves manual auto and replacements follow room policy", async () => {
   const a={token:"a",name:"A",ws:{readyState:1}},b={token:"b",name:"B",ws:{readyState:1}};
   const room={code:"PREF",host:"a",seats:[a,b]},rooms=new Map([[room.code,room]]);
   const control=createRoomControl({rooms,active:()=>true,started:()=>true,turnKey:()=>"turn",actors:()=>[0,1],stop:()=>{},remove:()=>{},changed:r=>control.sync(r)});
   try {
-    control.handle(room,a,{type:"roomControl",action:"idleAuto",enabled:true,target:Social.publicId(b)});
-    assert.equal(control.snapshot(room,a).idleAuto,true);assert.equal(control.snapshot(room,b).idleAuto,false);
-    assert.equal(control.snapshot(room,b).warning,null);
-    assert.throws(()=>control.handle(room,b,{type:"roomControl",action:"idleAuto",enabled:"false"}),/on or off/);
-    control.handle(room,b,{type:"roomControl",action:"idleAuto",enabled:true});
+    assert.equal(control.snapshot(room,a).idleAuto,false);
+    assert.throws(()=>control.handle(room,b,{type:"roomControl",action:"idleAuto",enabled:true}),/Host only/);
+    assert.throws(()=>control.handle(room,a,{type:"roomControl",action:"idleAuto",enabled:"false"}),/on or off/);
+    control.handle(room,a,{type:"roomControl",action:"idleAuto",enabled:true});
+    assert.equal(control.snapshot(room,a).idleAuto,true);assert.equal(control.snapshot(room,b).idleAuto,true);
+    assert.ok(control.snapshot(room,b).warning,"All required connected humans receive deadlines");
+    control.handle(room,b,{type:"roomControl",action:"auto",enabled:true});
+    room.roomControl.idle.get(a).deadline=Date.now()-1;
+    await sleep(1100);assert.equal(a.auto,true);
+    control.handle(room,a,{type:"roomControl",action:"idleAuto",enabled:false});
+    assert.equal(a.auto,false,"Timeout-triggered auto stops when the host turns the policy off");
+    assert.equal(b.auto,true,"Voluntary manual auto remains active");
+    assert.equal(control.snapshot(room,a).warning,null);assert.equal(control.snapshot(room,b).idleAuto,false);
+    control.handle(room,a,{type:"roomControl",action:"idleAuto",enabled:true});
     control.handle(room,a,{type:"roomControl",action:"kick",target:Social.publicId(b)});
     const next=control.fill(room,1,{token:"new",name:"New",ws:{readyState:1}});
-    control.sync(room);assert.equal(control.snapshot(room,next).idleAuto,false);assert.equal(control.snapshot(room,next).warning,null);
+    control.sync(room);assert.equal(control.snapshot(room,next).idleAuto,true);assert.ok(!next.auto);assert.ok(control.snapshot(room,next).warning);
+    control.handle(room,a,{type:"roomControl",action:"transfer",target:Social.publicId(next)});
+    control.handle(room,next,{type:"roomControl",action:"respond",id:room.roomControl.pending.id,accept:true});
+    assert.equal(control.snapshot(room,next).idleAuto,true,"Policy survives host transfer");
+    assert.throws(()=>control.handle(room,a,{type:"roomControl",action:"idleAuto",enabled:false}),/Host only/);
+    control.handle(room,next,{type:"roomControl",action:"idleAuto",enabled:false});
     a.ws=null;control.sync(room);assert.equal(control.snapshot(room,a).warning,null,"No background deadline for disconnected humans");
   } finally {control.close();}
 });
@@ -104,6 +118,12 @@ test("all five games: consent, closest online human, kick/pause, human and bot r
         assert.match(rejected.message,/Seat changed/);
       }
       const ownId=p=>latest(p).control.you;
+      assert.equal(latest(a).control.idleAuto,false);
+      assert.match((await b.request({type:"roomControl",action:"idleAuto",enabled:true},"error")).message,/Host only/);
+      const policyCursor=b.messages.length;
+      const policy=await a.request({type:"roomControl",action:"idleAuto",enabled:true});
+      assert.equal(policy.control.idleAuto,true);
+      await b.next(m=>m.type==="state"&&b.state(m).control.idleAuto===true,policyCursor);
       const hostChange=async(sender,target)=>{
         const cursor=sender.messages.length;
         sender.send({type:"roomControl",action:"transfer",target:ownId(target)});
@@ -121,6 +141,9 @@ test("all five games: consent, closest online human, kick/pause, human and bot r
       await a.request({type:"roomControl",action:"respond",id:request.control.pending.id,accept:false});
       assert.equal(latest(a).control.host,ownId(a));
       await hostChange(a,c||b);
+      assert.equal(latest(c||b).control.idleAuto,true,"Room policy survives host transfer");
+      assert.match((await a.request({type:"roomControl",action:"idleAuto",enabled:false},"error")).message,/Host only/);
+      await (c||b).request({type:"roomControl",action:"idleAuto",enabled:false});
       const departing=c||b, disconnectCursor=a.messages.length;
       departing.ws.close();await once(departing.ws,"close");
       await a.next(m=>m.type==="state"&&a.state(m).control.host===ownId(a),disconnectCursor);

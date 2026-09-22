@@ -32,6 +32,18 @@
 .player-summary .island-points small, .player-summary .longest-count small {display: block; font-size: 8px; white-space: nowrap;}
 .player-summary .island-points {color: #386b59;}
 .player-summary .route-holder {background: #f8e6a4; color: #664710;}
+@media (min-width: 741px) {
+  .board-section > .player-overview {margin-top: 14px; padding: 8px 12px 12px; border-top: 2px solid #bcd2cc; background: var(--panel); color: var(--ink);}
+  .board-section > .player-overview .player-summary {font-size: 13px;}
+  .board-section > .player-overview .player-summary thead th {font-size: 12px;}
+  .board-section > .player-overview .player-summary thead small {font-size: 10px;}
+  .board-section > .player-overview .summary-identity strong {font-size: 12px;}
+  .board-section > .player-overview .summary-identity small {font-size: 10px;}
+}
+@media (min-width: 1200px) {
+  .board-section > .player-overview .player-summary th:first-child {width: 26%;}
+  .board-section > .player-overview .ship-count {display: inline-flex!important; margin-left: 6px;}
+}
 @container (max-width: 360px) {
   .player-summary th, .player-summary td {padding-inline: 2px;}
   .player-summary thead th {font-size: 10px;}
@@ -81,6 +93,15 @@
 .trade-offer.incoming-offer {border-left: 4px solid #e0ab21; padding-left: 12px; background: #f8dfa23b; animation: trade-emphasis 1.2s ease-in-out 3;}
 .trade-offer.incoming-offer > h3 {color: #654a00;}
 .trade-offer:focus-visible {outline: 2px solid #d4a31e; outline-offset: 3px;}
+.gold-choice-alert strong {white-space: normal; overflow-wrap: anywhere;}
+.gold-choice-alert > .art {width: 30px; height: 30px; flex: 0 0 30px;}
+.special-actions .gold-choice-button {display: flex; align-items: center; justify-content: center; gap: 10px; border: 2px solid #b58117; box-shadow: 0 0 0 3px #f4cd6340;}
+.gold-choice-button > svg {width: 32px; height: 32px; flex: 0 0 32px;}
+.gold-choice-button > span {min-width: 0; overflow-wrap: anywhere;}
+.gold-choice-button small {display: block; font-size: 12px;}
+.turn-banner.needs-gold {border: 2px solid #ffdb76;}
+.action-grid button.build-unavailable {opacity: .5; cursor: pointer;}
+.build-notice {margin: 6px 0; padding: 10px 12px; border-left: 4px solid #d59e28; background: #fff3ce; color: #674910; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere;}
 @keyframes trade-arrival {from {opacity: 0; transform: translateY(-8px);} to {opacity: 1; transform: translateY(0);}}
 @keyframes trade-emphasis {50% {box-shadow: inset 0 0 0 2px #dfb343;}}
 @media (max-width: 740px) {
@@ -371,6 +392,7 @@
 .game-rule-links button {display: flex; flex-direction: column; justify-content: center; min-width: 64px; min-height: 40px; line-height: 1.2; white-space: nowrap;}
 .game-rule-links button small {display: block; font-size: 10px; margin-top: 2px; opacity: .8;}
 .victory-target {display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: #ffe397; white-space: nowrap; font-size: 12px; line-height: 18px;}
+.victory-target-heading {display: inline-flex; align-items: center; gap: 6px;}
 .victory-target svg {width: 17px; height: 17px; flex: none;}
 .victory-target strong {font-size: 17px; font-variant-numeric: tabular-nums;}
 .victory-target small {font-size: 11px; font-weight: 600;}
@@ -381,13 +403,13 @@
   .game-topbar .game-rule-links .quiet {min-height: 40px; padding: 4px 8px; font-size: 11px;}
   .game-topbar #autoButton {grid-area: auto; margin-left: 0;}
   .game-topbar > [data-leave] {grid-area: leave;}
-  .board-section .board-toolbar {height: 18px; min-height: 18px;}
+  .board-section .board-toolbar {height: auto; min-height: 20px;}
   .victory-target {gap: 5px; font-size: 11px; line-height: 18px;}
   .victory-target svg {width: 14px; height: 14px;}
   .victory-target strong {font-size: 15px;}
   .victory-target small {font-size: 10px;}
 }
-#helpDialog[open], #sailingDialog[open] {
+#helpDialog[open], #sailingDialog[open], #scenarioInfoDialog[open] {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -399,11 +421,18 @@
   padding: 22px;
   overflow: hidden;
 }
-#helpDialog .dialog-heading, #sailingDialog .dialog-heading {flex: 0 0 auto; min-width: 0; margin: 0;}
-#helpDialog .dialog-heading h2, #sailingDialog .dialog-heading h2 {min-width: 0; overflow-wrap: anywhere;}
-#helpDialog .dialog-heading .icon-button, #sailingDialog .dialog-heading .icon-button {width: 44px; height: 44px; flex: 0 0 44px;}
-#helpContent, #sailingContent {flex: 1 1 auto; min-width: 0; min-height: 0; max-height: none; margin-bottom: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-right: 8px; overflow-wrap: anywhere;}
-#helpAcknowledge, #sailingAcknowledge {flex: 0 0 auto; margin-bottom: 3px;}
+#helpDialog .dialog-heading, #sailingDialog .dialog-heading, #scenarioInfoDialog .dialog-heading {flex: 0 0 auto; min-width: 0; margin: 0;}
+#helpDialog .dialog-heading h2, #sailingDialog .dialog-heading h2, #scenarioInfoDialog .dialog-heading h2 {min-width: 0; overflow-wrap: anywhere;}
+#helpDialog .dialog-heading .icon-button, #sailingDialog .dialog-heading .icon-button, #scenarioInfoDialog .dialog-heading .icon-button {width: 44px; height: 44px; flex: 0 0 44px;}
+#helpContent, #sailingContent, #scenarioInfoContent {flex: 1 1 auto; min-width: 0; min-height: 0; max-height: none; margin-bottom: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-right: 8px; overflow-wrap: anywhere;}
+#helpAcknowledge, #sailingAcknowledge, #scenarioInfoDialog > .primary {flex: 0 0 auto; margin-bottom: 3px;}
+.scenario-info-symbol {margin-bottom: 12px;}
+.scenario-info-symbol svg {width: 44px; height: 44px;}
+[data-scenario-info] {cursor: help;}
+[data-scenario-info]:hover .gift-badge, [data-scenario-info]:focus-visible .gift-badge {stroke: #215b70; stroke-width: 3;}
+.foreign-island .hex-land {fill-opacity: .65;}
+.foreign-island-label {paint-order: stroke; stroke: #fff5dc; stroke-width: 2; stroke-linejoin: round;}
+.gift-coast, .gift-connector {pointer-events: none;}
 .rule-section {padding: 16px 0; border-bottom: 1px solid #c1d8db;}
 .rule-section:first-child {padding-top: 0;}
 .rule-section h3 {margin: 0 0 10px; font-size: 16px; color: #1e6d77;}
@@ -422,6 +451,113 @@
 .rules-development dt svg {width: 32px; height: 38px; flex: 0 0 32px;}
 .rules-development dt small {margin-top: 2px;}
 .rules-development dd {margin: 0; font-size: 13px;}
+.scenario-thieves small {display: block; font-size: 10px;}
+.scenario-art {width: 28px; height: 28px; flex: 0 0 28px; color: #47818e;}
+.scenario-panel {padding: 14px 0; border-bottom: 1px solid #c8dadb; min-width: 0;}
+.scenario-panel h2 {align-items: center; margin-bottom: 8px;}
+.scenario-panel button small,.scenario-wonders small {display: block;}
+.scenario-muted {font-size: 11px; color: #587783;}
+.scenario-harbors {display: flex; flex-wrap: wrap; gap: 6px;}
+.scenario-harbors button {display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 7px; font-size: 11px; text-align: left;}
+.scenario-harbors button svg {width: 26px; height: 26px; flex-shrink: 0;}
+.scenario-harbors button.selected {border-color: #b98c33; background: #fff0c0;}
+.scenario-public-counts {display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px 12px;}
+.scenario-public-counts > span {display: flex; gap: 5px; align-items: center; min-width: 0; font-size: 12px;}
+.scenario-public-counts > span > span {flex: 1; overflow-wrap: anywhere;}
+.scenario-panel .player-color {flex: 0 0 7px;}
+.scenario-loot {display: grid; gap: 8px; padding-top: 10px;}
+.scenario-loot strong {font-size: 12px; overflow-wrap: anywhere;}
+.scenario-loot > div > div {display: flex; gap: 6px; margin-top: 4px;}
+.scenario-loot .secondary {display: flex; flex: 1; align-items: center; justify-content: center; gap: 5px; padding: 7px; font-size: 12px;}
+.scenario-loot .secondary svg {width: 26px; height: 28px;}
+.scenario-loot .secondary small {font-size: 10px;}
+.scenario-back {min-height: 44px; color: #24566b; background: transparent; text-decoration: underline; font-size: 12px;}
+.scenario-fortresses > div {display: grid; grid-template-columns: minmax(0,1fr) 50px 105px; gap: 5px; align-items: center; padding: 4px 0; border-top: 1px solid #d2e1de; font-size: 12px;}
+.scenario-fortresses span {display: flex; align-items: center; gap: 4px; min-width: 0; overflow-wrap: anywhere;}
+.scenario-fortresses small {font-size: 9px; line-height: 1.2;}
+.scenario-fortresses .scenario-art {width: 23px; height: 23px; flex-basis: 23px;}
+.scenario-fortresses > div > span:last-child .scenario-art {color: var(--player);}
+.scenario-attack,.scenario-resource-choice {display: flex; justify-content: center; align-items: center; gap: 8px; width: 100%; margin-top: 8px;}
+.scenario-resource-choice {margin: 0; font-size: 12px; padding: 8px;}
+.scenario-resource-choice small {display: block; font-size: 11px;}
+.scenario-attack small {font-size: 11px;}
+.scenario-wonders {padding-top: 18px;}
+.scenario-wonders > h2 {font-size: 18px; margin-bottom: 10px;}
+.scenario-wonders > h2 small {display: inline; margin-left: 5px;}
+.wonder-ship-rule {margin: 0 0 10px; color: #c1e0e5; font-size: 11px;}
+.wonder-ship-rule small {font-size: 10px;}
+.wonder-build-rule {margin: 0 0 10px; max-width: 850px; font-size: 13px; line-height: 1.6; color: #fff0c6; overflow-wrap: anywhere;}
+.wonder-build-rule small {display: block; margin-top: 3px; font-size: 11px; color: #c1e0e5;}
+.wonder-list {display: grid; grid-template-columns: repeat(auto-fit,minmax(165px,1fr)); gap: 10px;}
+.harbor-setup-banner {display: flex; align-items: center; gap: 10px; margin: 10px 0 14px; padding: 12px; border-left: 4px solid #ffd875; background: #fff0c6; color: #254e59; overflow-wrap: anywhere;}
+.harbor-setup-banner > svg {width: 36px; height: 36px; flex: 0 0 36px;}
+.harbor-setup-banner > div {min-width: 0;}
+.harbor-setup-banner strong {font-size: 14px;}
+.harbor-setup-banner small {display: block; font-size: 11px; margin-top: 3px;}
+.harbor-setup-dialog {width: 420px; border-top: 5px solid #ffd875; overflow-wrap: anywhere;}
+.harbor-setup-dialog[open] {display: flex; flex-direction: column; gap: 14px;}
+.harbor-setup-body {min-height: 0; overflow-y: auto; scrollbar-width: thin;}
+.harbor-setup-symbol {display: flex; justify-content: center; align-items: center; gap: 18px; margin-bottom: 14px; color: #237a8c;}
+.harbor-setup-symbol svg {width: 40px; height: 40px; flex-shrink: 0;}
+.harbor-setup-symbol svg:last-child {width: 58px; height: 58px;}
+.harbor-setup-dialog .harbor-setup-complete {font-size: 12px; font-weight: 700; color: #42695c; margin-bottom: 7px;}
+.harbor-setup-dialog h2 {font-size: 24px; line-height: 1.35; margin-bottom: 16px;}
+.harbor-setup-dialog h2 small {font-size: 13px; margin-top: 5px;}
+#harborSetupDescription {font-size: 14px; line-height: 1.6;}
+#harborSetupActor {padding: 10px 12px; margin: 14px 0 0; background: #dcebe2; font-size: 13px; font-weight: 700;}
+#acknowledgeHarborSetup {display: flex; flex-direction: column; flex-shrink: 0; gap: 2px; white-space: normal; line-height: 1.4;}
+#acknowledgeHarborSetup small {font-size: 11px;}
+@media (max-height: 520px) {.harbor-setup-symbol {display: none;}.harbor-setup-dialog h2 {font-size: 21px; margin-bottom: 10px;}}
+.wonder-card {display: flex; flex-direction: column; min-width: 0; padding: 10px; border: 1px solid #afc9c9; border-radius: 6px; background: #edf5ee; color: #153e52;}
+.wonder-card.own-wonder {border-color: #ffe090; box-shadow: inset 0 0 0 2px #ffe090;}
+.wonder-illustration {width: 100%; aspect-ratio: 5/3; overflow: hidden;}
+.wonder-art {display: block; width: 100%; height: 100%;}
+.wonder-card h3 {font-size: 15px; line-height: 1.35; margin: 8px 0 6px;}
+.wonder-card h3 small {font-size: 11px;}
+.wonder-requirement {font-size: 11px; line-height: 1.5; overflow-wrap: anywhere;}
+.wonder-requirement small {font-size: 10px; color: #54727b;}
+.wonder-cost {display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0; margin-top: auto; min-height: 44px;}
+.wonder-cost .wonder-resource {display: grid; grid-template-columns: 23px auto; align-items: center; gap: 2px; font-size: 13px;}
+.wonder-resource > small {grid-column: 1 / -1; text-align: center; font-size: 9px; line-height: 1.35; color: #54727b;}
+.wonder-cost-label {flex: 0 0 100%; font-size: 12px; font-weight: 700; line-height: 1.45;}
+.wonder-cost-label small, .wonder-cost-repeat small, .wonder-progress-label small {display: block; font-size: 10px; font-weight: 500; color: #54727b; margin-top: 2px;}
+.wonder-cost-repeat {font-size: 11px; line-height: 1.5; padding-bottom: 10px; overflow-wrap: anywhere;}
+.wonder-progress-label {font-size: 12px; font-weight: 700; line-height: 1.45; margin-bottom: 6px;}
+.wonder-cost svg {width: 23px; height: 25px;}
+.wonder-stages {display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 4px; list-style: none; margin: 0; padding: 0;}
+.wonder-stages li {display: grid; grid-template-rows: 17px 14px; place-items: center; align-content: center; min-width: 0; height: 43px; background: #d2e1df; border-bottom: 3px solid #a5c0c0; font-size: 12px; font-weight: 700;}
+.wonder-stages li small {font-size: 10px; font-weight: 500; line-height: 14px;}
+.wonder-stages li.complete {background: #a9d09b; border-color: #4e8865; color: #214c42;}
+.wonder-stages li.next-stage {background: #ffe5a0; border-color: #b59646; color: #4d481f;}
+.wonder-owner {display: flex; align-items: center; gap: 6px; font-size: 11px; margin: 6px 0; overflow-wrap: anywhere; min-height: 28px;}
+.wonder-owner > span:last-child {min-width: 0;}
+.wonder-ship-marker {display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto;}
+.wonder-ship-marker svg {width: 23px; height: 26px;}
+.wonder-ship-marker b {color: #315564; font-size: 11px;}
+.wonder-card button {width: 100%; min-height: 44px; font-size: 11px; padding: 7px 5px; line-height: 1.3;}
+.wonder-card button small {display: block; font-size: 10px; margin-top: 3px;}
+.board-section .board-toolbar.has-scenario-target {height: auto; min-height: 0; flex-direction: column; align-items: stretch; gap: 8px; padding: 6px 0 12px;}
+.victory-target.scenario-target {display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px 24px; min-width: 0; width: 100%; max-width: none; margin: 0; white-space: normal; text-align: left;}
+.scenario-target .victory-target-heading {align-items: start; padding-top: 1px;}
+.scenario-victory-conditions {display: grid; gap: 8px; min-width: 0; overflow-wrap: anywhere;}
+.scenario-victory-conditions p {min-width: 0;}
+.scenario-victory-conditions strong {display: block; font-size: 14px; line-height: 1.45;}
+.scenario-victory-conditions small {display: block; color: #c0dfe5; font-size: 11px; line-height: 1.4; font-weight: 500; margin-top: 2px;}
+.scenario-victory-conditions .victory-timing {font-size: 12px; color: #c0dfe5;}
+.scenario-victory-conditions .victory-alternative {display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: baseline;}
+.victory-alternative > span:first-child {font-size: 11px; font-weight: 700;}
+@media (max-width: 740px) {
+  .scenario-wonders {padding-top: 12px;}
+  .wonder-list {grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px;}
+  .wonder-card {padding: 8px;}
+  .wonder-card h3 {font-size: 14px;}
+  .wonder-cost {gap: 5px;}
+  .wonder-cost svg {width: 21px; height: 23px;}
+  .scenario-panel {padding: 10px 0;}
+  .victory-target.scenario-target {grid-template-columns: minmax(0, 1fr); gap: 6px;}
+  .scenario-victory-conditions {gap: 6px;}
+  .scenario-victory-conditions strong {font-size: 13px;}
+}
 @media (max-width: 740px) {
   #helpDialog[open], #sailingDialog[open] {padding: 14px; gap: 12px;}
   #helpDialog .dialog-heading h2, #sailingDialog .dialog-heading h2 {font-size: 19px;}

@@ -63,3 +63,22 @@ test("audio gracefully handles unavailable APIs and saves the mute preference", 
     a.stop();
   } finally { delete global.localStorage; }
 });
+
+test("gold chime is local, once per choice, silent on reconnect, pause and manual auto", () => {
+  const sounds=[], t=A.tracker(s=>sounds.push(s));
+  const room={code:"GOLD",you:1,control:{},game:{phase:"main",current:0,turn:3,revision:1,legal:{gold:0},goldQueue:[]}};
+  t.update(room);
+  Object.assign(room.game,{phase:"gold",revision:2,legal:{gold:2},goldQueue:[{id:1,count:2},{id:0,count:1}]});
+  assert.equal(A.goldChoice(room),true,"The recipient need not be the current dice roller");
+  t.update(room);t.update(room);assert.deepEqual(sounds,["gold"]);
+  t.reset();t.update(room);assert.deepEqual(sounds,["gold"]);
+  room.control.paused=true;assert.equal(A.goldChoice(room),false);t.update(room);
+  room.control.paused=false;t.update(room);assert.deepEqual(sounds,["gold"]);
+  room.control.auto=true;assert.equal(A.goldChoice(room),false);
+  room.game.turn++;t.update(room);assert.deepEqual(sounds,["gold"]);
+  room.control.auto=false;t.update(room);assert.deepEqual(sounds,["gold"]);
+  room.game.legal.gold=0;assert.equal(A.goldChoice(room),false);t.update(room);
+  room.game.goldQueue.shift();t.update(room);assert.deepEqual(sounds,["gold"]);
+  room.game.goldQueue=[{id:1,count:1}];room.game.legal.gold=1;room.game.revision++;t.update(room);
+  assert.deepEqual(sounds,["gold","gold"]);
+});

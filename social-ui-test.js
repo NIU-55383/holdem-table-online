@@ -28,6 +28,9 @@ const origin = process.env.TEST_ORIGIN || "http://127.0.0.1:18764";
       const send = (page, data) => page.evaluate((m) => testSocket.send(JSON.stringify(m)), data);
       if (kind === "catan") {
         await a.locator(".piece-skin-settings summary").click();
+        for (const [id, art] of [["smile", "robber-hood"], ["angry", "robber-bandana"]]) {
+          assert.equal(await a.locator(`[data-skin-kind="robber"][data-skin="${id}"] use`).getAttribute("href"), `#catan-art-${art}`);
+        }
         await a.locator('[data-skin-kind="robber"][data-skin="angry"]').click();
         assert.equal(await a.locator('[data-skin="angry"]').getAttribute("aria-pressed"), "true");
         await a.locator("#name").fill("Alice"); await a.locator('[data-seats="3"]').click(); await a.locator("#create").click();
@@ -68,7 +71,8 @@ const origin = process.env.TEST_ORIGIN || "http://127.0.0.1:18764";
         await send(a, { type: "fillBots" }); await a.waitForFunction(() => testState.seats.length === 3);
         await send(a, { type: "start" }); await a.waitForFunction(() => testState.game);
         await a.evaluate(() => document.querySelectorAll("dialog[open]").forEach((d) => d.close()));
-        assert.equal(await a.locator("#board .robber-piece .piece-emoji").textContent(), "\uD83D\uDC7F");
+        assert.equal(await a.locator("#board .robber-piece use").getAttribute("href"), "#catan-art-robber-bandana");
+        assert.equal(await a.locator("#board .robber-piece .piece-emoji").count(), 0);
         for (const width of [320, 390, 1440]) {
           await a.setViewportSize({ width, height: 1000 });
           await send(b, { type: "chat", text: "Hi" });
@@ -109,7 +113,8 @@ const origin = process.env.TEST_ORIGIN || "http://127.0.0.1:18764";
     await guest.locator("#lobbyMapRules").click(); await guest.locator("#sailingAcknowledge").click();
     assert.equal(await guest.locator("dialog[open]").count(), 0);
     await p.locator("#fillBots").click(); await p.locator("#start").click(); await p.locator("#board .pirate-piece .piece-emoji").waitFor();
-    assert.equal(await p.locator("#board .robber-piece .piece-emoji").textContent(), "\uD83D\uDE08");
+    assert.equal(await p.locator("#board .robber-piece use").getAttribute("href"), "#catan-art-robber-hood");
+    assert.equal(await p.locator("#board .robber-piece .piece-emoji").count(), 0);
     await p.locator(".board-section").screenshot({ path: "test-results/social-skins-board.png" });
     const bot = p.locator("#players [data-social-target]").first(); await bot.scrollIntoViewIfNeeded(); await bot.focus(); await p.keyboard.press("Enter");
     await p.locator(".reaction-menu").waitFor(); await p.keyboard.press("Escape"); assert.equal(await p.locator(".reaction-menu").count(), 0);

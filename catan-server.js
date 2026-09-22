@@ -14,8 +14,8 @@ function attachCatan(server) {
   const rooms = new Map(), sessions = new Map();
   const control = require("./room-control").createRoomControl({ rooms,
     active: (r) => r.game && r.game.phase !== "over", started: (r) => Boolean(r.game),
-    turnKey: (r) => r.game && `${r.game.turn}:${r.game.phase}:${r.game.current}`,
-    actors: (r) => r.game.phase === "discard" ? r.game.players.map((p, i) => r.game.discard[i] ? i : -1) : [r.game.phase === "gold" ? r.game.goldQueue[0].id : r.game.current],
+    turnKey: (r) => r.game && `${r.game.turn}:${r.game.phase}:${r.game.current}:${E.requiredActors(r.game).join(",")}`,
+    actors: (r) => E.requiredActors(r.game),
     stop: (r) => clearTimeout(r.timer), changed: broadcast,
     remove: (r, p) => { const s = sessions.get(p.token); if (s) s.room = ""; send(p.ws, { type: "left", reason: "房主已将你移出房间 / Removed by the host" }); }
   });
@@ -32,7 +32,7 @@ function attachCatan(server) {
   function snapshot(room, session) {
     const you = room.seats.findIndex((p) => p.token === session.token);
     const swap = room.seatSwap;
-    return { type: "state", code: room.code, mapId: room.mapId, layout: room.layout, maxPlayers: room.maxPlayers, you, targetedTrades: true, seatSelection: true,
+    return { type: "state", code: room.code, mapId: room.mapId, layout: room.layout, thieves: room.thieves, maxPlayers: room.maxPlayers, you, targetedTrades: true, seatSelection: true,
       host: room.seats.findIndex((p) => p.token === room.host),
       skins: room.skins, control: control.snapshot(room, session),
       seats: room.seats.map((p) => ({ socialId: Social.publicId(p), name: p.name, position: p.position, avatar: p.avatar || null, bot: p.bot, vacant: Boolean(p.vacant), connected: !p.vacant && (p.bot || Boolean(p.ws)), auto: p.auto })),
@@ -79,10 +79,8 @@ function attachCatan(server) {
     if (control.paused(room) || !room.game || room.game.phase === "over" || !room.seats.some((p) => !p.bot && p.ws)) return;
     const g = room.game;
     let actor = -1;
-    if (g.phase === "discard") actor = room.seats.findIndex((p, i) => g.discard[i] && controlled(p));
-    else if (g.phase === "gold") actor = controlled(room.seats[g.goldQueue[0].id]) ? g.goldQueue[0].id : -1;
-    else if (g.trade) actor = room.seats.findIndex((p, i) => controlled(p) && E.canRespondToTrade(g, i));
-    if (actor < 0 && controlled(room.seats[g.current]) && !["discard", "gold"].includes(g.phase)) actor = g.current;
+    if (g.trade) actor = room.seats.findIndex((p, i) => controlled(p) && E.canRespondToTrade(g, i));
+    if (actor < 0) actor = E.requiredActors(g).find((id) => controlled(room.seats[id])) ?? -1;
     if (actor < 0) return;
     const revision = g.revision;
     room.timer = setTimeout(() => {
@@ -150,9 +148,16 @@ function attachCatan(server) {
           fail(mapId === "base" || map, "未知地图 / Unknown map");
           const layout = data.layout ?? "default";
           fail(["default", "random"].includes(layout), "未知地图模式 / Unknown map layout");
+          const thieves = map?.family === "new-world" ? data.thieves ?? "both" : "both";
+          fail(["both", "robber", "pirate"].includes(thieves), "请选择有效的强盗与海盗设置 / Invalid robber and pirate option");
           detach(session, true);
-          const room = { code: roomCode(), mapId, layout, host: session.token, maxPlayers: map?.players || (Number(data.seats) === 3 ? 3 : 4), seats: [], seatSwap: null, game: null, chat: [], updated: Date.now(), timer: null };
+          const requestedPlayers = Number(data.seats) === 3 ? 3 : 4;
+          const maxPlayers = map ? map.minPlayers === 3 ? requestedPlayers : map.players : requestedPlayers;
+          const room = { code: roomCode(), mapId, layout, thieves, host: session.token, maxPlayers, seats: [], seatSwap: null, game: null, chat: [], updated: Date.now(), timer: null };
           room.previewBoard = E.makeBoard(undefined, mapId, layout);
+          if (map?.family === "pirates") room.previewBoard.scenario.pirateSeats = room.previewBoard.scenario.pirateSeats.slice(0, maxPlayers);
+          if (thieves === "pirate") room.previewBoard.robber = null;
+          if (thieves === "robber") { room.previewBoard.pirate = null; room.previewBoard.pirateStart = null; }
           room.skins = SocialData.normalizeSkins(data.skins); room.previewBoard.skins = room.skins;
           room.seats.push({ token: session.token, name, position: 0, avatar: avatar === undefined ? session.avatar || null : avatar, bot: false, auto: false, ws });
           rooms.set(room.code, room); session.room = room.code; broadcast(room); return;
@@ -207,11 +212,11 @@ function attachCatan(server) {
           host(); fail(!room.game && room.seats.length === room.maxPlayers, "座位尚未坐满 / Waiting for all seats to be filled");
           fail(!room.seatSwap, "请先处理当前换座申请 / Resolve the pending swap first");
           const before = [...room.seats]; room.seats.sort((a, b) => a.position - b.position); remapChat(room, before);
-          room.game = E.createGame(room.seats.map((p) => p.name), undefined, room.mapId, room.layout, room.previewBoard);
+          room.game = E.createGame(room.seats.map((p) => p.name), undefined, room.mapId, room.layout, room.previewBoard, { thieves: room.thieves });
         }
-        else if (data.type === "rematch") { host(); fail(room.game?.phase === "over", "游戏尚未结束 / Game not over"); room.game = E.createGame(room.seats.map((p) => p.name), undefined, room.mapId, room.layout); room.game.board.skins = room.skins; }
+        else if (data.type === "rematch") { host(); fail(room.game?.phase === "over", "游戏尚未结束 / Game not over"); room.game = E.createGame(room.seats.map((p) => p.name), undefined, room.mapId, room.layout, undefined, { thieves: room.thieves }); room.game.board.skins = room.skins; }
         else if (data.type === "action") { fail(room.game, "游戏尚未开始 / Game not started"); E.act(room.game, you, data.action || {}); control.touch(room, room.seats[you]); }
-        else if (data.type === "auto") { room.seats[you].auto = Boolean(data.enabled); }
+        else if (data.type === "auto") { control.handle(room, room.seats[you], { type: "roomControl", action: "auto", enabled: Boolean(data.enabled) }); return; }
         else if (data.type === "chat") {
           const text = clean(data.text, 160);
           if (text) { room.chat.push({ id: crypto.randomUUID(), playerId: you, name: room.seats[you].name, text, time: Date.now() }); room.chat = room.chat.slice(-40); }

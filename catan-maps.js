@@ -1,9 +1,9 @@
 "use strict";
 (function (root, factory) {
-  const maps = factory();
+  const maps = factory(typeof module === "object" && module.exports ? require("./catan-scenario-maps") : root.CatanScenarioMaps);
   if (typeof module === "object" && module.exports) module.exports = maps;
   else root.CatanMaps = maps;
-})(typeof globalThis === "object" ? globalThis : this, () => {
+})(typeof globalThis === "object" ? globalThis : this, (scenarios) => {
   // Pointy-top rows, clockwise port normals (degrees). F is printed frame water.
   const maps = [
     { id: "shores-1", name: "扬帆出海1", english: "New Shores 1", players: 3, target: 14, family: "shores", robber: [0, 0], pirate: [3, 6], rows: [
@@ -41,6 +41,8 @@
       "b12 b6 h5 t8 s g5 w3", "w3 w11 o4 s s s", "s t9 s o6 h12",
     ], ports: [[0,2,0,1],[2,4,300,-1],[2,4,60,-1],[4,3,60,-1],[3,2,180,2],[5,0,180,3],[5,0,60,4],[6,1,0,0],[6,1,120,-1]] },
   );
+  if (!scenarios?.maps) throw new Error("Load catan-scenario-maps.js before catan-maps.js");
+  maps.push(...scenarios.maps);
   const terrain = { t: 0, b: 1, w: 2, h: 3, o: 4, d: -1, s: -2, F: -2, g: 5, "?": -3 };
   const adjacent = (a, b) => Math.max(Math.abs(a.q-b.q), Math.abs(a.r-b.r), Math.abs(a.q+a.r-b.q-b.r)) === 1;
   const randomRules = {
@@ -63,6 +65,18 @@
       components.push(members);
     }
     const main = components.reduce((best, list, i) => list.length > components[best].length ? i : best, 0);
+    if (map.scenario) {
+      const mainland = new Set(map.mainCells.map(([row, col]) => `${row}:${col}`));
+      for (const t of map.tiles) {
+        const home = mainland.has(`${t.row}:${t.col}`);
+        t.setupAllowed = t.resource >= -1 && home;
+        t.noProduction = t.resource >= -1 && !t.number;
+        t.noSettlement = t.resource >= -1 && !home && ["tribes", "cloth", "pirates"].includes(map.family);
+        t.robberAllowed = t.resource >= -1 && map.family !== "pirates" && (!["tribes", "cloth"].includes(map.family) || home);
+      }
+      map.randomPolicy.groups = map.randomPolicy.portsOnly || map.randomPolicy.regenerateWorld ? [] : [map.tiles.filter((t) => t.setupAllowed && t.resource >= 0 && t.number).map((t) => [t.row, t.col])];
+      continue;
+    }
     for (const t of map.tiles) {
       if (map.family === "desert" && t.resource === -1) t.region = main;
       t.setupAllowed = t.resource >= -1 && (["fog", "islands"].includes(map.family) || t.region === main);
@@ -86,7 +100,8 @@
     ];
   }
   const rules = [
-    ["船：1 木材 + 1 羊毛。每人最多 15 艘船、15 条道路、5 个村庄、4 座城市。", "Ship: 1 lumber + 1 wool. Each player has 15 ships, 15 roads, 5 settlements and 4 cities."],
+    ["船：1 木材 + 1 羊毛。每人的棋子库存为 5 个村庄、4 座城市、15 条道路、15 艘船。", "Ship: 1 lumber + 1 wool. Each player's piece supply is 5 settlements, 4 cities, 15 roads and 15 ships."],
+    ["标准发展牌共 25 张：14 骑士、5 胜利点、2 道路建设、2 丰收、2 垄断。海盗巢穴例外：三人局移除 5 张胜利点牌，四人局将其作为骑士使用。", "The standard 25-card development deck has 14 Knights, 5 Victory Points, 2 Road Building, 2 Year of Plenty and 2 Monopoly. Pirate Islands is an exception: remove the 5 VP cards with three players; treat them as Knights with four."],
     ["船只能建在海上或海岸边，道路只能建在陆地或海岸边；同一边只能放一个。船与道路必须经自己的村庄或城市连接。", "Ships go on sea/coastal edges, roads on land/coastal edges; one piece per edge. A road and ship connect only through your own settlement or city."],
     ["每个自己的建造阶段可移动一艘开放航线末端的旧船。本回合新造的船、封闭航线的船及海盗旁的船不能移动。", "Once per building phase, move an old ship at an open shipping end. Newly built ships, closed shipping routes and ships beside the pirate cannot move."],
     ["最长商路合并计算道路和船，连接转换处必须有自己的建筑；至少 5 段，奖励 2 分。道路建设卡可免费造两条路、两艘船或各一个。", "Longest Trade Route counts roads and ships, joined through your own buildings. At least 5 segments earn 2 VP. Road Building allows two roads, two ships, or one of each."],

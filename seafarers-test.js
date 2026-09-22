@@ -38,7 +38,7 @@ test("four fixed maps match photographed terrain inventories, tokens and separat
 });
 
 test("initial placement restricts New Shores to main island, permits Four Islands homes and coastal ships", () => {
-  for (const m of Maps.maps) {
+  for (const m of Maps.maps.slice(0, 8)) {
     const g = game(m.id), order = [];
     while (!g.turn) {
       const id = actor(g), l = E.legal(g, id);
@@ -154,7 +154,7 @@ test("gold production chooses clockwise, supports cities and shortages, robber b
 });
 
 test("foreign-island bonus is personal, once per island and survives city upgrade; target wins only on own turn", () => {
-  for (const map of Maps.maps.filter((m) => m.bonusPoints)) {
+  for (const map of Maps.maps.slice(0, 8).filter((m) => m.bonusPoints)) {
     const g = setup(game(map.id)); g.phase = "main"; supply(g);
     const p = g.players[0], site = g.board.vertices.find((v) => v.owner < 0 && v.neighbors.every((n) => g.board.vertices[n].owner < 0) && v.tiles.some((t) => g.board.tiles[t].region !== undefined && !p.homeIslands.includes(g.board.tiles[t].region)));
     const edge = g.board.edges[site.edges[0]]; edge.owner = 0; edge.kind = "ship";
@@ -177,8 +177,8 @@ test("Road Building builds ships before rolling and respects separate stock", ()
   assert.equal(g.phase, "roll"); assert.equal(E.publicGame(g,0).players[0].ships, 2); invariant(g);
 });
 
-test("every Seafarers map cancels Road Building before placement, but not after a road or ship", () => {
-  for (const map of Maps.maps) for (const phase of ["roll", "main"]) for (const kind of ["road", "ship"]) {
+test("original eight Seafarers maps cancel Road Building before placement, but not after a road or ship", () => {
+  for (const map of Maps.maps.slice(0, 8)) for (const phase of ["roll", "main"]) for (const kind of ["road", "ship"]) {
     const g = game(map.id); g.turn = 3; g.phase = phase; g.rolled = phase === "main"; g.dice = g.rolled ? [1, 1] : [];
     const coast = g.board.vertices.find((v) => v.tiles.some((t) => g.board.tiles[t].resource >= 0) && v.tiles.some((t) => g.board.tiles[t].resource === -2));
     Object.assign(coast, { owner: 0, level: 1 });

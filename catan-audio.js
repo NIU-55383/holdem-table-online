@@ -4,7 +4,7 @@
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.CatanAudio = api;
 })(typeof window === "object" ? window : globalThis, function () {
-  const durations = { click: .07, road: .4, settlement: .65, city: .95, ship: 1.05, robber: .6, pirate: .9, monopoly: .85, plenty: .85, roads: .7, knight: .55, victory: 1.85, trade: .65, exchange: .45, dice: .55, cancel: .18 };
+  const durations = { click: .07, road: .4, settlement: .65, city: .95, ship: 1.05, robber: .6, pirate: .9, monopoly: .85, plenty: .85, roads: .7, knight: .55, victory: 1.85, trade: .65, gold: .85, exchange: .45, dice: .55, cancel: .18 };
   const banks = new WeakMap();
   function noiseBuffer(ctx) {
     if (!banks.has(ctx)) {
@@ -70,6 +70,7 @@
         [523,659,784,1047].forEach((f,i) => bell(i*.18,f,.4,.19));
         [523,659,784,1047].forEach(f => tone(.9,.85,f,.07,"triangle")); break;
       case "trade": bell(0,880,.24,.23); bell(.18,1175,.34,.23); bell(.38,1568,.24,.13); break;
+      case "gold": [1318,1760,2093].forEach((f,i) => bell(i*.19,f,.43,.19)); tone(.38,.4,659,.08); break;
       case "exchange": bell(0,1397,.25,.13); bell(.13,1865,.27,.12); break;
       case "dice": [0,.07,.16,.28,.4].forEach(at => { noise(at,.06,1500,.18); tone(at,.07,430,.12,"triangle",220); }); break;
       case "cancel": tone(0,.15,440,.09,"sine",220); break;
@@ -123,12 +124,20 @@
       reset() { previous = null; },
       update(room) {
         const g = room?.game, before = previous;
-        previous = g ? { code: room.code, you: room.you, revision: g.revision, phase: g.phase, effect: g.effect?.id, trade: g.trade?.id } : null;
+        previous = g ? { code: room.code, you: room.you, revision: g.revision, phase: g.phase, effect: g.effect?.id, trade: g.trade?.id, gold: goldKey(room) } : null;
         if (!before || !g || before.code !== room.code || before.you !== room.you || g.revision < before.revision || (before.phase === "over" && g.phase !== "over")) return;
         if (g.effect?.id > before.revision && g.effect.id <= g.revision && g.effect.id !== before.effect) play(g.effect.sound);
         if (incoming(room) && g.trade.id !== before.trade) play("trade");
+        if (goldChoice(room) && previous.gold !== before.gold) play("gold");
       }
     };
   }
-  return { create, synthesize, tracker, incoming, durations };
+  function goldKey(room) {
+    const g = room?.game, choice = g?.goldQueue?.[0];
+    return g?.phase === "gold" && g.legal?.gold > 0 && choice?.id === room.you ? `${g.turn}:${choice.id}:${choice.count}` : "";
+  }
+  function goldChoice(room) {
+    return Boolean(goldKey(room) && !room.control?.paused && !room.control?.auto);
+  }
+  return { create, synthesize, tracker, incoming, goldChoice, durations };
 });

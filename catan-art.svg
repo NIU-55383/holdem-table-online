@@ -35,6 +35,29 @@
     <path d="M5 36h8l10-8 7-1c4 0 4 5 1 6l-6 3h7l9-8c3-2 6 1 3 4L33 43H13l-8 1z" fill="#e7b58b" stroke="#9e735b" stroke-width="2" stroke-linejoin="round"/><path d="M2 33h10v13H2z" fill="#6b609e" stroke="#4e4d76" stroke-width="2"/>
   </symbol>
   <symbol id="robber" viewBox="0 0 48 48"><path d="M8 20Q3 12 5 4l12 8M40 20q5-8 3-16L31 12" fill="#9c42d4" stroke="#562780" stroke-width="2" stroke-linejoin="round"/><path d="M5 26C5 14 13 9 24 9s19 5 19 17c0 12-9 18-19 18S5 38 5 26Z" fill="#ad51df" stroke="#562780" stroke-width="2"/><path d="m12 20 8 3m16-3-8 3" stroke="#42215c" stroke-width="3" stroke-linecap="round"/><ellipse cx="17" cy="26" rx="2.5" ry="3.5" fill="#321d47"/><ellipse cx="31" cy="26" rx="2.5" ry="3.5" fill="#321d47"/><path d="M15 33q9 9 18 0" fill="#fff5ff" stroke="#42215c" stroke-width="2" stroke-linejoin="round"/><path d="M13 14q5-3 10-3" fill="none" stroke="#d992f2" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="robber-hood" viewBox="0 0 48 48">
+    <path d="M5 44 8 23C9 11 16 4 24 3c8 1 15 8 16 20l3 21z" fill="#418d70" stroke="#294f49" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M12 24c0-10 5-15 12-15s12 5 12 15v7c0 8-5 12-12 12s-12-4-12-12z" fill="#e8b28a" stroke="#795b4e" stroke-width="2"/>
+    <path d="M12 22c-1-9 4-14 12-15 8 1 13 6 12 15l-5-8-7 3-7-3z" fill="#294f49"/>
+    <path d="M11 22q13-5 26 0l-2 8-11-2-11 2z" fill="#35444e" stroke="#263a40" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="M16 24h4m8 0h4" fill="none" stroke="#fff5df" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="m24 27-2 5h4" fill="none" stroke="#b47b5d" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M19 35q5 4 10-1" fill="none" stroke="#81504b" stroke-width="2" stroke-linecap="round"/>
+    <path d="m6 44 8-9 10 8 10-8 8 9" fill="#5b9d7e" stroke="#294f49" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M13 15q3-7 9-8" fill="none" stroke="#91c4a1" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="robber-bandana" viewBox="0 0 48 48">
+    <path d="m35 15 9 4-6 6 6 6-10 2-5-13z" fill="#d56660" stroke="#824b4e" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M5 45c1-10 9-14 19-14s18 4 19 14z" fill="#587e9a" stroke="#35566d" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M9 23c0-10 6-16 15-16s15 6 15 16v6c0 10-7 15-15 15S9 39 9 29z" fill="#cb946e" stroke="#795747" stroke-width="2"/>
+    <path d="M9 22C5 5 18 2 24 3c13-2 17 7 15 19l-7-8-15 2-5 9z" fill="#493c43"/>
+    <path d="M8 19C8 8 13 4 24 4s16 4 16 15q-16-5-32 0z" fill="#d56660" stroke="#824b4e" stroke-width="2"/>
+    <path d="M13 11q8-5 19-1" fill="none" stroke="#f3ab8e" stroke-width="2" stroke-linecap="round"/>
+    <path d="m10 20 27 7" fill="none" stroke="#343c45" stroke-width="2.5"/>
+    <path d="m12 21 11 2-1 7c-4 3-9 0-10-3z" fill="#343c45" stroke="#26333f" stroke-width="1.5" stroke-linejoin="round"/>
+    <ellipse cx="31" cy="26" rx="2" ry="2.5" fill="#343c45"/>
+    <path d="m25 28-2 5h4m-8 4q5 3 10-1" fill="none" stroke="#87554b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
   <symbol id="dice" viewBox="0 0 48 48"><rect x="4" y="4" width="40" height="40" rx="8" fill="#fff7dc" stroke="#dabd79" stroke-width="2"/><g fill="#194864"><circle cx="14" cy="14" r="3"/><circle cx="34" cy="14" r="3"/><circle cx="24" cy="24" r="3"/><circle cx="14" cy="34" r="3"/><circle cx="34" cy="34" r="3"/></g></symbol>
   <symbol id="bot-smile" viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="#f1cd69" stroke="#927438" stroke-width="2"/><path d="M10 16q4-7 10-8" fill="none" stroke="#fff0a9" stroke-width="3" stroke-linecap="round"/><g fill="#4d5145"><ellipse cx="17" cy="22" rx="2.5" ry="3.5"/><ellipse cx="31" cy="22" rx="2.5" ry="3.5"/></g><path d="M14 30q10 14 20 0z" fill="#fff8db" stroke="#79623e" stroke-width="2" stroke-linejoin="round"/><g fill="#e89c75"><ellipse cx="11" cy="28" rx="3" ry="2"/><ellipse cx="37" cy="28" rx="3" ry="2"/></g></symbol>
   <symbol id="bot-wink" viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="#aad38b" stroke="#598064" stroke-width="2"/><path d="M10 16q4-7 10-8" fill="none" stroke="#deecbd" stroke-width="3" stroke-linecap="round"/><ellipse cx="17" cy="22" rx="2.5" ry="3.5" fill="#355a50"/><path d="m28 23 4-3 4 3M15 31q9 10 19-2" fill="none" stroke="#355a50" stroke-width="2.5" stroke-linecap="round"/><ellipse cx="12" cy="29" rx="3" ry="2" fill="#e0b179"/></symbol>

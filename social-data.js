@@ -14,10 +14,10 @@
   });
   const skins = Object.freeze({
     robber: [
-      { id: "classic", art: "robber", label: "经典恶魔 / Classic devil" },
-      { id: "smile", emoji: "\uD83D\uDE08", label: "坏笑恶魔 / Smiling devil" },
-      { id: "angry", emoji: "\uD83D\uDC7F", label: "生气恶魔 / Angry devil" },
-      { id: "red", emoji: "\uD83D\uDC79", label: "红色恶魔 / Red devil" },
+      { id: "classic", art: "robber", label: "经典强盗 / Classic robber" },
+      { id: "smile", art: "robber-hood", label: "兜帽强盗 / Hooded robber" },
+      { id: "angry", art: "robber-bandana", label: "头巾强盗 / Bandana robber" },
+      { id: "red", emoji: "\uD83D\uDC79", label: "红色强盗 / Red robber" },
     ],
     pirate: [
       { id: "classic", art: "pirate", label: "经典海盗船 / Classic pirate ship" },

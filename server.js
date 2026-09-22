@@ -26,7 +26,7 @@ const roomControl = require("./room-control").createRoomControl({ rooms, seats: 
     const clientId = next.clientId || next.token;
     if (r.acted.delete(old.clientId)) r.acted.add(clientId);
     return { ...old, token: next.token, name: next.name, avatar: next.avatar, clientId, isBot: Boolean(next.bot), vacant: Boolean(next.vacant),
-      connected: Boolean(next.bot || next.socket), socket: next.socket || null, auto: Boolean(next.auto), idleAuto: next.idleAuto === true,
+      connected: Boolean(next.bot || next.socket), socket: next.socket || null, auto: Boolean(next.auto),
       aggression: .55, looseness: .25, mastery: .85, handBluff: .08 };
   }
 });
@@ -1410,7 +1410,13 @@ const server = http.createServer((request, response) => {
     const mapId = (params.get("map") || "base") + (params.get("layout") === "random" && params.get("map") !== "base" ? ":random" : "");
     if (!catan.previews.has(mapId)) { response.writeHead(404); response.end("Unknown map"); return; }
     response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=300" });
-    response.end(JSON.stringify(catan.previews.get(mapId)));
+    const board = structuredClone(catan.previews.get(mapId));
+    if (board.scenario?.kind === "pirates" && params.get("players") === "3") board.scenario.pirateSeats = board.scenario.pirateSeats.slice(0, 3);
+    if (board.scenario?.kind === "new-world") {
+      if (params.get("thieves") === "pirate") board.robber = -1;
+      if (params.get("thieves") === "robber") { board.pirate = -1; board.pirateStart = null; }
+    }
+    response.end(JSON.stringify(board));
     return;
   }
   if (pathname === "/health") {

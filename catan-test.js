@@ -26,6 +26,31 @@ test("base board has 19 hexes, 54 vertices, 72 edges and nine separate ports", (
     assert.ok(!b.edges.some((e) => e.tiles.length === 2 && e.tiles.every((t) => [6, 8].includes(b.tiles[t].number))));
   }
 });
+
+test("piece caps explain blocked builds and a city upgrade returns a settlement piece", () => {
+  for (const map of ["base","shores-1"]) {
+    const g=E.createGame(["A","B","C"],seeded(8),map);
+    g.phase="main";g.turn=1;g.current=0;g.players[0].resources=[10,10,10,10,10];
+    for(const v of g.board.vertices){v.owner=-1;v.level=0;}
+    for(const e of g.board.edges){e.owner=-1;}
+    g.board.vertices.slice(0,5).forEach(v=>{v.owner=0;v.level=1;});
+    assert.match(E.legal(g,0).buildBlocked.settlement,/5.*村庄/);
+    let before=structuredClone(g);
+    assert.throws(()=>E.act(g,0,{type:"settlement",vertex:10}),/All 5 settlements/);assert.deepEqual(g,before);
+    E.act(g,0,{type:"city",vertex:0});
+    assert.equal(E.legal(g,0).buildBlocked.settlement,undefined,"Upgrading releases a village piece");
+    g.board.vertices.slice(1,4).forEach(v=>{v.owner=0;v.level=2;});
+    g.board.edges.slice(0,15).forEach(e=>{e.owner=0;e.kind="road";});
+    if(g.board.islands)g.board.edges.slice(15,30).forEach(e=>{e.owner=0;e.kind="ship";});
+    const blocked=E.legal(g,0).buildBlocked;
+    assert.match(blocked.city,/All 4 cities/);assert.match(blocked.road,/All 15 roads/);
+    if(g.board.islands)assert.match(blocked.ship,/All 15 ships/);
+    for(const type of ["road","city",...(g.board.islands?["ship"]:[])]) {
+      before=structuredClone(g);assert.throws(()=>E.act(g,0,{type,vertex:4,edge:40}),/All (4|15)/);assert.deepEqual(g,before);
+    }
+    assert.deepEqual(E.publicGame(g,0).legal.buildBlocked,blocked);
+  }
+});
 test("snake setup, second-settlement resources, distance rule and turn ownership", () => {
   const g = game(4), order = [];
   while (g.phase.startsWith("setup")) {

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <symbol id="cloth" viewBox="0 0 48 48">
+    <path d="M10 10h25v29H10z" fill="#f0c966" stroke="#315564" stroke-width="2"/><path d="M13 9h18v27H13z" fill="#dc8d86" stroke="#315564" stroke-width="2"/><path d="M17 8h15a7 7 0 0 1 0 14H17z" fill="#f3dcb0" stroke="#315564" stroke-width="2"/><ellipse cx="17" cy="15" rx="6" ry="7" fill="#e0ac62" stroke="#315564" stroke-width="2"/><ellipse cx="17" cy="15" rx="2" ry="3" fill="#fff0cd"/><path d="M13 27h18M13 31h18" stroke="#b46c73" stroke-width="2"/><path d="M10 39h25" stroke="#315564" stroke-width="3"/>
+  </symbol>
+  <symbol id="fortress" viewBox="0 0 48 48">
+    <path d="M7 41V16h7v6h7v-6h7v6h7v-6h7v25z" fill="#a4b7b5" stroke="#315564" stroke-width="2.5" stroke-linejoin="round"/><path d="M18 41V31a6 6 0 0 1 12 0v10" fill="#3e6775" stroke="#315564" stroke-width="2"/><path d="M12 28h4m17 0h4M9 35h5m21 0h5M24 6v12" stroke="#315564" stroke-width="2"/><path d="M25 6h12l-4 5 4 4H25z" fill="currentColor" stroke="#315564" stroke-width="2"/>
+  </symbol>
+  <symbol id="warship" viewBox="0 0 48 48">
+    <path d="M5 32h38l-7 10H14z" fill="currentColor" stroke="#315564" stroke-width="2.5"/><path d="M24 5v28" stroke="#315564" stroke-width="3"/><path d="M21 8 7 28h14zm6 1v19h15z" fill="#e17e6d" stroke="#315564" stroke-width="2"/><path d="m32 15 4 3-4 5-4-5z" fill="#ffdc79"/><path d="m14 35 3 4m6-4 3 4m6-4 3 4" stroke="#ffedc2" stroke-width="2"/><path d="M5 46q5-4 10 0t10 0 10 0 9 0" fill="none" stroke="#6fb6c4" stroke-width="2"/>
+  </symbol>
+  <symbol id="wonder-bridge" viewBox="0 0 160 96">
+    <path d="M0 0h160v96H0z" fill="#c6e3de"/><path d="M0 68q35-8 80 0t80 0v28H0z" fill="#79b9c5"/><path d="M0 60h27v28H0zm131 0h29v28h-29z" fill="#7d9d77"/>
+    <path d="M18 40h124v10H18zm5 10h114v31h-12V67a12 12 0 0 0-24 0v14H87V67a12 12 0 0 0-24 0v14H49V67a9 9 0 0 0-18 0v14h-8z" fill="#eed698" stroke="#315564" stroke-width="2.5"/><path d="M28 40V28m104 12V28M18 28h124M57 40V28m45 12V28" stroke="#315564" stroke-width="2.5"/><path d="M48 87h29m25-3h31M12 91h23" stroke="#d4eee8" stroke-width="2"/>
+  </symbol>
+  <symbol id="wonder-wall" viewBox="0 0 160 96">
+    <path d="M0 0h160v96H0z" fill="#d6e7dc"/><path d="m0 73 36-30 41 14 42-37 41 34v42H0z" fill="#91b393"/><path d="m0 90 40-24 45 15 45-29 30 24v20H0z" fill="#679385"/>
+    <path d="m16 70 38-22 40 14 45-34v14L96 78 54 64 16 87z" fill="#d7bea0" stroke="#315564" stroke-width="2.5"/><path d="M44 65V33h7v5h7v-5h7v36zM126 50V14h7v5h7v-5h7v27zM9 88V58h7v5h7v-5h7v21z" fill="#ead3aa" stroke="#315564" stroke-width="2.5"/><path d="M51 47h7m75-16h7M16 71h7M72 63l16 5m18-7 12-9" stroke="#806f61" stroke-width="2"/>
+  </symbol>
+  <symbol id="wonder-theatre" viewBox="0 0 160 96">
+    <path d="M0 0h160v96H0z" fill="#d1e4e7"/><path d="M0 79q80-24 160 0v17H0z" fill="#92bda4"/>
+    <path d="M19 45q61-45 122 0v29q-61 34-122 0z" fill="#d9a496" stroke="#315564" stroke-width="2.5"/><path d="M19 45q61 40 122 0m-122 14q61 39 122 0M29 39v43m18-53v59m22-64v67m22-67v67m22-62v59m18-49v43" fill="none" stroke="#926f6c" stroke-width="2"/><ellipse cx="80" cy="42" rx="44" ry="16" fill="#f1d7ab" stroke="#315564" stroke-width="2"/><ellipse cx="80" cy="45" rx="26" ry="9" fill="#d9bb8d"/><path d="M65 43V26h30v17z" fill="#e6c399" stroke="#315564" stroke-width="2"/><path d="m61 26 19-11 19 11z" fill="#ba736d" stroke="#315564" stroke-width="2"/>
+  </symbol>
+  <symbol id="wonder-library" viewBox="0 0 160 96">
+    <path d="M0 0h160v96H0z" fill="#d2e6df"/><path d="M0 82h160v14H0z" fill="#9fbd8e"/>
+    <path d="M31 41h98v42H31z" fill="#efdab3" stroke="#315564" stroke-width="2.5"/><path d="m23 41 57-28 57 28z" fill="#ce867b" stroke="#315564" stroke-width="2.5"/><path d="m43 34 37-17 37 17z" fill="#f2d5a1"/><path d="M41 47h10v32H41zm22 0h10v32H63zm24 0h10v32H87zm22 0h10v32h-10z" fill="#fff0cc" stroke="#315564" stroke-width="2"/><path d="M27 84h106m-110 6h114" stroke="#315564" stroke-width="3"/><path d="M80 24v9m-5-5h10" stroke="#b07869" stroke-width="2"/>
+  </symbol>
+  <symbol id="wonder-colossus" viewBox="0 0 160 96">
+    <path d="M0 0h160v96H0z" fill="#c6e1e8"/><path d="M0 72q40-9 80 0t80 0v24H0z" fill="#80bbc6"/><path d="M0 86h59V74h42v12h59v10H0z" fill="#a2ba92"/>
+    <path d="M58 86V73h44v13z" fill="#e4c59a" stroke="#315564" stroke-width="2.5"/><path d="m69 69 4-24-10-9-14 11-6-7 20-18 14 6 7-1 15-14 6 6-15 22 3 28h-9l-4-23-3 23z" fill="#e1bd6e" stroke="#315564" stroke-width="2.5" stroke-linejoin="round"/><circle cx="79" cy="17" r="8" fill="#f0d897" stroke="#315564" stroke-width="2"/><path d="m101 16 5-13 6 13z" fill="#dc8570" stroke="#315564" stroke-width="2"/><path d="M16 78h25m79 3h24M70 74h20" stroke="#d8ece5" stroke-width="2"/>
+  </symbol>
+</svg>

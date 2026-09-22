@@ -87,6 +87,49 @@ catan=attachCatan(server); server.on("upgrade",(req,socket,head)=>catan.upgrade(
     await guest.waitForFunction(()=>!testState.game.trade);assert.equal(await count(guest,"exchange"),1);
     assert.equal(await guest.locator("#incomingTradeAlert").isVisible(),false);
     // A real winning action is heard once; rereading the resulting state is silent.
+    g.phase="gold";g.goldResume="main";g.goldQueue=[{id:1,count:2},{id:0,count:1}];await sync();
+    await guest.locator("#goldChoiceAlert").waitFor();
+    assert.equal(await host.locator("#goldChoiceAlert").isVisible(),false);
+    assert.equal(await count(guest,"gold"),1);assert.equal(await count(host,"gold"),0);
+    assert.equal(await guest.evaluate(()=>testSounds.find(s=>s.kind==="gold").audible),true);
+    await sync();assert.equal(await count(guest,"gold"),1,"Repeated states never replay gold chimes");
+    for(const [width,height] of [[320,568],[390,844],[844,390],[1440,1000]]) {
+      await guest.setViewportSize({width,height});await guest.evaluate(()=>scrollTo(0,0));
+      assert.equal(await guest.locator("#goldChoiceAlert").evaluate(el=>{const r=el.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.bottom<=innerHeight&&el.scrollWidth<=el.clientWidth;}),true);
+      assert.equal(await guest.locator('.gold-choice-button').evaluate(el=>el.getBoundingClientRect().height<100&&el.scrollWidth<=el.clientWidth&&el.querySelector('svg').getBoundingClientRect().width===32),true,"Gold action stays compact with a small illustration");
+      await guest.screenshot({path:`test-results/catan-gold-alert-${width}.png`,animations:"disabled"});
+    }
+    await guest.setViewportSize({width:390,height:844});await guest.locator("#chooseGold").click();
+    await guest.locator("#resourceDialog").waitFor();assert.equal(await guest.locator("#goldChoiceAlert").isVisible(),false);
+    await guest.locator('[data-close="resourceDialog"]').click();await guest.locator("#goldChoiceAlert").waitFor();
+    await guest.reload();await guest.locator("#goldChoiceAlert").waitFor();assert.equal(await count(guest,"gold"),0,"Reconnect displays pending choices without replaying old sound");
+    await guest.locator("#chooseGold").click();
+    await guest.locator('[data-add-resource="0"]').click();await guest.locator('[data-add-resource="1"]').click();
+    await guest.locator("#confirmResources").click();await host.locator("#goldChoiceAlert").waitFor();
+    assert.equal(await count(host,"gold"),1,"Next recipient is notified, even without rolling the dice");
+    assert.equal(await guest.locator("#goldChoiceAlert").isVisible(),false);
+    await host.locator("#chooseGold").click();await host.locator('[data-add-resource="2"]').click();await host.locator("#confirmResources").click();
+    await guest.waitForFunction(()=>testState.game.phase==="main");
+    await guest.locator("#soundToggle").click();
+    g.phase="gold";g.goldQueue=[{id:1,count:1}];await sync();
+    assert.equal(await guest.evaluate(()=>testSounds.filter(s=>s.kind==="gold").at(-1).audible),false,"Gold obeys mute");
+    await guest.locator("#chooseGold").click();await guest.locator('[data-add-resource="0"]').click();await guest.locator("#confirmResources").click();
+    await guest.waitForFunction(()=>testState.game.phase==="main");await guest.locator("#soundToggle").click();
+    // Full piece supplies stay clickable for an explanation, never for an illegal build.
+    const originalBoard=structuredClone(g.board), originalTarget=g.target;g.target=99;
+    g.board.vertices.forEach(v=>{v.owner=-1;v.level=0;});g.board.edges.forEach(e=>{e.owner=-1;});
+    g.board.vertices.slice(0,5).forEach(v=>{v.owner=0;v.level=1;});g.board.vertices.slice(5,9).forEach(v=>{v.owner=0;v.level=2;});
+    g.board.edges.slice(0,15).forEach(e=>{e.owner=0;e.kind="road";});g.board.edges.slice(15,30).forEach(e=>{e.owner=0;e.kind="ship";});
+    await sync();const cappedRevision=g.revision;
+    for(const [type,reason] of [["settlement","All 5 settlements"],["city","All 4 cities"],["road","All 15 roads"],["ship","All 15 ships"]]) {
+      await host.locator(`[data-action="${type}"]`).click();await host.locator("#buildNotice").waitFor();
+      assert.ok((await host.locator("#buildNotice").textContent()).includes(reason));assert.equal(g.revision,cappedRevision);
+      assert.equal(await host.locator("#buildNotice").evaluate(el=>{const r=el.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.bottom<=innerHeight+1&&el.scrollWidth<=el.clientWidth;}),true);
+    }
+    await host.locator('[data-action="settlement"]').focus();await host.keyboard.press("Enter");
+    assert.ok((await host.locator("#buildNotice").textContent()).includes("All 5 settlements"));
+    await host.screenshot({path:"test-results/catan-build-limit-390.png",animations:"disabled"});
+    g.board=originalBoard;g.target=originalTarget;await sync();assert.equal(await host.locator("#buildNotice").isVisible(),false);
     g.phase="roll";g.rolled=false;g.target=2;await sync();
     await send(host,{type:"action",action:{type:"roll"}});await guest.locator("#victory").waitFor();
     assert.equal(await count(guest,"victory"),1);await sync();assert.equal(await count(guest,"victory"),1);
@@ -107,7 +150,7 @@ catan=attachCatan(server); server.on("upgrade",(req,socket,head)=>catan.upgrade(
     fs.writeFileSync("test-results/catan-audio-measurements.json",JSON.stringify(rendered,null,2));
     await guest.emulateMedia({reducedMotion:"reduce"});
     assert.equal(await guest.locator("#incomingTradeAlert").evaluate(el=>getComputedStyle(el).animationName),"none");
-    assert.deepEqual(errors,[]);console.log("PASS trade targeting, visible mobile alerts, two-client sound delivery, mute persistence, reconnect deduplication, victory, and 16 non-clipping distinct audio recipes");
+    assert.deepEqual(errors,[]);console.log("PASS trade/gold targeting, mobile alerts, building limit explanations, sound delivery, mute, reconnect deduplication, victory, and 17 distinct non-clipping audio recipes");
     for(const context of contexts)await context.close();
   } finally { await browser?.close();for(const room of catan.rooms.values())clearTimeout(room.timer);server.close();server.emit("close"); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -20,12 +20,12 @@ function invariant(g) {
 }
 
 test("eight maps include exact Fog and Desert inventories, legal harbors and four desert bonus regions", () => {
-  assert.equal(Maps.maps.length,8);
+  assert.deepEqual(Maps.maps.slice(4,8).map((m) => m.id), ["fog-1", "fog-2", "desert-1", "desert-2"]);
   const inventory = {
     "fog-1": [4,2,4,2,2,0,0,16,12], "fog-2": [4,3,4,3,3,0,0,13,12],
     "desert-1": [5,3,4,4,4,2,3,10,0], "desert-2": [5,5,5,5,5,2,3,12,0],
   };
-  for (const m of Maps.maps.slice(4)) {
+  for (const m of Maps.maps.slice(4,8)) {
     const g=game(m.id),b=g.board;
     assert.deepEqual(b,E.makeBoard(rngFor(32),m.id));
     assert.deepEqual([0,1,2,3,4,5,-1,-2,-3].map((r)=>b.tiles.filter((t)=>!t.frame&&t.resource===r).length),inventory[m.id]);
@@ -52,7 +52,7 @@ test("eight maps include exact Fog and Desert inventories, legal harbors and fou
 });
 
 test("800 seeded random boards obey their own region pools, shape, tokens and harbor restrictions", () => {
-  for(const m of Maps.maps) for(let seed=1;seed<=100;seed++) {
+  for(const m of Maps.maps.slice(0,8)) for(let seed=1;seed<=100;seed++) {
     const b=E.makeBoard(rngFor(seed),m.id,"random"),fixed=E.makeBoard(rngFor(1),m.id);
     assert.equal(b.layout,"random");
     for(const group of m.randomPolicy.groups) {
@@ -165,7 +165,7 @@ test("each desert foreign territory awards each player once, with at most eight 
 
 test("new scenario bots finish default and random games with exploration and conserved inventory",{timeout:120000},()=>{
   const covered={reveals:0,gold:0,ship:0};
-  for(const m of Maps.maps.slice(4)) for(const layout of ["default","random"]) for(let seed=1;seed<=4;seed++) {
+  for(const m of Maps.maps.slice(4,8)) for(const layout of ["default","random"]) for(let seed=1;seed<=4;seed++) {
     const rng=rngFor(seed),g=E.createGame(names.slice(0,m.players),rng,m.id,layout);let steps=0;
     while(g.phase!=="over"&&steps++<9000) {
       const id=actor(g),a=E.chooseBotAction(g,id,rng);assert.ok(a,`${m.id}/${layout} stuck ${g.phase}`);

@@ -22,7 +22,7 @@ test("reactions have stable public identities, trusted senders, bounded rates an
   assert.equal(Social.reaction(room, [b, a], a, { target, kind: "heart" }, 22000).to, target, "Seat swaps retain identity");
   b.departed = true; assert.throws(() => Social.reaction(room, [a, b], a, { target, kind: "heart" }, 24000));
 });
-test("skin whitelist covers classic/devil/pirate choices and rejects arbitrary markup", () => {
+test("skin whitelist covers classic/robber/pirate choices and rejects arbitrary markup", () => {
   assert.deepEqual(Data.normalizeSkins({ robber: "<svg>", pirate: "https://x" }), { robber: "classic", pirate: "classic" });
   for (const kind of ["robber", "pirate"]) for (const skin of Data.skins[kind]) assert.equal(Data.normalizeSkins({ [kind]: skin.id })[kind], skin.id);
 });

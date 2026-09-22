@@ -914,7 +914,7 @@ const server = spawn(process.execPath, [path.join(__dirname, "server.js")], { en
     assert.equal(await page.locator("#turnPrompt").textContent(), `${catanState.game.players[catanState.game.winner].name} 胜利${catanState.game.players[catanState.game.winner].name} wins`);
     await page.screenshot({ path: "test-results/catan-victory.png", fullPage: true });
     const winnerState = structuredClone(catanState);
-    winnerState.game.current = 0; winnerState.game.winner = 1; winnerState.game.players[1].name = "Laura";
+    winnerState.game.current = 0; winnerState.game.winner = 1; winnerState.game.winners = [1]; winnerState.game.players[1].name = "Laura";
     winnerState.seats[1] = { ...winnerState.seats[1], name: "Laura", avatar: null, bot: false, connected: false };
     await deliverFeedback(winnerState);
     assert.equal(await page.locator("#turnPrompt").textContent(), "Laura 胜利Laura wins", "The prompt names the actual winner, even when the current actor differs");

@@ -85,7 +85,7 @@ function attachRichman(server,options={}){
       else if(data.type==="ready"){ensure(!room.game||room.game.phase==="over","游戏已开始 / Game started");room.seats[id].ready=!!data.ready;}
       else if(data.type==="bots"){host();ensure(!room.game,"游戏已开始 / Game started");if(data.remove!==undefined){ensure(room.seats[data.remove]?.bot,"只能移除机器人 / Bots only");ensure(data.target===undefined||Social.publicId(room.seats[data.remove])===data.target,"座位已变化，请重新确认 / Seat changed; confirm again");room.seats[data.remove]=null;}else{ensure(room.seats.includes(null),"座位已满 / Room full");addBot(room);if(data.fill)while(room.seats.includes(null))addBot(room);}}
       else if(data.type==="start"){host();ensure(!room.game||room.game.phase==="over","本局未结束 / Game still playing");ensure(room.seats.every(p=>p&&p.ready&&connected(p)),"等待所有玩家入座并准备 / Waiting for ready players");start(room);return;}
-      else if(data.type==="auto"){room.seats[id].auto=!room.seats[id].auto;stop(room);}
+      else if(data.type==="auto"){control.handle(room,room.seats[id],{type:"roomControl",action:"auto",enabled:!room.seats[id].auto});return;}
       else if(data.type==="action"){
         ensure(room.game&&data.action&&typeof data.action==="object","尚未开局 / Not started");
         ensure(data.action.type==="stock"||data.revision===room.game.revision,"棋盘已更新，请重试 / Board changed; try again");

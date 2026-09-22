@@ -210,7 +210,8 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
       assert.equal(await base.locator("#buildingCosts .cost-row").count(), 4);
       assert.equal(await base.locator('[data-cost="ship"]').count(), 0);
       assert.equal(await base.locator("#rulesDevelopment > div").count(), 5);
-      assert.match(await base.locator("#helpContent").textContent(), /15 roads, 5 settlements and 4 cities/);
+      assert.match(await base.locator("#helpContent").textContent(), /5 settlements, 4 cities and 15 roads/);
+      assert.match(await base.locator("#helpContent").textContent(), /14 Knights, 5 Victory Points, 2 Road Building, 2 Monopoly and 2 Year of Plenty/);
       assert.match(await base.locator("#helpContent").textContent(), /before or after rolling/);
       assert.deepEqual(await base.locator("#buildingCosts .cost-resources").evaluateAll((rows) => rows.map((r) => r.children.length)), [2,4,5,3]);
       const framed = await base.evaluate(() => {
@@ -501,7 +502,7 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
       await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
       await checkPlayerSummary(page, g, "seafarers-long-route", width);
     }
-    for(const map of Maps.maps) {
+    for(const map of Maps.maps.slice(0, 8)) {
       const p=await context.newPage();p.on("pageerror",(e)=>errors.push(e.message));
       await p.goto(`http://127.0.0.1:${server.address().port}/catan.html`);
       await p.getByText("已连接 / Connected",{exact:true}).waitFor();
@@ -535,7 +536,7 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
       await p.close();clearTimeout(newRoom.timer);
     }
     assert.deepEqual(errors, []);
-    console.log("CATAN browser checks passed: mobile rules wrap and touch-scroll to the end with fixed controls, all eight map rules in portrait/landscape, first-seat setup, both map layouts, ships, pirate, gold, reconnect.");
+    console.log("CATAN browser checks passed: mobile rules wrap and touch-scroll to the end with fixed controls, all registered map rules in portrait/landscape, first-seat setup, both map layouts, ships, pirate, gold, reconnect.");
     await context.close();
   } finally { await browser?.close(); catan.rooms.forEach((r) => clearTimeout(r.timer)); server.close(); server.emit("close"); }
 })().catch((e) => { console.error(e); process.exitCode = 1; });

@@ -220,6 +220,27 @@
     clearTimeout(state.noticeTimer);
     if (text) state.noticeTimer = setTimeout(() => { $("notice").hidden = true; }, 8000);
   }
+  let shortageRoom = "", shortageId = 0;
+  function resetSupplyFeedback() { shortageRoom = ""; shortageId = 0; $("supplyAlert").hidden = true; }
+  function trackSupplyShortages(room) {
+    const key = room?.game ? `${room.code}:${room.you}` : "", entries = room?.game?.supplyNotices || [];
+    const latest = entries.at(-1)?.id || 0;
+    // Establish a baseline on entry/reconnect; old missed draws are not new alerts.
+    if (!key || key !== shortageRoom || latest < shortageId) {
+      shortageRoom = key; shortageId = latest; $("supplyAlert").hidden = true; return;
+    }
+    const fresh = entries.filter(n => n.id > shortageId); shortageId = latest;
+    if (!fresh.length) return;
+    $("supplyAlertDetails").innerHTML = fresh.map(n => {
+      const zh = n.resource >= 0 ? labels[n.resource] : ({ gold: "金矿资源", plenty: "丰收卡资源", pirateReward: "击退海盗奖励" })[n.reason] || "资源";
+      const en = n.resource >= 0 ? english[n.resource] : ({ gold: "Gold-field resources", plenty: "Year of Plenty", pirateReward: "Pirate raid reward" })[n.reason] || "Resources";
+      const waiting = ["gold", "plenty"].includes(n.reason) && n.received > 0;
+      return `<p>${zh}：应领 ${n.wanted} 张，${waiting ? "本次只能领" : "实领"} ${n.received} 张。${n.reason === "shared" ? "库存不够分给所有人，本次该资源均不发放。" : ""}<small>${en}: ${n.wanted} due; ${n.received} ${waiting ? "available to choose" : "received"}.${n.reason === "shared" ? " Not enough for everyone; no one receives this resource." : ""}</small></p>`;
+    }).join("");
+    $("supplyAlert").dataset.noticeId = String(latest);
+    $("supplyAlert").hidden = false;
+  }
+  $("dismissSupplyAlert").onclick = () => { $("supplyAlert").hidden = true; };
   let battleRoomKey = "", battleId = null, battleMarkup = "";
   function resetBattleFeedback() {
     battleRoomKey = ""; battleId = null; battleMarkup = "";
@@ -371,14 +392,14 @@
     ws.addEventListener("open", () => { $("connection").textContent = "已连接 / Connected"; $("connection").classList.remove("offline"); send({ type: "hello", token: sessionStorage.getItem("catan-token") || "", avatar: window.BoardGameUI.getAvatar() }); });
     ws.addEventListener("message", (event) => {
       let data; try { data = JSON.parse(event.data); } catch { return; }
-      if (data.type === "welcome") { sessionStorage.setItem("catan-token", data.token); soundEvents.reset(); resetBattleFeedback(); state.cardBaseline = false; clearCardChanges(); renderCardChanges(); clearChatBubbles(); }
+      if (data.type === "welcome") { sessionStorage.setItem("catan-token", data.token); soundEvents.reset(); resetBattleFeedback(); resetSupplyFeedback(); state.cardBaseline = false; clearCardChanges(); renderCardChanges(); clearChatBubbles(); }
       if (data.type === "reaction") { social.receive(data); return; }
-      if (data.type === "state") { soundEvents.update(data); trackCardChanges(data); trackChatBubbles(data); state.room = data; social.sync(); state.pending = false; render(); showMapIntroduction(); }
+      if (data.type === "state") { soundEvents.update(data); trackCardChanges(data); trackChatBubbles(data); trackSupplyShortages(data); state.room = data; social.sync(); state.pending = false; render(); showMapIntroduction(); }
       if (data.type === "error") { state.pending = false; notice(data.message); renderActions(); renderScenario(); }
-      if (data.type === "left") { audio.stop(); soundEvents.reset(); viewedTradeKey = ""; clearCardChanges(); clearChatBubbles(); resetBoardView(); state.cardBaseline = false; state.room = null; rememberMapIntro(null); state.phaseKey = ""; state.pending = false; state.mode = ""; state.selected = null; state.moveFrom = null; document.querySelectorAll("dialog[open]").forEach((d) => d.close()); render(); if (data.reason) notice(data.reason); }
+      if (data.type === "left") { audio.stop(); soundEvents.reset(); resetSupplyFeedback(); viewedTradeKey = ""; clearCardChanges(); clearChatBubbles(); resetBoardView(); state.cardBaseline = false; state.room = null; rememberMapIntro(null); state.phaseKey = ""; state.pending = false; state.mode = ""; state.selected = null; state.moveFrom = null; document.querySelectorAll("dialog[open]").forEach((d) => d.close()); render(); if (data.reason) notice(data.reason); }
     });
     ws.addEventListener("close", (event) => {
-      audio.stop(); soundEvents.reset(); $("incomingTradeAlert").hidden = true;
+      audio.stop(); soundEvents.reset(); resetSupplyFeedback(); $("incomingTradeAlert").hidden = true;
       $("connection").textContent = "正在重连 / Reconnecting"; $("connection").classList.add("offline");
       if (state.room) render();
       if (event.code !== 4001) state.reconnect = setTimeout(connect, 1800);
@@ -815,7 +836,7 @@
       ["road", "road", "修道路", "Road", l.roads.length && ["main", "freeRoads", "setupRoad"].includes(g.phase), "木 + 砖 / Wood + Brick"],
       ["settlement", "settlement", "建村庄", "Settlement", l.settlements.length, "木砖羊麦 / 4 resources"],
       ["city", "city", "升城市", "City", l.cities.length, "2 麦 + 3 矿 / Grain + Ore"],
-      ["buyDevelopment", "development", "买发展卡", "Dev card", l.buy, "羊麦矿 / Wool Grain Ore"],
+      ["buyDevelopment", "development", "买发展卡", "Dev card", l.buy, g.deckCount === 0 ? "已售罄 / Sold out" : "羊麦矿 / Wool Grain Ore"],
       ["trade", "trade", "交易", "Trade", l.trade, "银行 / 玩家 · Bank / Player"],
       ["help", "dice", "建造费用", "Build costs", true, g.board.islands ? "航海家 / Seafarers" : "基础版 / Base game"],
     ];
@@ -824,6 +845,7 @@
       ["moveShip", "ship", "移船", "Move ship", g.legal.moveShips?.length, "每回合一次 / Once per turn"]);
     const shownReason = l.buildBlocked?.[$("buildNotice").dataset.type];
     if (!shownReason) $("buildNotice").hidden = true;
+    else $("buildNotice").textContent = shownReason;
     $("actions").innerHTML = items.map(([type, image, zh, en, enabled, cost]) => {
       const reason = l.buildBlocked?.[type];
       return `<button data-action="${type}" title="${B.escape(reason || `${zh} / ${en} · ${cost}`)}" class="${reason ? "build-unavailable" : state.mode === type ? "selected" : ""}" ${(enabled || reason) && !state.pending && (type === "help" || !state.room.control?.paused) ? "" : "disabled"}>${icon(image)}<span>${zh}<small>${en}</small><small class="action-cost">${cost}</small></span></button>`;
@@ -963,8 +985,8 @@
   $("resourceDialog").addEventListener("close", renderGoldAlert);
   function renderBank() {
     const g = state.room.game;
-    $("bank").innerHTML = g.bank.map((n, r) => `<span class="bank-item" title="${labels[r]} / ${english[r]}">${icon(B.RES[r])}${n}</span>`).join("");
-    $("devSupply").textContent = `发展卡 / Dev ${g.deckCount}`;
+    $("bank").innerHTML = g.bank.map((n, r) => `<span class="bank-item${n ? "" : " supply-empty"}" title="${labels[r]} / ${english[r]}${n ? "" : " · 暂无库存 / Out of stock"}">${icon(B.RES[r])}${n}</span>`).join("");
+    $("devSupply").textContent = g.deckCount ? `发展卡 / Dev ${g.deckCount}` : "发展卡已售罄 / Dev sold out";
     $("awards").innerHTML = `<span>${icon("road")}最长道路 / Longest Road: ${g.longest < 0 ? "—" : B.escape(g.players[g.longest].name) + " · " + g.roadLengths[g.longest]}</span><span>${icon("knight")}最大骑士团 / Largest Army: ${g.largest < 0 ? "—" : B.escape(g.players[g.largest].name) + " · " + g.players[g.largest].knights}</span>`;
     if (g.board.islands) {
       $("awards").firstElementChild.innerHTML = `${icon("ship")}最长商路 / Longest Trade Route: ${g.longest < 0 ? "—" : B.escape(g.players[g.longest].name) + " · " + g.roadLengths[g.longest]}`;
@@ -1025,7 +1047,9 @@
     const g = state.room.game, p = me(); let a;
     if (state.tradeMode === "bank") {
       const give = Number($("tradeGive").value), get = Number($("tradeGet").value);
-      if (give === get || p.resources[give] < g.rates[give] || !g.bank[get]) { $("tradeError").textContent = "资源不足或选中了相同资源 / Unavailable or identical resources"; return; }
+      if (give === get) { $("tradeError").textContent = "请选择两种不同资源。 / Choose two different resources."; return; }
+      if (!g.bank[get]) { $("tradeError").textContent = `银行的${labels[get]}已无库存，暂时无法换取。 / The bank has no ${english[get]} left to trade.`; return; }
+      if (p.resources[give] < g.rates[give]) { $("tradeError").textContent = `需要 ${g.rates[give]} 张${labels[give]}，你只有 ${p.resources[give]} 张。 / Requires ${g.rates[give]} ${english[give]}; you have ${p.resources[give]}.`; return; }
       a = { type: "bankTrade", give, get };
     } else {
       const give = [...tradeDraft.give], want = [...tradeDraft.want];
@@ -1080,9 +1104,11 @@
     const selected = total(resourceDraft);
     $("resourceSupply").querySelectorAll("[data-add-resource]").forEach((button) => {
       const r = Number(button.dataset.addResource), available = supply[r] - resourceDraft[r];
-      button.disabled = state.pending || !available || (!monopoly && selected >= required);
-      button.title = `${labels[r]} / ${english[r]} · ${monopoly ? "选择此资源 / Choose this resource" : `可选 / Available ${available}`}`;
-      button.setAttribute("aria-label", `${monopoly ? "选择 / Choose" : "添加 / Add"} ${labels[r]} / ${english[r]}${monopoly ? "" : ` · ${available}`}`);
+      const empty = !supply[r] && ["gold", "plenty", "pirateReward"].includes(state.resourceMode);
+      button.disabled = state.pending || (!empty && (!available || (!monopoly && selected >= required)));
+      button.classList.toggle("supply-empty", empty);
+      button.title = `${labels[r]} / ${english[r]} · ${empty ? "银行暂无库存 / Bank out of stock" : monopoly ? "选择此资源 / Choose this resource" : `可选 / Available ${available}`}`;
+      button.setAttribute("aria-label", `${monopoly ? "选择 / Choose" : "添加 / Add"} ${labels[r]} / ${english[r]}${empty ? " · 银行暂无库存 / Bank out of stock" : monopoly ? "" : ` · ${available}`}`);
       button.setAttribute("aria-pressed", String(monopoly && resourceDraft[r] > 0));
     });
     $("resourceSelected").innerHTML = resourceDraft.flatMap((n, r) => Array.from({ length: n }, () => {
@@ -1097,6 +1123,9 @@
     if (!button || button.disabled || state.pending || !["gold", "plenty", "monopoly", "piratePayment", "pirateReward"].includes(state.resourceMode)) return;
     const adding = button.hasAttribute("data-add-resource"), r = Number(adding ? button.dataset.addResource : button.dataset.removeResource);
     const { required, supply } = resourceLimits();
+    if (adding && !supply[r] && ["gold", "plenty", "pirateReward"].includes(state.resourceMode)) {
+      $("resourceError").textContent = `银行的${labels[r]}已无库存，请选其他资源。 / The bank has no ${english[r]} left. Choose another resource.`; return;
+    }
     if (adding && state.resourceMode === "monopoly") resourceDraft = [0, 0, 0, 0, 0];
     if (adding && (total(resourceDraft) >= required || resourceDraft[r] >= supply[r])) return;
     resourceDraft[r] = Math.max(0, resourceDraft[r] + (adding ? 1 : -1));

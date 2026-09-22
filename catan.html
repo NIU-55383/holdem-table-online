@@ -58,6 +58,7 @@
     <button class="icon-button" id="helpButton" title="规则 / Rules" aria-label="规则 / Rules">?</button>
   </header>
   <aside id="incomingTradeAlert" class="incoming-trade-alert" role="status" aria-live="polite" hidden><i data-lucide="handshake" aria-hidden="true"></i><div><strong id="incomingTradeName"></strong><small>向你发起交易 / Trade offer</small></div><button id="viewIncomingTrade" type="button" class="primary">查看<small>View</small></button></aside>
+  <aside id="supplyAlert" class="supply-alert" role="status" aria-live="polite" hidden><div class="supply-alert-heading"><strong>银行库存不足 / Bank shortage</strong><button id="dismissSupplyAlert" class="icon-button" type="button" title="关闭 / Close" aria-label="关闭库存提示 / Dismiss supply notice"><i data-lucide="x" aria-hidden="true"></i></button></div><div id="supplyAlertDetails"></div></aside>
   <main>
     <aside id="goldChoiceAlert" class="incoming-trade-alert gold-choice-alert" role="status" aria-live="polite" hidden><svg class="art" viewBox="0 0 48 48" aria-hidden="true"><use href="#catan-art-gold"></use></svg><div><strong id="goldChoiceTitle"></strong><small id="goldChoiceHint"></small></div><button id="chooseGold" type="button">选择<small>Choose</small></button></aside>
     <div id="notice" role="alert" hidden></div>

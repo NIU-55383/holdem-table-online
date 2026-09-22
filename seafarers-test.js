@@ -151,6 +151,16 @@ test("gold production chooses clockwise, supports cities and shortages, robber b
   g.players[0].resources = [18,19,19,19,19]; g.players[1].resources = [0,0,0,0,0]; g.players[2].resources = [0,0,0,0,0]; g.bank = [1,0,0,0,0];
   E.produce(g, tile.number); E.act(g, 1, { type: "gold", resources: [1,0,0,0,0] });
   assert.equal(g.phase, "main"); assert.deepEqual(g.goldQueue, []); invariant(g);
+  assert.deepEqual(E.publicGame(g, 1).supplyNotices, [], "First recipient received the full claim");
+  assert.deepEqual([0, 2].map(id => E.publicGame(g, id).supplyNotices.at(-1)).map(n => [n.reason, n.wanted, n.received]), [["gold", 1, 0], ["gold", 2, 0]]);
+  E.produce(g, tile.number);
+  assert.equal(g.phase, "main"); assert.deepEqual(g.goldQueue, []);
+  assert.equal(E.publicGame(g, 1).supplyNotices.at(-1).received, 0, "An entirely empty bank also explains skipped gold");
+  g.players[1].resources[0]--; g.bank[0]++; g.current = 2;
+  E.produce(g, tile.number);
+  assert.equal(E.legal(g, 2).gold, 1);
+  assert.deepEqual([g.supplyNotices.at(-1).wanted, g.supplyNotices.at(-1).received], [2, 1]);
+  E.act(g, 2, { type: "gold", resources: [1,0,0,0,0] }); invariant(g);
 });
 
 test("foreign-island bonus is personal, once per island and survives city upgrade; target wins only on own turn", () => {

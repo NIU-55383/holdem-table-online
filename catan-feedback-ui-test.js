@@ -160,6 +160,63 @@ catan=attachCatan(server); server.on("upgrade",(req,socket,head)=>catan.upgrade(
     assert.ok((await host.locator("#buildNotice").textContent()).includes("All 5 settlements"));
     await host.screenshot({path:"test-results/catan-build-limit-390.png",animations:"disabled"});
     g.board=originalBoard;g.target=originalTarget;await sync();assert.equal(await host.locator("#buildNotice").isVisible(),false);
+    // A blocked purchase is an explanation button, not a silent disabled control.
+    const savedDeck=[...g.deck];g.deck=[];await sync();
+    const noDeckRevision=g.revision;
+    await host.locator('[data-action="buyDevelopment"]').click();
+    assert.match(await host.locator("#buildNotice").textContent(),/发展卡已售罄.*sold out/);
+    assert.match(await host.locator("#devSupply").textContent(),/sold out/);
+    assert.match(await host.locator('[data-action="buyDevelopment"] .action-cost').textContent(),/Sold out/);
+    assert.equal(g.revision,noDeckRevision,"An explanation sends no purchase");
+    g.deck=savedDeck;g.players[0].resources=[0,0,1,0,0];await sync();
+    await host.locator('[data-action="buyDevelopment"]').focus();await host.keyboard.press("Enter");
+    assert.match(await host.locator("#buildNotice").textContent(),/Missing:.*Grain.*Ore/);
+    g.phase="roll";await sync();await host.locator('[data-action="buyDevelopment"]').click();
+    assert.match(await host.locator("#buildNotice").textContent(),/Roll the dice/);
+    g.phase="main";g.players[0].resources=[0,0,1,1,1];await sync();
+    assert.equal(await host.locator("#buildNotice").isVisible(),false);
+    const buyRevision=g.revision,deckBeforeBuy=g.deck.length;await host.locator('[data-action="buyDevelopment"]').click();
+    await host.waitForFunction(r=>testState.game.revision>r,buyRevision);
+    assert.equal(g.deck.length,deckBeforeBuy-1);
+    // Production shortages target affected players and remain readable until dismissed.
+    const supplyBoard=structuredClone(g.board);g.target=99;g.phase="main";
+    g.board.vertices.forEach(v=>{v.owner=-1;v.level=0;});
+    g.board.tiles.forEach(t=>{t.number=0;});
+    const tile=g.board.tiles.find(t=>t.resource===0&&!t.noProduction);tile.number=2;g.board.robber=-1;
+    Object.assign(g.board.vertices[tile.vertices[0]],{owner:0,level:2});
+    g.bank=[1,0,0,0,0];await sync();
+    E.produce(g,2);await sync();await host.locator("#supplyAlert").waitFor();
+    assert.match(await host.locator("#supplyAlertDetails").textContent(),/应领 2 张，实领 1 张/);
+    assert.equal(await guest.locator("#supplyAlert").isVisible(),false);
+    for(const [width,height] of [[320,568],[390,844],[844,390],[1440,1000]]) {
+      await host.setViewportSize({width,height});
+      assert.equal(await host.locator("#supplyAlert").evaluate(el=>{const r=el.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight&&el.scrollWidth<=el.clientWidth;}),true);
+      await host.screenshot({path:`test-results/catan-supply-alert-${width}.png`,animations:"disabled"});
+    }
+    await host.locator("#dismissSupplyAlert").click();await sync();
+    assert.equal(await host.locator("#supplyAlert").isVisible(),false,"Repeated state never reopens a dismissed shortage");
+    Object.assign(g.board.vertices[tile.vertices[2]],{owner:1,level:1});
+    E.produce(g,2);await sync();await guest.locator("#supplyAlert").waitFor();
+    assert.match(await guest.locator("#supplyAlertDetails").textContent(),/no one receives this resource/);
+    await host.reload();await host.locator("#game").waitFor();
+    assert.equal(await host.locator("#supplyAlert").isVisible(),false,"Reconnect does not replay previous shortages");
+    E.produce(g,2);await sync();await host.locator("#supplyAlert").waitFor();
+    await host.locator("#dismissSupplyAlert").click();await guest.locator("#dismissSupplyAlert").click();
+    // Empty resource choices explain themselves without selecting or submitting a card.
+    g.bank=[0,1,0,0,0];g.phase="gold";g.goldQueue=[{id:0,count:1}];g.goldResume="main";await sync();
+    await host.locator("#chooseGold").click();
+    const resourceRevision=g.revision;
+    await host.locator('[data-add-resource="0"]').click();
+    assert.match(await host.locator("#resourceError").textContent(),/银行的木材已无库存.*Choose another resource/);
+    assert.equal(await host.locator("#resourceSelected button").count(),0);assert.equal(g.revision,resourceRevision);
+    await host.locator('[data-add-resource="1"]').click();await host.locator("#confirmResources").click();
+    await host.waitForFunction(()=>testState.game.phase==="main");
+    g.bank=[0,0,0,0,0];g.players[0].resources=[4,0,0,0,0];await sync();
+    await host.locator('[data-action="trade"]').click();await host.locator('[data-trade-mode="bank"]').click();
+    await host.locator("#confirmTrade").click();
+    assert.match(await host.locator("#tradeError").textContent(),/no Brick left/);
+    await host.locator('[data-close="tradeDialog"]').click();
+    g.board=supplyBoard;g.target=originalTarget;g.bank=[10,10,10,10,10];await sync();
     g.phase="roll";g.rolled=false;g.target=2;await sync();
     await send(host,{type:"action",action:{type:"roll"}});await guest.locator("#victory").waitFor();
     assert.equal(await count(guest,"victory"),1);await sync();assert.equal(await count(guest,"victory"),1);

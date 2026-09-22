@@ -219,7 +219,27 @@ function checkWin(g) {
   }
 }
 function pay(g, p, cost) { requireRule(affordable(p, cost), "资源不足 / Not enough resources"); cost.forEach((n, i) => { p.resources[i] -= n; g.bank[i] += n; }); }
-function take(g, p, r, amount = 1) { const n = Math.min(g.bank[r], amount); g.bank[r] -= n; p.resources[r] += n; }
+function supplyShortage(g, player, resource, wanted, received, reason = "resource") {
+  if (received >= wanted) return;
+  const event = { id: (g.supplyNoticeSeq || 0) + 1, player, resource, wanted, received, reason };
+  g.supplyNoticeSeq = event.id;
+  g.supplyNotices = [...(g.supplyNotices || []), event].slice(-40);
+  const choosing = ["gold", "plenty"].includes(reason) && received > 0;
+  log(g, `${g.players[player].name} · ${resource >= 0 ? LABEL[RES[resource]] : "资源 / Resources"} · 银行库存不足，应领 ${wanted}，${choosing ? "本次可领" : "实领"} ${received} / Bank shortage: ${received} of ${wanted} ${choosing ? "available to choose" : "received"}`);
+}
+function take(g, p, r, amount = 1) {
+  const n = Math.min(g.bank[r], amount); g.bank[r] -= n; p.resources[r] += n;
+  supplyShortage(g, p.id, r, amount, n);
+}
+function limitGoldSupply(g) {
+  const available = sum(g.bank);
+  // Only the next recipient can reserve the remaining bank supply.
+  for (const choice of available ? g.goldQueue.slice(0, 1) : g.goldQueue) {
+    supplyShortage(g, choice.id, -1, choice.count, Math.min(choice.count, available), "gold");
+    choice.count = Math.min(choice.count, available);
+  }
+  if (!available) g.goldQueue = [];
+}
 function discover(g, id, edgeId) {
   if (Maps.get(g.mapId)?.family !== "fog") return;
   const edge = g.board.edges[edgeId];
@@ -235,7 +255,10 @@ function discover(g, id, edgeId) {
     const name = tile.resource === -2 ? "海洋 / Sea" : tile.resource === 5 ? "金矿 / Gold" : LABEL[RES[tile.resource]];
     log(g, `${g.players[id].name} 探索发现 / discovers ${name}${tile.number ? ` · ${tile.number}` : ""}`);
   }
-  if (gold && sum(g.bank)) { g.goldQueue = [{ id, count: gold }]; g.goldResume = g.phase; g.phase = "gold"; }
+  if (gold) {
+    g.goldQueue = [{ id, count: gold }]; limitGoldSupply(g);
+    if (g.goldQueue.length) { g.goldResume = g.phase; g.phase = "gold"; }
+  }
 }
 function produce(g, number) {
   const demand = g.players.map(() => zeros());
@@ -245,11 +268,12 @@ function produce(g, number) {
   RES.forEach((_, r) => {
     const total = demand.reduce((n, x) => n + x[r], 0), recipients = demand.filter((x) => x[r] > 0).length;
     if (total <= g.bank[r] || recipients === 1) demand.forEach((d, id) => take(g, g.players[id], r, d[r]));
-    else if (total) log(g, `${LABEL[RES[r]]} 库存不足，本次不发放 / Supply shortage`);
+    else if (total) demand.forEach((d, id) => supplyShortage(g, id, r, d[r], 0, "shared"));
   });
   const gold = g.players.map(() => 0);
   g.board.tiles.filter((t) => !t.noProduction && t.resource === 5 && t.number === number && t.id !== g.board.robber).forEach((t) => t.vertices.forEach((vId) => { const v = g.board.vertices[vId]; if (v.owner >= 0) gold[v.owner] += v.level; }));
   g.goldQueue = Array.from({ length: g.players.length }, (_, n) => (g.current + n) % g.players.length).filter((id) => gold[id]).map((id) => ({ id, count: gold[id] }));
+  limitGoldSupply(g);
   if (g.goldQueue.length && sum(g.bank)) { g.goldResume = g.phase; g.phase = "gold"; }
   else g.goldQueue = [];
   Scenarios.produceCloth(g, number);
@@ -277,6 +301,16 @@ function legal(g, id) {
   out.buildBlocked = {};
   out.scenario = Scenarios.legal(g, id, scenarioHelpers);
   if (p) {
+    if (g.phase === "over") out.buildBlocked.buyDevelopment = "本局已结束，不能再购买发展卡。 / The game is over; development cards can no longer be bought.";
+    else if (!g.deck.length) out.buildBlocked.buyDevelopment = "发展卡已售罄，本局不能再购买。 / Development cards are sold out for this game.";
+    else if (!ownTurn) out.buildBlocked.buyDevelopment = "还没轮到你，请在自己的回合购买发展卡。 / Buy development cards on your own turn.";
+    else if (g.phase === "roll") out.buildBlocked.buyDevelopment = "请先掷骰子，再购买发展卡。 / Roll the dice before buying a development card.";
+    else if (g.phase.startsWith("setup")) out.buildBlocked.buyDevelopment = "初始放置尚未完成，开局后才能购买发展卡。 / Finish initial placement before buying development cards.";
+    else if (g.phase !== "main") out.buildBlocked.buyDevelopment = "请先完成当前操作，再购买发展卡。 / Finish the current action before buying a development card.";
+    else if (!affordable(p, COST.development)) {
+      const missing = COST.development.flatMap((n, r) => n > p.resources[r] ? [`${n - p.resources[r]} ${LABEL[RES[r]]}`] : []).join("、");
+      out.buildBlocked.buyDevelopment = `购买需要羊毛、麦子、矿石各 1 张。还缺：${missing}。 / Costs 1 wool, 1 grain and 1 ore. Missing: ${missing}.`;
+    }
     if (pieceCount(g, id, 1) >= 5) out.buildBlocked.settlement = "已用完 5 个村庄。先将村庄升级为城市，收回村庄后才能再建。 / All 5 settlements are in use. Upgrade one to a city to recover a settlement piece.";
     if (pieceCount(g, id, 2) >= 4) out.buildBlocked.city = "已用完 4 座城市，无法再升级。 / All 4 cities are in use. No more city pieces are available.";
     if (routeCount(g, id, "road") >= 15) out.buildBlocked.road = "已用完 15 条道路，无法再修路。 / All 15 roads are in use. No more road pieces are available.";
@@ -350,6 +384,7 @@ function act(g, id, a, rng = random) {
     requireRule(l.gold > 0 && resourceArray(a.resources) && sum(a.resources) === l.gold && a.resources.every((n, r) => n <= g.bank[r]), "请选择金矿资源 / Choose available gold-field resources");
     a.resources.forEach((n, r) => take(g, p, r, n)); g.goldQueue.shift();
     log(g, `${p.name} 领取 ${l.gold} 张金矿资源 / collects gold-field resources`);
+    limitGoldSupply(g);
     if (!g.goldQueue.length || !sum(g.bank)) { g.goldQueue = []; g.phase = g.goldResume; }
   } else if (type === "discard") {
     requireRule(g.phase === "discard" && l.discard > 0 && resourceArray(a.resources) && sum(a.resources) === l.discard && affordable(p, a.resources), "请弃掉指定数量的资源 / Discard the required resources");
@@ -388,7 +423,10 @@ function act(g, id, a, rng = random) {
         if (g.setupStep >= (Scenarios.setupRounds(g) - 1) * g.players.length) {
           let gold = 0;
           v.tiles.forEach((t) => { if (g.board.tiles[t].noProduction) return; const r = g.board.tiles[t].resource; if (r >= 0 && r < 5) take(g, p, r); else if (r === 5) gold++; });
-          if (gold && sum(g.bank)) { g.goldQueue = [{ id, count: gold }]; g.goldResume = "setupRoad"; g.phase = "gold"; }
+        if (gold) {
+          g.goldQueue = [{ id, count: gold }]; limitGoldSupply(g);
+          if (g.goldQueue.length) { g.goldResume = "setupRoad"; g.phase = "gold"; }
+        }
         }
       }
       updateAwards(g);
@@ -438,7 +476,8 @@ function act(g, id, a, rng = random) {
     } else if (type === "bankTrade") {
       requireRule(l.trade && Number.isInteger(a.give) && Number.isInteger(a.get) && a.give >= 0 && a.give < 5 && a.get >= 0 && a.get < 5 && a.give !== a.get, "无效交易 / Invalid trade");
       const rate = tradeRate(g, id, a.give);
-      requireRule(p.resources[a.give] >= rate && g.bank[a.get] > 0, "交易资源不足 / Trade resources unavailable");
+      requireRule(g.bank[a.get] > 0, `银行的${LABEL[RES[a.get]]}已无库存，暂时无法换取。 / The bank has no ${RES[a.get]} left to trade.`);
+      requireRule(p.resources[a.give] >= rate, `需要 ${rate} 张${LABEL[RES[a.give]]}才能交换。 / You need ${rate} ${RES[a.give]} to trade.`);
       const cost = zeros(); cost[a.give] = rate; pay(g, p, cost); take(g, p, a.get);
       log(g, `${p.name} ${rate}:1 交易 / maritime trade · ${LABEL[RES[a.give]]} → ${LABEL[RES[a.get]]}`);
     } else if (type === "offerTrade") {
@@ -469,7 +508,10 @@ function act(g, id, a, rng = random) {
         updateAwards(g);
       }
       if (a.card === "roads") { g.phase = "freeRoads"; g.freeRoads = 2; }
-      if (a.card === "plenty") g.phase = "plenty";
+      if (a.card === "plenty") {
+        g.phase = "plenty";
+        supplyShortage(g, id, -1, 2, Math.min(2, sum(g.bank)), "plenty");
+      }
       if (a.card === "monopoly") g.phase = "monopoly";
     } else if (type === "cancelDevelopment") {
       requireRule(l.cancelDevelopment && g.usedDevelopment.at(-1) === g.pendingDevelopment?.card.type, "现在不能撤回 / This card can no longer be cancelled");
@@ -503,6 +545,7 @@ function publicGame(g, id) {
     board: g.board, scenario: g.scenario || null, mapId: g.mapId, layout: g.layout, target: g.target, thief: g.thief, goldQueue: g.goldQueue, bank: g.bank, deckCount: g.deck.length, phase: g.phase, current: g.current, turn: g.turn,
     dice: g.dice, longest: g.longest, largest: g.largest, roadLengths: g.roadLengths, winner: g.winner, winners: g.winners || (g.winner >= 0 ? [g.winner] : []),
     log: g.log, revision: g.revision, effect: g.effect || null, trade: g.trade, discard: g.discard, freeRoads: g.freeRoads,
+    supplyNotices: (g.supplyNotices || []).filter(n => n.player === id).map(({ player, ...notice }) => notice),
     players: g.players.map((p) => ({ id: p.id, name: p.name, resourceCount: sum(p.resources), developmentCount: p.development.length,
       resources: p.id === id || g.phase === "over" ? p.resources : null,
       development: p.id === id || g.phase === "over" ? p.development : null,
@@ -665,5 +708,5 @@ function chooseBotAction(g, id, rng = random) {
   return { type: "end" };
 }
 
-const scenarioHelpers = { affordable, resourceArray, pay, take, pieceCount, longestRoad, score, updateAwards, checkWin, finishRoll, endTurn, log };
+const scenarioHelpers = { affordable, resourceArray, pay, take, supplyShortage, pieceCount, longestRoad, score, updateAwards, checkWin, finishRoll, endTurn, log };
 module.exports = { RES, COST, LABEL, makeBoard, createGame, act, legal, publicGame, chooseBotAction, canRespondToTrade, longestRoad, updateAwards, score, produce, tradeRate, settlementSites, roadSites, shipSites, movableShips, citySites, sum, random, requiredActors: Scenarios.requiredActors };

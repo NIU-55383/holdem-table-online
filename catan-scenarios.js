@@ -282,7 +282,7 @@ function rollPirate(g, number, h, rng) {
   }
   report.reward = sum(g.bank) ? "pending" : "empty";
   h.log(g, report.reward === "pending" ? `${report.name} 击退海盗，待任选 1 张银行资源 / Wins the raid: choose 1 bank resource` : `${report.name} 击退海盗，但银行无资源可领 / Wins the raid, but the bank is empty`);
-  if (report.reward === "empty") return false;
+  if (report.reward === "empty") { h.supplyShortage(g, actor, -1, 1, 0, "pirateReward"); return false; }
   setPending(g, { actor, kind: "pirateReward", number });
   return true;
 }

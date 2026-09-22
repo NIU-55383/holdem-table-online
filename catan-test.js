@@ -51,6 +51,63 @@ test("piece caps explain blocked builds and a city upgrade returns a settlement 
     assert.deepEqual(E.publicGame(g,0).legal.buildBlocked,blocked);
   }
 });
+test("development purchase explains sold-out stock, missing costs, turn and phase without mutating rejected actions", () => {
+  const g = game();
+  g.phase = "main"; g.turn = 1; resources(g, [[0, 0, 1, 0, 0]]);
+  const reason = E.legal(g, 0).buildBlocked.buyDevelopment;
+  assert.match(reason, /Missing:.*Grain.*Ore/); assert.doesNotMatch(reason.split("Missing:")[1], /Wool/);
+  const blocked = pattern => {
+    const before = structuredClone(g);
+    assert.match(E.publicGame(g, 0).legal.buildBlocked.buyDevelopment, pattern);
+    assert.throws(() => E.act(g, 0, { type: "buyDevelopment" }), pattern);
+    assert.deepEqual(g, before);
+  };
+  blocked(/Missing:/);
+  const deck = g.deck; g.deck = []; blocked(/sold out/);
+  g.deck = deck; g.phase = "roll"; blocked(/Roll the dice/);
+  g.phase = "setupSettlement"; blocked(/initial placement/);
+  g.phase = "plenty"; blocked(/current action/);
+  g.phase = "main"; g.current = 1; blocked(/own turn/);
+  g.current = 0; resources(g, [[0, 0, 1, 1, 1]]);
+  assert.equal(E.legal(g, 0).buildBlocked.buyDevelopment, undefined);
+  const count = g.deck.length; E.act(g, 0, { type: "buyDevelopment" });
+  assert.equal(g.deck.length, count - 1); assert.equal(g.players[0].development.length, 1); invariant(g);
+});
+
+test("shortage notices describe missed and partial production without changing allocations or exposing another player's notices", () => {
+  const g = game(), tile = g.board.tiles.find(t => t.resource >= 0), r = tile.resource;
+  g.board.tiles.forEach(t => { t.number = t.id === tile.id ? 2 : 0; });
+  const first = g.board.vertices[tile.vertices[0]], second = g.board.vertices[tile.vertices[2]];
+  first.owner = 0; first.level = 2; second.owner = 1; second.level = 1;
+  const held = [0, 0, 0, 0, 0]; held[r] = 18; resources(g, [[], [], held].map(a => a.length ? a : [0, 0, 0, 0, 0]));
+  E.produce(g, 2);
+  assert.equal(g.bank[r], 1); assert.equal(g.players[0].resources[r], 0);
+  assert.deepEqual(E.publicGame(g, 0).supplyNotices, [{ id: 1, resource: r, wanted: 2, received: 0, reason: "shared" }]);
+  assert.deepEqual(E.publicGame(g, 1).supplyNotices, [{ id: 2, resource: r, wanted: 1, received: 0, reason: "shared" }]);
+  assert.deepEqual(E.publicGame(g, 2).supplyNotices, []);
+  second.owner = -1; E.produce(g, 2);
+  assert.equal(g.bank[r], 0); assert.equal(g.players[0].resources[r], 1);
+  assert.deepEqual(E.publicGame(g, 0).supplyNotices.at(-1), { id: 3, resource: r, wanted: 2, received: 1, reason: "resource" });
+  E.produce(g, 2); assert.equal(g.supplyNotices.at(-1).received, 0);
+  g.board.robber = tile.id; const count = g.supplyNotices.length; E.produce(g, 2);
+  assert.equal(g.supplyNotices.length, count, "Blocked production is not a bank shortage");
+  g.board.robber = -1; for (let n = 0; n < 45; n++) E.produce(g, 2);
+  assert.equal(g.supplyNotices.length, 40, "Notification history stays bounded"); invariant(g);
+});
+
+test("Year of Plenty explains limited supply and bank trades name the exhausted resource", () => {
+  const g = setup(game()); g.phase = "main";
+  resources(g, [[18, 19, 19, 19, 19]]);
+  g.deck.splice(g.deck.indexOf("plenty"), 1); g.players[0].development.push({ type: "plenty", turn: 0 });
+  E.act(g, 0, { type: "playDevelopment", card: "plenty" });
+  assert.equal(g.phase, "plenty");
+  assert.deepEqual(E.publicGame(g, 0).supplyNotices.at(-1), { id: 1, resource: -1, wanted: 2, received: 1, reason: "plenty" });
+  E.act(g, 0, { type: "plenty", resources: [1, 0, 0, 0, 0] });
+  const before = structuredClone(g);
+  assert.throws(() => E.act(g, 0, { type: "bankTrade", give: 0, get: 1 }), /no brick left/);
+  assert.deepEqual(g, before); invariant(g);
+});
+
 test("snake setup, second-settlement resources, distance rule and turn ownership", () => {
   const g = game(4), order = [];
   while (g.phase.startsWith("setup")) {

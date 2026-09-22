@@ -121,6 +121,15 @@
 .turn-banner.needs-gold {border: 2px solid #ffdb76;}
 .action-grid button.build-unavailable {opacity: .5; cursor: pointer;}
 .build-notice {margin: 6px 0; padding: 10px 12px; border-left: 4px solid #d59e28; background: #fff3ce; color: #674910; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere;}
+.supply-alert {position: fixed; z-index: 41; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); width: max-content; max-width: min(390px, calc(100vw - 24px)); padding: 10px 12px; border: 2px solid #dcb65a; border-radius: 8px; background: #fff3ce; color: #674910; box-shadow: 0 5px 18px #16364740; font-size: 13px; overflow-wrap: anywhere;}
+.supply-alert-heading {display: flex; align-items: center; justify-content: space-between; gap: 8px;}
+.supply-alert-heading .icon-button {width: 36px; height: 36px; color: inherit; border-color: #dcb65a;}
+.supply-alert-heading svg {width: 18px; height: 18px;}
+#supplyAlertDetails {max-height: min(210px, 28svh); overflow: auto; overscroll-behavior: contain;}
+#supplyAlertDetails p {margin-top: 8px;}
+#supplyAlertDetails small {display: block; font-size: 11px; line-height: 1.4;}
+.bank-item.supply-empty {color: #a04330;}
+.trade-resource-add.supply-empty {opacity: .5; cursor: pointer;}
 @keyframes trade-arrival {from {opacity: 0; transform: translateY(-8px);} to {opacity: 1; transform: translateY(0);}}
 @keyframes trade-emphasis {50% {box-shadow: inset 0 0 0 2px #dfb343;}}
 @media (max-width: 740px) {

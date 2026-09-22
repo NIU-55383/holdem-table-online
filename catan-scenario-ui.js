@@ -6,22 +6,21 @@
   const esc = value => root.CatanBoard.escape(String(value ?? ""));
   const harborPlacement = ["领取后，立即把海港放到自己沿海村庄或城市旁的合法海岸边。不能与现有港口重合或共用交叉点。没有合法位置才暂存；以后出现合法位置时必须放置，放好当回合即可交易。", "After collection, immediately place the harbor beside your own coastal settlement or city. It cannot overlap or share an intersection with another harbor. Keep it only while no legal site exists, then place it as soon as possible. It can be used on the turn placed."];
   function tribeInfo(type, resource = -1) {
-    const arrival = ["按通常连接规则，把自己的船建造或移动到这个标记连线所指的那一条海岸边，自动领取这一份礼物。不必建村；停在附近或相邻边不算。最先到达者领取一次，之后不补充。", "Legally build or move your ship onto the exact coast edge linked to this marker to collect this one gift automatically. No settlement is needed. A nearby or neighboring edge does not count. The first arrival takes it; it is not replenished."];
-    const inspect = ["此窗口只解释规则，不会领取礼物、放船或消耗回合。", "This description does not claim a gift, place a ship or use a turn."];
+    const arrival = ["按通常连接规则，将自己的船建造或移动到标记连线所指的海岸边，即可领取礼物。每份礼物由最先到达的玩家领取一次，之后不补充。", "Legally build or move your ship onto the coastal edge linked to the marker to collect the gift. Each gift goes to the first player to arrive and is not replenished."];
     if (type === "foreign") return { title: ["外岛：不产资源", "Foreign island: no production"], icon: "", paragraphs: [
-      ["这里不是可开发的资源岛。没有数字圆片，不生产木材、砖块、羊毛、麦子、矿石或黄金；不能在外岛建村庄或城市。地形颜色只表示地貌，不决定礼物种类。", "This island is not a resource source. It has no number tokens, produces nothing (including gold), and cannot hold your settlements or cities. Terrain colors only represent the landscape and do not determine the gifts."],
-      ["你来这里是为了海岸边的礼物：+1 是胜利点，卡牌是免费发展卡，带 2:1 或 3:1 的标牌是海港。外岛中央和地形颜色本身不提供任何奖励。", "Visit for the coastal gifts: +1 is a victory point, a card is a free development card, and a 2:1 or 3:1 badge is a harbor. The island center and terrain colors give no reward."], arrival, inspect] };
-    if (type === "pirate") return { title: ["海盗：不是可领取的船", "Pirate: not a ship gift"], icon: "pirate", paragraphs: [
-      ["海面上的黑旗船是海盗棋子，不属于任何玩家，也不是礼物、港口或可领取的船。玩家的船使用各自玩家颜色。", "The black-flag boat is the pirate, not a player's ship, a gift or a harbor. Player ships use their owner's color."],
-      ["掷出 7 或使用骑士时可按规则选择移动海盗。海盗所在海洋格边缘不能新建船，已有船也不能移动；它可能让通往礼物的航线暂时受阻。", "On a 7 or a Knight, you may choose to move the pirate under the usual rules. Ships cannot be built or moved on the edges of its sea hex, so it can block access to gifts."], inspect] };
+      ["外岛没有数字圆片，不产资源，也不能建造村庄或城市。", "Foreign islands have no number tokens, produce no resources and cannot be settled."],
+      ["海岸边的奖杯可领取 1 胜利点，卡牌可领取 1 张免费发展卡，2:1 或 3:1 标牌可领取对应海港。", "Coastal trophies grant 1 VP, cards grant one free development card, and 2:1 or 3:1 markers grant the corresponding harbor."], arrival] };
+    if (type === "pirate") return { title: ["海盗", "Pirate"], icon: "pirate", paragraphs: [
+      ["黑旗船是海盗棋子。掷出 7 或使用骑士时，可按规则选择移动海盗。", "The black-flag ship is the pirate. On a 7 or a Knight, you may choose to move it under the usual rules."],
+      ["海盗所在海洋格边缘不能新建船，已有船也不能移动。", "Ships cannot be built or moved on the edges of the pirate's sea hex."]] };
     if (type === "harbor" && Number.isInteger(resource) && resource >= -1 && resource < 5) {
       const [zh, en] = resource >= 0 ? resourceNames[resource].split(" / ") : ["通用", "Generic"], rate = resource >= 0 ? "2:1" : "3:1";
       return { title: [`${zh}海港 · ${rate}`, `${en} harbor · ${rate}`], icon: resource >= 0 ? root.CatanBoard.RES[resource] : "trade", paragraphs: [
-        ["这是一份可搬回主岛的海港礼物，不是资源卡，也不会赠送一艘船。领取前不能用外岛海港交易。", "This gift is a harbor to relocate to the mainland, not resource cards or a free ship. It cannot be used for trade while still on the foreign island."], arrival, harborPlacement,
-        [resource >= 0 ? `标牌上的${zh}表示兑换种类：放好后，2 张${zh}换银行 1 张自选资源，不是免费领取 2 张${zh}。` : "放好后，3 张同种资源换银行 1 张自选资源，不是免费领取 3 张资源。", resource >= 0 ? `After placement, exchange 2 ${en.toLowerCase()} for any 1 bank resource. The icon specifies the trade type, not a gift of 2 resource cards.` : "After placement, exchange 3 identical resources for any 1 bank resource. This is not a gift of 3 resources."], inspect] };
+        arrival, harborPlacement,
+        [resource >= 0 ? `放好后，2 张${zh}换银行 1 张自选资源。` : "放好后，3 张同种资源换银行 1 张自选资源。", resource >= 0 ? `After placement, exchange 2 ${en.toLowerCase()} for any 1 bank resource.` : "After placement, exchange 3 identical resources for any 1 bank resource."]] };
     }
-    if (type === "vp") return { title: ["礼物：1 胜利点", "Gift: 1 victory point"], icon: "dev-vp", paragraphs: [arrival, ["领取后立即增加 1 分，计入玩家表的剧本奖励。不是资源卡，也无需在外岛建村。", "Adds 1 VP immediately, shown as Scenario VP in the player table. It is not a resource card and requires no settlement on this island."], inspect] };
-    if (type === "development") return { title: ["礼物：免费发展卡", "Gift: free development card"], icon: "development", paragraphs: [arrival, ["免费获得事先背面朝下放置的 1 张发展卡，领取前不公开卡面。行动卡从下一个自己的回合起才能使用，每回合最多一张；胜利点卡立即计分。", "Receive one pre-dealt face-down development card for free. Its identity is private until collected. Action cards are playable on a later turn of your own, at most one per turn; VP cards count immediately."], inspect] };
+    if (type === "vp") return { title: ["礼物：1 胜利点", "Gift: 1 victory point"], icon: "dev-vp", paragraphs: [arrival, ["领取后立即增加 1 分，计入玩家表的剧本奖励。", "Adds 1 VP immediately, shown as Scenario VP in the player table."]] };
+    if (type === "development") return { title: ["礼物：免费发展卡", "Gift: free development card"], icon: "development", paragraphs: [arrival, ["免费获得事先背面朝下放置的 1 张发展卡，领取前不公开卡面。行动卡从下一个自己的回合起才能使用，每回合最多一张；胜利点卡立即计分。", "Receive one pre-dealt face-down development card for free. Its identity is private until collected. Action cards are playable on a later turn of your own, at most one per turn; VP cards count immediately."]] };
     return null;
   }
   function art(id, cls = "scenario-art") {

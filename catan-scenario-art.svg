@@ -1,6 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg">
   <symbol id="cloth" viewBox="0 0 48 48">
-    <path d="M10 10h25v29H10z" fill="#f0c966" stroke="#315564" stroke-width="2"/><path d="M13 9h18v27H13z" fill="#dc8d86" stroke="#315564" stroke-width="2"/><path d="M17 8h15a7 7 0 0 1 0 14H17z" fill="#f3dcb0" stroke="#315564" stroke-width="2"/><ellipse cx="17" cy="15" rx="6" ry="7" fill="#e0ac62" stroke="#315564" stroke-width="2"/><ellipse cx="17" cy="15" rx="2" ry="3" fill="#fff0cd"/><path d="M13 27h18M13 31h18" stroke="#b46c73" stroke-width="2"/><path d="M10 39h25" stroke="#315564" stroke-width="3"/>
+    <path d="M12 6h22a8 8 0 0 1 0 16H12z" fill="#eea196" stroke="#315564" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M12 14h30c1 10-13 15-3 24-13 8-20-5-31 1-6-9 7-15 4-25z" fill="#e38c85" stroke="#315564" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M34 17c0 8-9 16-2 22l7-1c-10-9 4-14 3-24z" fill="#c87376"/>
+    <path d="M10 34c10-4 16 7 25 2" fill="none" stroke="#ffe9c2" stroke-width="3" stroke-linecap="round"/>
+    <path d="M21 10h12" stroke="#ffd5be" stroke-width="2.5" stroke-linecap="round"/>
+    <ellipse cx="12" cy="14" rx="8" ry="8" fill="#ffe9cf" stroke="#315564" stroke-width="2"/>
+    <path d="M15 18a5 5 0 1 1 1-7c3 4-2 7-4 4-1-1 0-3 1-2" fill="none" stroke="#ba6a70" stroke-width="2" stroke-linecap="round"/>
+    <path d="M8 39c11-6 18 7 31-1" fill="none" stroke="#315564" stroke-width="2" stroke-linecap="round"/>
   </symbol>
   <symbol id="fortress" viewBox="0 0 48 48">
     <path d="M7 41V16h7v6h7v-6h7v6h7v-6h7v25z" fill="#a4b7b5" stroke="#315564" stroke-width="2.5" stroke-linejoin="round"/><path d="M18 41V31a6 6 0 0 1 12 0v10" fill="#3e6775" stroke="#315564" stroke-width="2"/><path d="M12 28h4m17 0h4M9 35h5m21 0h5M24 6v12" stroke="#315564" stroke-width="2"/><path d="M25 6h12l-4 5 4 4H25z" fill="currentColor" stroke="#315564" stroke-width="2"/>

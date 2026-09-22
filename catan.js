@@ -370,7 +370,7 @@
     if (g.phase === "scenarioChoice" && g.scenario?.pending?.kind === "placeHarbor" && harbors.length && state.harbor === null) { state.harbor = harbors[0].harbor; state.mode = "placeHarbor"; }
     $("roomLabel").textContent = `房间 / Room ${room.code}`;
     $("turnLabel").textContent = `回合 / Turn ${g.turn || "—"}`;
-    const specialTarget = ["wonders", "pirates"].includes(map?.family);
+    const specialTarget = ["wonders", "pirates", "cloth"].includes(map?.family);
     $("victoryTarget").classList.toggle("scenario-target", specialTarget);
     $("victoryTarget").parentElement.classList.toggle("has-scenario-target", specialTarget);
     $("victoryTarget").title = S.target(map, g).join(" / ");
@@ -380,7 +380,8 @@
     $("scenarioVictoryConditions").hidden = !specialTarget;
     $("scenarioVictoryConditions").innerHTML = map?.family === "wonders"
       ? '<p class="victory-timing">自己的回合，满足以下任意一项<small>On your turn, meet either condition</small></p><p><strong>奇观建满全部 4 个阶段</strong><small>Complete all 4 stages of your wonder</small></p><p class="victory-alternative"><span>或 / OR</span><span><strong>至少 10 分，且奇观阶段数超过所有对手</strong><small>At least 10 VP, with more completed wonder stages than every opponent</small></span></p>'
-      : map?.family === "pirates" ? `<p class="victory-timing">自己的回合，必须同时满足<small>On your turn, meet both conditions</small></p><p><strong>至少 ${g.target || map.target} 分，并收复自己的海盗要塞</strong><small>At least ${g.target || map.target} VP and your own pirate fortress liberated</small></p>` : "";
+      : map?.family === "pirates" ? `<p class="victory-timing">自己的回合，必须同时满足<small>On your turn, meet both conditions</small></p><p><strong>至少 ${g.target || map.target} 分，并收复自己的海盗要塞</strong><small>At least ${g.target || map.target} VP and your own pirate fortress liberated</small></p>`
+      : map?.family === "cloth" ? `<p><strong>自己的回合达 ${g.target || map.target} 分</strong><small>Reach ${g.target || map.target} VP on your turn</small></p><p><strong>或有布村落仅剩 3 个：分高者胜，同分比布匹</strong><small>Or only 3 villages have cloth: most VP wins; ties go to most cloth</small></p>` : "";
     $("autoButton").textContent = room.seats[room.you].auto ? "托管中 / Auto On" : "托管 / Auto";
     $("autoButton").classList.toggle("selected", room.seats[room.you].auto);
     $("victory").hidden = g.winner < 0;
@@ -647,6 +648,7 @@
     const { game: g, seats, you } = state.room;
     const seafarers = Boolean(g.board.islands);
     const pirates = g.scenario?.kind === "pirates";
+    const routeUnavailable = g.scenario?.kind === "cloth";
     $("players").closest("table").querySelector("thead th:nth-last-child(3)").innerHTML = pirates ? "战舰<small>Warships</small>" : "骑士<small>Knights</small>";
     const longestLabel = seafarers ? "最长商路 / Longest Route" : "最长道路 / Longest Road";
     $("players").closest("table").classList.toggle("seafarers-summary", seafarers);
@@ -659,11 +661,11 @@
       const connected = seatConnected(p.id);
       const status = seats[p.id].bot ? "机器人 / Bot" : !connected ? "离线 / Offline" : "在线 / Online";
       const length = g.roadLengths[p.id];
-      const routeTitle = `${longestLabel}: ${length}${g.longest === p.id ? " · 最长奖 +2 分 / Award +2 VP" : ""}`;
+      const routeTitle = `${longestLabel}: ${routeUnavailable ? "不可用 / Not available" : `${length}${g.longest === p.id ? " · 最长奖 +2 分 / Award +2 VP" : ""}`}`;
       return `<tr data-player-id="${p.id}" class="summary-player ${p.id === g.current && g.phase !== "over" ? "current" : ""}" style="--player:${B.COLORS[p.id]}"><th scope="row"><div class="summary-identity">${numberedAvatar({ name: p.name, avatar: seats[p.id]?.avatar }, p.id, "player-portrait")}<div class="summary-person"><strong title="${B.escape(p.name)} · ${status}">${B.escape(p.name)}</strong><span class="summary-meta"><i class="player-color"></i><b>${p.score}</b> VP</span>${p.id === you || p.id === state.room.host ? `<small>${p.id === state.room.host ? "房主 / Host" : "你 / You"}</small>` : ""}</div></div><span class="player-speech" data-chat-bubble="${p.id}" aria-label="${B.escape(p.name)} 说 / says" hidden><span class="player-speech-text"></span></span></th>
         ${seafarers ? `<td class="island-points" title="登岛奖励，已包含在总分中 / Island bonus, included in total VP" aria-label="登岛奖励 / Island bonus: ${p.islandPoints} VP"><b>${p.islandPoints}</b><small>VP</small></td>` : ""}
         <td class="resource-count" aria-label="资源卡 / Resource cards: ${p.resourceCount}">${cardCounter(p.id, "resource", "resource-back", p.resourceCount)}</td><td class="development-count" aria-label="发展卡 / Development cards: ${p.developmentCount}">${cardCounter(p.id, "development", "development", p.developmentCount)}</td><td class="knight-count" aria-label="已用骑士 / Played knights: ${p.knights}"><span>${icon("robber")}<b>${p.knights}</b></span></td><td class="road-count" aria-label="已建道路 / Built roads: ${p.roads}"><span>${icon("road")}<b>${p.roads}</b></span></td>
-        <td class="longest-count${g.longest === p.id ? " route-holder" : ""}" title="${routeTitle}" aria-label="${routeTitle}"><b>${length}</b>${g.longest === p.id ? "<small>+2 VP</small>" : ""}</td></tr>`;
+        <td class="longest-count${routeUnavailable ? " route-unavailable" : g.longest === p.id ? " route-holder" : ""}" title="${routeTitle}" aria-label="${routeTitle}">${routeUnavailable ? "<b>不可用</b><small>Not available</small>" : `<b>${length}</b>${g.longest === p.id ? "<small>+2 VP</small>" : ""}`}</td></tr>`;
     }).join("");
     $("players").querySelectorAll("tr").forEach((row, id) => row.classList.toggle("current", g.phase !== "over" && id === (g.phase === "gold" ? g.goldQueue[0]?.id : g.current)));
     if (g.phase === "scenarioChoice") $("players").querySelectorAll("tr").forEach((row, id) => row.classList.toggle("current", id === (g.scenario.pending?.actor ?? g.scenario.actor)));

@@ -53,6 +53,31 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
       return JSON.stringify([...source.querySelectorAll("symbol")].map(canonical)) === JSON.stringify([...document.querySelectorAll("#catanScenarioSprite symbol")].map(canonical));
     }, read("catan-scenario-art.svg"));
     assert.equal(spriteMatch, true, "Inline scenario symbols exactly match source vectors");
+    const artPage = await browser.newPage({ viewport: { width: 560, height: 320 }, deviceScaleFactor: 2 });
+    try {
+      const sizes = [14, 24, 48, 128];
+      const swatches = sizes.map(size => `<div><svg width="${size}" height="${size}" viewBox="0 0 48 48"><use href="#cloth"/></svg><small>${size}px</small></div>`).join("");
+      await artPage.setContent(`<style>body{margin:0;font:12px Arial;color:#315564}section{display:flex;align-items:center;justify-content:space-around;height:160px;background:#edf6ef}section+section{background:#196e8d;color:white}section div{display:flex;align-items:center;gap:8px}small{font-size:11px}</style>${read("catan-scenario-art.svg").replace('<svg xmlns=', '<svg width="0" height="0" style="position:absolute" xmlns=')}<section>${swatches}</section><section>${swatches}</section>`);
+      const pixels = await artPage.evaluate(async () => {
+        const symbol = document.getElementById("cloth");
+        const markup = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">${symbol.innerHTML}</svg>`;
+        const img = new Image();
+        img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
+        await img.decode();
+        const canvas = document.createElement("canvas"); canvas.width = canvas.height = 48;
+        const ctx = canvas.getContext("2d"); ctx.drawImage(img, 0, 0);
+        const data = ctx.getImageData(0, 0, 48, 48).data;
+        let visible = 0, boundary = 0;
+        for (let y = 0; y < 48; y++) for (let x = 0; x < 48; x++) if (data[(y * 48 + x) * 4 + 3]) {
+          visible++;
+          if (x === 0 || y === 0 || x === 47 || y === 47) boundary++;
+        }
+        return { visible, boundary };
+      });
+      assert.ok(pixels.visible > 700, "Cloth artwork has a readable filled silhouette");
+      assert.equal(pixels.boundary, 0, "Cloth artwork is not clipped by its viewBox");
+      await artPage.screenshot({ path: path.join(__dirname, "test-results/cloth-art-sizes.png") });
+    } finally { await artPage.close(); }
     assert.equal(await page.locator('#catan-scenario-art-fortress path').last().getAttribute("fill"), "currentColor", "Fortress flags inherit their owner's color");
     const emit = data => page.evaluate(data => window.testSocket.emit(data), data);
     const show = (g, you = 0, patch = {}) => emit(room(g, you, patch));
@@ -81,11 +106,23 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
       E.act(g, E.requiredActors(g)[0] ?? g.current, action, seeded(11));
       setup(g); await show(g);
       assert.equal(await page.locator("#game").getAttribute("data-phase"), "main");
+      const routeCells = page.locator("#players .longest-count");
+      if (map === "cloth") {
+        assert.deepEqual(await routeCells.locator("b").allTextContents(), Array(n).fill("不可用"));
+        assert.deepEqual(await routeCells.locator("small").allTextContents(), Array(n).fill("Not available"));
+        assert.equal(await page.locator("#players .route-holder").count(), 0);
+        assert.match(await routeCells.first().getAttribute("aria-label"), /不可用 \/ Not available/);
+      } else {
+        assert.deepEqual(await routeCells.locator("b").allTextContents(), g.roadLengths.map(String));
+        assert.equal(await page.locator("#players .route-unavailable").count(), 0);
+      }
+      assert.deepEqual(await page.locator("#players .road-count > span:first-child b").allTextContents(), E.publicGame(g, 0).players.map(p => String(p.roads)));
+      assert.deepEqual(await page.locator("#players .ship-count b").allTextContents(), E.publicGame(g, 0).players.map(p => String(p.ships)));
       assert.equal(await page.locator('#actions [data-action="road"]').count(), 1);
       if (n === 3) fixtures[map] = structuredClone(g);
     }
     // Special victory conditions are complete sentences, not an overflowing score suffix.
-    for (const map of ["wonders", "pirates", "tribes"]) {
+    for (const map of ["wonders", "pirates", "cloth", "tribes"]) {
       await show(fixtures[map]);
       const special = map !== "tribes";
       assert.equal(await page.locator("#victoryTargetScore").isVisible(), !special);
@@ -96,6 +133,10 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
         assert.doesNotMatch(await page.locator("#victoryTarget").textContent(), /领先 \/ lead|VP \+/);
       }
       if (map === "pirates") assert.match(await page.locator("#scenarioVictoryConditions").textContent(), /必须同时满足.*至少 10 分，并收复自己的海盗要塞/s);
+      if (map === "cloth") {
+        assert.deepEqual(await page.locator("#scenarioVictoryConditions strong").allTextContents(), ["自己的回合达 14 分", "或有布村落仅剩 3 个：分高者胜，同分比布匹"]);
+        assert.match(await page.locator("#scenarioVictoryConditions").textContent(), /only 3 villages have cloth: most VP wins; ties go to most cloth/);
+      }
       for (const width of [320, 390, 740, 741, 980, 1440]) {
         await page.setViewportSize({ width, height: width > 740 ? 1000 : 844 });
         const fits = await page.locator("#victoryTarget").evaluate(el => {
@@ -105,16 +146,90 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
             && el.scrollWidth <= el.clientWidth + 1 && children.every(n => { const b = n.getBoundingClientRect(); return b.left >= r.left && b.right <= r.right + 1 && b.top >= r.top && b.bottom <= r.bottom + 1 && n.scrollWidth <= n.clientWidth + 1; });
         });
         assert.equal(fits, true, `${map} target fits above the map at ${width}px: ${fits ? "" : JSON.stringify(await page.locator("#victoryTarget").evaluate(el => [el.parentElement, el, document.querySelector("#boardViewport"), ...el.querySelectorAll("p, strong, small, .victory-target-heading")].map(n => ({ tag: n.id || n.className || n.tagName, box: n.getBoundingClientRect().toJSON(), scroll: n.scrollWidth, client: n.clientWidth }))))}`);
-        if (map === "wonders") {
+        if (map === "wonders" || map === "cloth") {
           const blocks = await page.locator("#scenarioVictoryConditions > p").evaluateAll(nodes => nodes.map(n => ({ top: n.getBoundingClientRect().top, bottom: n.getBoundingClientRect().bottom })));
           assert.ok(blocks.every((b, i) => !i || b.top >= blocks[i - 1].bottom), "Each condition has its own non-overlapping row");
-          await page.locator(".board-toolbar").screenshot({ path: path.join(__dirname, "test-results", `wonder-victory-conditions-${width}.png`) });
+          await page.locator(".board-toolbar").screenshot({ path: path.join(__dirname, "test-results", `${map === "wonders" ? "wonder" : map}-victory-conditions-${width}.png`) });
+        }
+        if (map === "cloth") {
+          const fits = await page.locator("#players .route-unavailable").evaluateAll(cells => cells.every(cell => {
+            const box = cell.getBoundingClientRect();
+            return cell.scrollWidth <= cell.clientWidth + 1 && [...cell.children].every(child => {
+              const r = child.getBoundingClientRect();
+              return r.left >= box.left && r.right <= box.right + 1 && r.top >= box.top && r.bottom <= box.bottom + 1 && child.scrollWidth <= child.clientWidth + 1;
+            });
+          }));
+          assert.equal(fits, true, `Cloth unavailable labels fit each player cell at ${width}px`);
+          await page.locator(".player-overview").screenshot({ path: path.join(__dirname, "test-results", `cloth-player-routes-${width}.png`) });
         }
       }
     }
-    // Foreign terrain is not a resource reward; gift inspection never plays a turn.
+    // Desert artwork is presentation-only; both map layouts keep their original rules data.
+    for (const layout of ["default", "random"]) for (const n of [3, 4]) {
+      const g = E.createGame(names.slice(0, n), seeded(37), "tribes", layout);
+      for (const preview of [false, true]) {
+        const result = await page.evaluate(({ board, scenario, preview }) => {
+          const original = JSON.stringify(board), host = document.createElement("div");
+          host.innerHTML = CatanBoard.render(board, { scenario, preview });
+          const islands = [...host.querySelectorAll(".foreign-island")];
+          return {
+            unchanged: JSON.stringify(board) === original,
+            islands: islands.length,
+            text: islands.flatMap(el => [...el.querySelectorAll("text")]).length,
+            fills: [...new Set(islands.map(el => el.querySelector(".hex-land").getAttribute("fill")))],
+            icons: islands.flatMap(el => [...el.querySelectorAll("use")].map(node => node.getAttribute("href"))),
+            trophies: host.querySelectorAll('[data-scenario-info="vp"] use[href$="dev-vp"]').length,
+            vpText: host.querySelectorAll('[data-scenario-info="vp"] text').length,
+            cards: host.querySelectorAll('[data-scenario-info="development"] use[href$="development"]').length,
+          };
+        }, { board: g.board, scenario: g.scenario, preview });
+        assert.equal(result.unchanged, true);
+        assert.equal(result.islands, 12, `${layout}/${n}/${preview}: all foreign tiles use desert art`);
+        assert.equal(result.text, 0);
+        assert.deepEqual(result.fills, ["#dece96"]);
+        assert.ok(result.icons.length >= 11 && result.icons.every(href => href === "#catan-art-desert"));
+        assert.equal(result.trophies, 8);
+        assert.equal(result.vpText, 0);
+        assert.equal(result.cards, 4);
+      }
+    }
+    for (const layout of ["default", "random"]) for (const n of [3, 4]) {
+      const g = E.createGame(names.slice(0, n), seeded(37), "cloth", layout);
+      for (const preview of [false, true]) {
+        const rendered = await page.evaluate(({ board, scenario, preview }) => {
+          const before = JSON.stringify(board), host = document.createElement("div");
+          host.innerHTML = window.CatanBoard.render(board, { scenario, preview });
+          const islands = [...host.querySelectorAll(".cloth-island")];
+          return {
+            unchanged: JSON.stringify(board) === before,
+            islands: islands.length,
+            fills: [...new Set(islands.map(el => el.querySelector(".hex-land").getAttribute("fill")))],
+            icons: islands.flatMap(el => [...el.querySelectorAll("use")].map(node => node.getAttribute("href"))),
+            gold: host.querySelectorAll('use[href$="gold"]').length,
+            villages: host.querySelectorAll(".cloth-village").length,
+            cloth: host.querySelectorAll('.cloth-village use[href$="cloth"]').length,
+          };
+        }, { board: g.board, scenario: g.scenario, preview });
+        assert.equal(rendered.unchanged, true);
+        assert.equal(rendered.islands, 4);
+        assert.deepEqual(rendered.fills, ["#dece96"]);
+        assert.deepEqual(rendered.icons, Array(4).fill("#catan-art-desert"));
+        assert.equal(rendered.gold, 0);
+        assert.equal(rendered.villages, 8);
+        assert.equal(rendered.cloth, 8);
+      }
+    }
+    await show(fixtures.cloth);
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.locator("#board").screenshot({ path: path.join(__dirname, "test-results", `cloth-desert-board-${width}.png`) });
+    }
+    // Gift inspection remains available and never plays a turn.
     await show(fixtures.tribes);
-    assert.equal(await page.locator("#board .foreign-island use").count(), 0, "No resource icons in foreign island centers");
+    assert.equal(await page.locator("#board .foreign-island text").count(), 0, "No labels on foreign island tiles");
+    assert.equal(await page.locator('#board .foreign-island use:not([href$="desert"])').count(), 0);
+    assert.equal(await page.locator("#board .foreign-island .hex-land").first().evaluate(el => getComputedStyle(el).fillOpacity), "1", "Use the normal desert texture without fading");
+    assert.equal(await page.locator('#board [data-scenario-info="vp"] use[href$="dev-vp"]').count(), 8);
     assert.equal(await page.locator('#board [data-scenario-info="harbor"]').count(), 6);
     assert.equal(await page.locator('#board [data-scenario-info="harbor"] use[href$="ship"]').count(), 0, "Generic harbors are not drawn as ships");
     assert.equal(await page.locator('#board [data-scenario-info="harbor"][data-resource="-1"]').textContent().then(t => t.includes("3:1")), true);
@@ -123,15 +238,16 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
       const marker = page.locator(`#board [data-scenario-info="${type}"]`).first();
       await marker.focus(); await page.keyboard.press("Enter");
       assert.equal(await page.locator("#scenarioInfoDialog").isVisible(), true, `${type} opens by keyboard`);
-      assert.match(await page.locator("#scenarioInfoContent").textContent(), /不会领取礼物/);
-      if (type === "foreign") assert.match(await page.locator("#scenarioInfoContent").textContent(), /不生产木材/);
-      if (type === "pirate") assert.match(await page.locator("#scenarioInfoContent").textContent(), /不属于任何玩家/);
+      assert.doesNotMatch(await page.locator("#scenarioInfoContent").textContent(), /此窗口只解释|不是资源卡|not resource cards|This description does not/);
+      if (type === "foreign") assert.match(await page.locator("#scenarioInfoContent").textContent(), /奖杯可领取 1 胜利点/);
+      if (type === "pirate") assert.match(await page.locator("#scenarioInfoContent").textContent(), /黑旗船是海盗棋子/);
       await page.keyboard.press("Escape");
     }
     for (const r of [-1, 0, 1, 2, 3, 4]) {
       await page.locator(`#board [data-scenario-info="harbor"][data-resource="${r}"]`).click();
       assert.match(await page.locator("#scenarioInfoTitle").textContent(), r < 0 ? /3:1/ : /2:1/);
-      assert.match(await page.locator("#scenarioInfoContent").textContent(), /不是资源卡/);
+      assert.match(await page.locator("#scenarioInfoContent").textContent(), /即可领取礼物/);
+      assert.doesNotMatch(await page.locator("#scenarioInfoContent").textContent(), /不是资源卡|not resource cards/);
       assert.match(await page.locator("#scenarioInfoContent").textContent(), /不能与现有港口重合或共用交叉点/);
       await page.locator("#scenarioInfoDialog > [data-close]").click();
     }
@@ -152,10 +268,14 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
         return Math.min(x.right, y.right) - Math.max(x.left, y.left) > 2 && Math.min(x.bottom, y.bottom) - Math.max(x.top, y.top) > 2;
       }).map(b => `${a.parentElement.dataset.gift}/${b.parentElement.dataset.gift}`)));
       assert.deepEqual(overlaps, [], `Gift badges do not overlap at ${width}`);
+      await page.locator("#board").screenshot({ path: path.join(__dirname, "test-results", `tribe-desert-board-${width}.png`) });
     }
     await page.locator("#gameMapRules").click();
     const harborRule = page.locator("#sailingContent > p").filter({ hasText: "六个海港礼物" });
     assert.match(await harborRule.textContent(), /没有合法位置则暂存/);
+    assert.doesNotMatch(await page.locator("#sailingContent").textContent(), /领取的是可搬回主岛的海港|not resource cards or a ship/);
+    assert.equal(await page.locator("#sailingContent .foreign-island text").count(), 0);
+    assert.equal(await page.locator('#sailingContent [data-scenario-info="vp"] use[href$="dev-vp"]').count(), 8);
     await page.locator('#sailingContent [data-scenario-info="harbor"]').first().click();
     assert.equal(await page.locator("#scenarioInfoDialog").isVisible(), true, "Map-rule preview is inspectable too");
     await page.locator("#scenarioInfoDialog > [data-close]").click();

@@ -85,6 +85,35 @@ test("all five scenarios initialize both player counts and layouts with public-s
   }
 });
 
+test("cloth robber starts on a main island in both layouts and cannot enter cloth islands", () => {
+  for (const layout of ["default", "random"]) for (const n of [3, 4]) for (let seed = 1; seed <= 30; seed++) {
+    const g = game("cloth", n, seed, layout), start = g.board.tiles[g.board.robber];
+    assert.equal(start.setupAllowed, true, `${layout}/${n}/${seed}: robber starts on mainland`);
+    assert.equal(start.number, 12);
+    const islands = g.board.tiles.filter(t => t.resource >= -1 && !t.setupAllowed);
+    assert.equal(islands.length, 4);
+    assert.ok(islands.every(t => t.noProduction && t.robberAllowed === false));
+    main(g); g.phase = "robber";
+    assert.ok(E.legal(g, 0).robber.length);
+    assert.ok(E.legal(g, 0).robber.every(id => g.board.tiles[id].setupAllowed));
+    for (const tile of islands) unchanged(g, 0, { type: "robber", tile: tile.id }, /legal tile/);
+  }
+});
+
+test("cloth villages pay cloth, not gold, even with a legacy robber on the central island", () => {
+  const g = main(game("cloth")), village = g.scenario.villages[0];
+  const tile = g.board.tiles.find(t => t.vertices.includes(village.vertex) && t.resource === 5);
+  assert.ok(tile);
+  village.connected = [0];
+  g.board.robber = tile.id;
+  E.produce(g, village.number);
+  assert.equal(g.players[0].cloth, 1);
+  assert.equal(village.cloth, 4);
+  assert.deepEqual(g.goldQueue, []);
+  assert.ok(g.players.every(p => E.sum(p.resources) === 0));
+  invariant(g);
+});
+
 test("cloth setup is forward-reverse-forward and resources come only from the third settlement", () => {
   const g = game("cloth", 4), order = [];
   while (g.turn === 0) {

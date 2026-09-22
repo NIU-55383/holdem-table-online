@@ -26,18 +26,19 @@ window.CatanBoard = (() => {
       <defs><filter id="${shadow}" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="3" stdDeviation="2" flood-opacity=".25"/></filter></defs>
       <g fill="none" stroke="#68becd" opacity=".3" stroke-width="2"><path d="M-290-160q12 7 24 0m-9 12q12 7 24 0M218 178q12 7 24 0m-9 12q12 7 24 0M-249 165q12 7 24 0M209-196q12 7 24 0"/></g>
       ${board.tiles.map((t) => {
-        const r = t.resource === -3 ? 8 : t.resource === -2 ? 6 : t.resource === -1 ? 5 : t.resource === 5 ? 7 : t.resource;
-        const occupied = showPieces && (t.id === board.robber || t.id === board.pirate);
         const foreign = scenario.kind === "tribes" && t.resource >= -1 && !t.setupAllowed;
+        const clothIsland = scenario.kind === "cloth" && t.resource >= -1 && !t.setupAllowed;
+        const r = foreign || clothIsland ? 5 : t.resource === -3 ? 8 : t.resource === -2 ? 6 : t.resource === -1 ? 5 : t.resource === 5 ? 7 : t.resource;
+        const occupied = showPieces && (t.id === board.robber || t.id === board.pirate);
         const robbable = !preview && ["robber", "pirate"].includes(mode) && legal[mode]?.includes(t.id);
         const chosen = robbable && selected?.kind === "tile" && selected.id === t.id;
         const rolled = dice.length && dice[0] + dice[1] === t.number && t.id !== board.robber;
-        return `<g ${robbable ? `${accessible("tile", t.id, "移动强盗 / Move robber")} aria-pressed="${chosen}"` : foreign ? info("foreign", "外岛，不产资源，不能建村 / Foreign island, no production or settlements") : ""} class="hex-tile ${foreign ? "foreign-island" : ""} ${r === 8 ? "fog-tile" : ""} ${robbable ? "target-tile" : ""} ${chosen ? "chosen-tile" : ""} ${rolled ? "producing" : ""}">
+        return `<g ${robbable ? `${accessible("tile", t.id, "移动强盗 / Move robber")} aria-pressed="${chosen}"` : foreign ? info("foreign", "外岛，不产资源，不能建村 / Foreign island, no production or settlements") : ""} class="hex-tile ${foreign ? "foreign-island" : ""} ${clothIsland ? "cloth-island" : ""} ${r === 8 ? "fog-tile" : ""} ${robbable ? "target-tile" : ""} ${chosen ? "chosen-tile" : ""} ${rolled ? "producing" : ""}">
           <title>${foreign ? "外岛 · 不产资源 · 不能建村 / Foreign island · No production or settlements" : names[r]}${t.number ? ` · ${t.number}` : ""}</title>
           <polygon points="${points(t)}" fill="${r === 8 ? "#b9d5d7" : r === 6 ? "#197c9e" : "#ebca80"}" stroke="${r >= 6 && r !== 7 ? "#51a1b2" : "#f6df9e"}" stroke-width="2"/>
           <polygon class="hex-land" points="${points(t, .88)}" fill="${FILL[r]}" stroke="#384b3f" stroke-opacity=".25" stroke-width="1.5"/>
           <polygon points="${points(t, .78)}" fill="none" stroke="#fff" stroke-opacity=".14" stroke-width="1"/>
-          ${foreign ? `<g class="foreign-island-label" text-anchor="middle" fill="#244b49"><text x="${t.x}" y="${t.y + (occupied ? 30 : -10)}" font-size="${occupied ? 11 : 15}" font-weight="800">外岛</text><text x="${t.x}" y="${t.y + (occupied ? 43 : 8)}" font-size="${occupied ? 9 : 11}" font-weight="600">不产资源</text>${occupied ? "" : `<text x="${t.x}" y="${t.y + 24}" font-size="10">不能建村</text>`}</g>` : occupied ? "" : r === 8 ? `${icon("fog", t.x - 24, t.y - 28, 48)}<text x="${t.x}" y="${t.y + 24}" text-anchor="middle" fill="#34606b" font-size="21" font-weight="800">?</text>` : icon(RES[r], t.x - 16, t.y - 37, 32)}
+          ${occupied ? "" : r === 8 ? `${icon("fog", t.x - 24, t.y - 28, 48)}<text x="${t.x}" y="${t.y + 24}" text-anchor="middle" fill="#34606b" font-size="21" font-weight="800">?</text>` : icon(RES[r], t.x - 16, t.y - 37, 32)}
           ${t.number ? occupied
             ? `<g class="blocked-number"><rect x="${t.x - 13}" y="${t.y - 39}" width="26" height="17" rx="4" fill="#fff7df"/><text x="${t.x}" y="${t.y - 26}" text-anchor="middle" fill="#634576" font-size="14" font-weight="800">${t.number}</text></g>`
             : `<g><rect x="${t.x - 18}" y="${t.y - 1}" width="36" height="36" rx="7" fill="#fff7df" stroke="#907a46" stroke-opacity=".35"/><text x="${t.x}" y="${t.y + 23}" text-anchor="middle" fill="${[6, 8].includes(t.number) ? "#b53732" : "#254938"}" font-size="24" font-weight="800">${t.number}</text><text x="${t.x}" y="${t.y + 31}" text-anchor="middle" fill="${[6, 8].includes(t.number) ? "#b53732" : "#254938"}" font-size="8">${"•".repeat(6 - Math.abs(7 - t.number))}</text></g>` : ""}
@@ -75,7 +76,7 @@ window.CatanBoard = (() => {
         const harbor = gift.kind === "harbor", rate = gift.resource >= 0 ? "2:1" : "3:1";
         const name = harbor ? `${gift.resource >= 0 ? ["木材 / Lumber", "砖块 / Brick", "羊毛 / Wool", "麦子 / Grain", "矿石 / Ore"][gift.resource] : "通用 / Generic"} ${rate} 海港 / Harbor` : gift.kind === "vp" ? "+1 胜利点 / Victory point" : "免费发展卡 / Free development card";
         const badge = harbor ? `<rect class="gift-badge" x="${x - 24}" y="${y - 15}" width="48" height="30" rx="5" fill="#edf6f1" stroke="#bb9044" stroke-width="2"/>${gift.resource >= 0 ? icon(RES[gift.resource], x - 21, y - 11, 20) : ""}<text x="${x + (gift.resource >= 0 ? 10 : 0)}" y="${y + 5}" text-anchor="middle" fill="#20526a" font-size="13" font-weight="800">${rate}</text>`
-          : `<circle class="gift-badge" cx="${x}" cy="${y}" r="16" fill="#fff2c3" stroke="#bb9044" stroke-width="2"/>${gift.kind === "vp" ? `<text x="${x}" y="${y + 5}" text-anchor="middle" fill="#75552e" font-size="15" font-weight="800">+1</text>` : icon("development", x - 11, y - 12, 23)}`;
+          : `<circle class="gift-badge" cx="${x}" cy="${y}" r="16" fill="#fff2c3" stroke="#bb9044" stroke-width="2"/>${icon(gift.kind === "vp" ? "dev-vp" : "development", x - 11.5, y - 11.5, 23)}`;
         return `<g class="scenario-gift" data-gift="${escape(gift.id)}"><path class="gift-coast" d="M${a.x * .8 + b.x * .2} ${a.y * .8 + b.y * .2}L${a.x * .2 + b.x * .8} ${a.y * .2 + b.y * .8}" stroke="#fff2b0" stroke-width="5" stroke-linecap="round"/><path class="gift-connector" d="M${mx} ${my}L${x} ${y}" stroke="#ffe19a" stroke-width="2"/><g ${info(gift.kind, name)} data-resource="${gift.resource ?? -1}"><title>${escape(name)} · 船抵达所连海岸边领取 / Claim by ship on the linked coast edge</title>${badge}</g></g>`;
       }).join("")}
       ${(scenario.villages || []).map((village) => {
@@ -121,7 +122,7 @@ window.CatanBoard = (() => {
       }).join("")}
       ${["settlement", "city"].includes(mode) ? (legal[mode === "city" ? "cities" : "settlements"] || []).map((id) => `<g ${accessible("vertex", id, mode === "city" ? "升级城市 / Upgrade city" : "建造村庄 / Build settlement")} class="board-target ${selected?.kind === "vertex" && selected.id === id ? "selected-target" : ""}"><circle cx="${v[id].x}" cy="${v[id].y}" r="19" fill="transparent"/><circle class="target-dot" cx="${v[id].x}" cy="${v[id].y}" r="10" fill="#fffbe5" stroke="#176787" stroke-width="3"/><path d="M${v[id].x-4} ${v[id].y}h8m-4-4v8" stroke="#176787" stroke-width="2"/></g>`).join("") : ""}
       ${!showPieces || !board.tiles[board.robber] ? "" : `<g class="robber-piece" role="img" aria-label="强盗 / Robber">${piece("robber", board.tiles[board.robber].x - 21, board.tiles[board.robber].y - 21, 42, board.skins)}</g>`}
-      ${!piratePosition ? "" : `<g class="pirate-piece" ${scenario.kind === "tribes" ? info("pirate", "海盗，不是礼物或玩家船只 / Pirate, not a gift or player ship") : 'role="img" aria-label="海盗 / Pirate"'}>${piece("pirate", piratePosition.x - 23, piratePosition.y - 23, 46, board.skins)}</g>`}
+      ${!piratePosition ? "" : `<g class="pirate-piece" ${scenario.kind === "tribes" ? info("pirate", "海盗 / Pirate") : 'role="img" aria-label="海盗 / Pirate"'}>${piece("pirate", piratePosition.x - 23, piratePosition.y - 23, 46, board.skins)}</g>`}
     </svg>`;
   }
   return { render, icon, piece, escape, COLORS, RES };

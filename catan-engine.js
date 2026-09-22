@@ -88,7 +88,7 @@ function makeBoard(rng = random, mapId = "base", layout = "default") {
     const offset = map.pirateOffset, anchor = offset && at(offset);
     const pirateStart = map.pirate ? null : offset ? { x: anchor.x + offset[2], y: anchor.y + offset[3] } : { x: 0, y: Math.max(...ys) + 26 };
     if (pirateStart) { xs.push(pirateStart.x); ys.push(pirateStart.y); }
-    const robber = map.robber == null ? null : layout === "default" ? at(map.robber) : tiles.find((t) => t.resource === -1) || tiles.find((t) => t.number === 12);
+    const robber = map.robber == null ? null : layout === "default" ? at(map.robber) : tiles.find((t) => t.resource === -1 && t.robberAllowed !== false) || tiles.find((t) => t.number === 12 && t.robberAllowed !== false);
     const board = { tiles, vertices, edges, ports, robber: robber?.id ?? -1, pirate: map.pirate ? at(map.pirate).id : -1, pirateStart, islands, mainIsland, mapId, layout, bounds: [Math.min(...xs) - margin, Math.min(...ys) - margin, Math.max(...xs) - Math.min(...xs) + margin * 2, Math.max(...ys) - Math.min(...ys) + margin * 2] };
     Scenarios.prepareBoard(board, map);
     return board;

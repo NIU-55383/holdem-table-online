@@ -30,6 +30,8 @@
 .player-summary.seafarers-summary th:first-child {width: 28%;}
 .player-summary .island-points b, .player-summary .longest-count b {font-size: 16px; font-variant-numeric: tabular-nums;}
 .player-summary .island-points small, .player-summary .longest-count small {display: block; font-size: 8px; white-space: nowrap;}
+.player-summary .route-unavailable b {font-size: 10px; font-weight: 500;}
+.player-summary .route-unavailable small {white-space: normal;}
 .player-summary .island-points {color: #386b59;}
 .player-summary .route-holder {background: #f8e6a4; color: #664710;}
 @media (min-width: 741px) {
@@ -430,8 +432,6 @@
 .scenario-info-symbol svg {width: 44px; height: 44px;}
 [data-scenario-info] {cursor: help;}
 [data-scenario-info]:hover .gift-badge, [data-scenario-info]:focus-visible .gift-badge {stroke: #215b70; stroke-width: 3;}
-.foreign-island .hex-land {fill-opacity: .65;}
-.foreign-island-label {paint-order: stroke; stroke: #fff5dc; stroke-width: 2; stroke-linejoin: round;}
 .gift-coast, .gift-connector {pointer-events: none;}
 .rule-section {padding: 16px 0; border-bottom: 1px solid #c1d8db;}
 .rule-section:first-child {padding-top: 0;}

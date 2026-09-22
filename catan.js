@@ -8,19 +8,39 @@
   const state = { socket: null, room: null, seats: 4, mode: "", selected: null, tradeMode: "bank", resourceMode: "", pending: false, phaseKey: "", diceKey: "", reconnect: null, noticeTimer: null, cardBaseline: false, cardChanges: new Map(), cardChangeTimer: null };
   const CARD_CHANGE_DURATION = 3500;
   const audio = window.CatanAudio.create(), soundEvents = window.CatanAudio.tracker(kind => audio.play(kind));
+  const music = window.CatanMusic.create();
   let viewedTradeKey = "", alertTradeKey = "";
   let harborSetupKey = "", harborSetupAcknowledged = false;
+  let islandRoadIntent = null;
   function renderSoundToggle() {
     const button = $("soundToggle"), label = audio.muted ? "开启音效 / Enable sounds" : "关闭音效 / Mute sounds";
     button.title = label; button.setAttribute("aria-label", label); button.setAttribute("aria-pressed", String(!audio.muted));
     button.innerHTML = `<i data-lucide="${audio.muted ? "volume-x" : "volume-2"}" aria-hidden="true"></i>`;
     window.lucide?.createIcons();
   }
-  $("soundToggle").onclick = () => { audio.setMuted(!audio.muted); renderSoundToggle(); };
+  $("soundToggle").onclick = () => { audio.setMuted(!audio.muted); renderSoundToggle(); renderAudioSettings(); };
   renderSoundToggle();
-  document.addEventListener("pointerdown", () => audio.unlock(), { capture: true, passive: true });
-  document.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") audio.unlock(); }, true);
-  document.addEventListener("visibilitychange", () => { if (document.hidden) audio.stop(); });
+  const unlockAudio = () => { audio.unlock(); music.unlock(); };
+  document.addEventListener("pointerdown", unlockAudio, { capture: true, passive: true });
+  document.addEventListener("pointerup", unlockAudio, { capture: true, passive: true });
+  document.addEventListener("keydown", event => { if (["Enter", " ", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) unlockAudio(); }, true);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) audio.stop(); music.sync(); });
+  window.addEventListener("pagehide", () => music.stop());
+  window.addEventListener("pageshow", event => { if (event.persisted) music.unlock(); });
+  function renderAudioSettings() {
+    $("musicEnabled").checked = music.enabled; $("sfxEnabled").checked = !audio.muted;
+    $("musicVolume").value = Math.round(music.volume * 100); $("sfxVolume").value = Math.round(audio.volume * 100);
+    $("musicVolumeValue").textContent = `${Math.round(music.volume * 100)}%`; $("sfxVolumeValue").textContent = `${Math.round(audio.volume * 100)}%`;
+    $("musicTrackCredit").textContent = music.track.title; $("musicTrackCredit").href = music.track.source;
+    $("musicError").hidden = !music.failed;
+  }
+  music.onChange(renderAudioSettings);
+  $("audioSettings").onclick = () => { renderAudioSettings(); if (!$("audioSettingsDialog").open) $("audioSettingsDialog").showModal(); };
+  $("musicEnabled").onchange = () => music.setEnabled($("musicEnabled").checked);
+  $("sfxEnabled").onchange = () => { audio.setMuted(!$("sfxEnabled").checked); renderSoundToggle(); renderAudioSettings(); };
+  $("musicVolume").oninput = () => { music.setVolume(Number($("musicVolume").value) / 100); renderAudioSettings(); };
+  $("sfxVolume").oninput = () => { audio.setVolume(Number($("sfxVolume").value) / 100); renderAudioSettings(); };
+  $("sfxVolume").onchange = () => audio.play("click");
   document.addEventListener("click", event => {
     const button = event.target.closest("button");
     if (!button || button.disabled || button.id === "soundToggle") return;
@@ -60,14 +80,16 @@
   }
   $("sailingAcknowledge").onclick = () => $("sailingDialog").close();
   function showScenarioInfo(target) {
-    const info = S.tribeInfo(target.dataset.scenarioInfo, Number(target.dataset.resource ?? -1));
+    const info = S.pirateInfo(target.dataset.scenarioInfo, Number(target.dataset.owner), Number(target.dataset.strength ?? 3))
+      || S.tribeInfo(target.dataset.scenarioInfo, Number(target.dataset.resource ?? -1));
     if (!info) return;
     $("scenarioInfoTitle").innerHTML = `${B.escape(info.title[0])}<small>${B.escape(info.title[1])}</small>`;
-    $("scenarioInfoContent").innerHTML = (info.icon ? `<div class="scenario-info-symbol">${icon(info.icon)}</div>` : "") + info.paragraphs.map(([zh, en]) => `<p>${B.escape(zh)}<small>${B.escape(en)}</small></p>`).join("");
+    const symbol = info.scenarioArt ? S.art(info.scenarioArt) : info.icon ? icon(info.icon) : "";
+    $("scenarioInfoContent").innerHTML = (symbol ? `<div class="scenario-info-symbol"${info.color ? ` style="color:${info.color}"` : ""}>${symbol}</div>` : "") + info.paragraphs.map(([zh, en]) => `<p>${B.escape(zh)}<small>${B.escape(en)}</small></p>`).join("");
     if (!$("scenarioInfoDialog").open) $("scenarioInfoDialog").showModal();
     $("scenarioInfoContent").scrollTop = 0;
   }
-  for (const id of ["previewBoard", "sailingContent", "board"]) {
+  for (const id of ["previewBoard", "sailingContent", "board", "scenarioPanel"]) {
     const explain = event => {
       const target = event.target.closest("[data-scenario-info]");
       if (!target || event.type === "keydown" && !["Enter", " "].includes(event.key)) return;
@@ -94,14 +116,22 @@
       ["monopoly", "dev-monopoly", "指定一种资源，其他玩家须交出该种资源的所有手牌。", "Choose a resource. All opponents give you every card of that resource."],
       ["vp", "dev-vp", "秘密增加一分，达到获胜条件时计入总分。", "One hidden victory point, counted when checking for victory."]
     ];
-    const deckCounts = { knight: 14, vp: 5, roads: 2, plenty: 2, monopoly: 2 };
-    $("rulesDevelopment").innerHTML = effects.map(([type, art, zh, en]) => `<div><dt>${art === "warship" ? S.art("warship") : icon(art)}<span>${devNames[type][0]} × ${deckCounts[type]}<small>${devNames[type][1]} × ${deckCounts[type]}</small>${art === "warship" ? '<small>战舰 / Warship</small>' : ""}</span></dt><dd>${zh}<small>${en}</small></dd></div>`).join("");
+    const pirate = map?.family === "pirates", players = state.room?.game?.players.length || state.room?.maxPlayers || state.seats;
+    const deckCounts = { knight: pirate && players === 4 ? 19 : 14, vp: pirate ? 0 : 5, roads: 2, plenty: 2, monopoly: 2 };
+    $("rulesDevelopment").innerHTML = effects.filter(([type]) => deckCounts[type]).map(([type, art, zh, en]) => {
+      const name = S.devName(type, pirate) || devNames[type];
+      return `<div><dt>${art === "warship" ? S.art("warship") : icon(art)}<span>${name[0]} × ${deckCounts[type]}<small>${name[1]} × ${deckCounts[type]}</small></span></dt><dd>${zh}<small>${en}</small></dd></div>`;
+    }).join("");
     if (map) {
       const extra = map.family === "pirates" ? ["本图不使用最长商路和最大骑士团。骑士卡改为战舰卡；三人移除 5 张胜利点卡，四人把它们也改为战舰卡。每回合最多使用一张行动发展卡，战舰卡也计入此限制，购买当回合不能使用。必须解放自己的要塞并达到目标分数才能获胜。", "No Longest Route or Largest Army here. Knights become Warships; three players remove the 5 VP cards, four players also convert them to Warships. Play at most one action development card per turn, including Warships; not on the turn bought. Liberate your own fortress and reach the target VP to win."] : map.family === "wonders" ? ["每人最多认领一项奇迹；认领时须从自己的 15 艘船库存中预留一艘作为永久标记，该船不能再用于棋盘，库存无船时不能认领。在自己的回合建完第 4 阶段，或达到 10 分且奇迹阶段严格领先所有对手，即获胜。", "Claim at most one wonder. Reserve one of your 15 ships from supply as its permanent marker; that ship is unavailable for the board, and claiming requires an available ship. Win on your turn by completing stage 4, or with 10 VP and strictly more wonder stages than every opponent."] : map.family === "cloth" ? ["本图不使用最长商路。每 2 布匹计 1 分；布匹公开，不是资源卡，不能交易或弃牌。村庄供货耗尽时也可能提前结算，详见本图规则。", "No Longest Route here. Every 2 cloth score 1 VP. Cloth is public, not a resource card, and cannot be traded or discarded. Depleted village supplies may end the game early; see Map Rules."] : ["航海家的船、海盗、金矿与地图奖励另见「航海规则」及「本图规则」；剧本例外优先。", "See Sailing Rules and Map Rules for ships, pirates, gold and rewards. Scenario exceptions take precedence."];
       $("rulesScenarioNote").innerHTML = `${extra[0]}<small>${extra[1]}</small>`;
       if (["wonders", "pirates"].includes(map.family)) {
         $("rulesVictory").innerHTML = `${S.target(map)[0]}。${extra[0]}<small>${S.target(map)[1]}. ${extra[1]}</small>`;
         $("rulesVictoryCard").innerHTML = "胜利点卡立即计分，包括新买的卡；但仍须满足本图的特殊获胜条件。<small>Victory point cards count immediately, even when newly bought, but this scenario's special victory conditions still apply.</small>";
+        if (pirate) {
+          $("rulesVictoryCard").innerHTML = "本图没有直接加分的发展卡。三人局移除全部 5 张胜利点卡，共 20 张发展卡，其中 14 张战舰；四人局保留这 5 张，但都当战舰卡使用，不加分，共 25 张，其中 19 张战舰。两种人数都是道路建设、丰收、垄断各 2 张。<small>No development card scores VP here. With 3 players, remove all 5 VP cards: 20 cards total, including 14 Warships. With 4 players, keep those 5 but use them as Warship cards, worth no VP: 25 cards total, including 19 Warships. Both decks contain 2 Road Building, 2 Year of Plenty and 2 Monopoly cards.</small>";
+          $("rulesScenarioNote").innerHTML += "<br>要塞收复前不能升级城市；收复后变成自己的村庄，可以按正常费用（2 麦子 + 3 矿石）升级城市，仍受每人最多 4 座城市的限制。进攻会结束回合，升级要等之后自己的建造阶段。<small>A fortress cannot be upgraded before liberation. Once liberated, it becomes your settlement and can be upgraded for the normal cost of 2 grain + 3 ore, within your 4-city limit. Attacking ends your turn, so upgrade during a later building phase of your own.</small>";
+        }
       }
     }
     if (!$("helpDialog").open) $("helpDialog").showModal();
@@ -112,6 +142,7 @@
   $("mapChoice").innerHTML = Maps.maps.map((map) => `<option value="${map.id}">${map.name} / ${map.english} · ${S.playerRange(map)}人 / Players</option>`).join("");
   function chooseMap(id) {
     const map = Maps.get(id); state.mapId = map ? id : "base";
+    if (!state.room) music.setEdition(state.mapId);
     renderSkins();
     $("baseSetup").hidden = Boolean(map); $("seafarerSetup").hidden = !map; $("playerCountChoice").hidden = Boolean(map && !(map.minPlayers < map.players));
     $("scenarioSetup").hidden = map?.id !== "new-world";
@@ -174,12 +205,65 @@
     clearTimeout(state.noticeTimer);
     if (text) state.noticeTimer = setTimeout(() => { $("notice").hidden = true; }, 8000);
   }
+  let battleRoomKey = "", battleId = null, battleMarkup = "";
+  function resetBattleFeedback() {
+    battleRoomKey = ""; battleId = null; battleMarkup = "";
+    $("pirateBattle").hidden = true; $("pirateBattle").innerHTML = "";
+  }
+  function renderPirateBattle() {
+    const room = state.room, el = $("pirateBattle"), key = room?.game ? `${room.code}:${room.you}` : "";
+    const report = S.battleReport(room?.game, icon), fresh = Boolean(report && key === battleRoomKey && report.id !== battleId);
+    el.hidden = !report;
+    if (report && (report.html !== battleMarkup || report.id !== battleId)) {
+      el.classList.toggle("battle-arrival", fresh);
+      el.dataset.result = report.result;
+      el.innerHTML = report.html;
+      if (fresh || key !== battleRoomKey) el.open = true;
+      if (fresh && report.actor === room.you) notice(report.notice);
+    }
+    battleRoomKey = key; battleId = report?.id ?? null; battleMarkup = report?.html || "";
+  }
   function send(data) {
     if (state.room?.control?.paused && ["action", "start", "rematch"].includes(data.type)) { notice("空位待补齐，游戏暂停 / Waiting for replacement"); return false; }
     if (state.socket?.readyState !== WebSocket.OPEN) { notice("连接尚未恢复 / Waiting for connection"); return false; }
     state.socket.send(JSON.stringify(data)); return true;
   }
-  function action(a) { if (state.pending || $("harborSetupDialog").open || $("scenarioInfoDialog").open) return; if (send({ type: "action", action: a })) { state.pending = true; renderActions(); renderScenario(); } }
+  function action(a) { if (state.pending || $("harborSetupDialog").open || $("scenarioInfoDialog").open || $("islandRoadDialog").open) return; if (send({ type: "action", action: a })) { state.pending = true; renderActions(); renderScenario(); } }
+  function islandRoadKey() {
+    const room = state.room, g = room?.game;
+    return g ? JSON.stringify([room.code, room.you, room.seats[room.you]?.socialId, g.revision, g.current, g.phase, g.turn]) : "";
+  }
+  function validIslandRoadIntent(intent) {
+    const l = state.room?.game?.legal;
+    return Boolean(intent && intent.key === islandRoadKey() && !state.pending && !state.room?.control?.paused && state.socket?.readyState === WebSocket.OPEN
+      && (intent.type === "removeIslandRoad" ? l?.scenario?.removeIslandRoads?.includes(intent.edge) : l?.roads?.includes(intent.edge) && l?.scenario?.warnIslandRoads?.includes(intent.edge)));
+  }
+  function syncIslandRoadDialog() {
+    if (islandRoadIntent && !validIslandRoadIntent(islandRoadIntent)) { islandRoadIntent = null; $("islandRoadDialog").close(); }
+  }
+  function confirmIslandRoad(type, edge) {
+    const intent = { type, edge, key: islandRoadKey() };
+    if (!validIslandRoadIntent(intent)) return;
+    islandRoadIntent = intent;
+    const remove = type === "removeIslandRoad";
+    $("islandRoadTitle").innerHTML = remove ? "撤回这条外岛道路？<small>Remove this island road?</small>" : "这里需要船只通往要塞<small>Ships are needed to reach the fortress</small>";
+    $("islandRoadDescription").innerHTML = remove
+      ? "道路棋子回到库存，但不退任何资源、发展卡或免费建造次数。<small>The road piece returns to your supply. No resources, development cards or free builds are refunded.</small>"
+      : "只有船只通往要塞才能进攻，在此建造道路没有任何收益。<small>Only a continuous line of ships reaching your fortress allows an attack. Building a road here gives no benefit.</small>";
+    $("confirmIslandRoad").textContent = remove ? "撤回道路 / Remove road" : "仍然建路 / Build anyway";
+    if (!$("islandRoadDialog").open) $("islandRoadDialog").showModal();
+  }
+  $("islandRoadDialog").addEventListener("close", () => { if (!$("islandRoadDialog").open) islandRoadIntent = null; });
+  $("confirmIslandRoad").onclick = () => {
+    const intent = islandRoadIntent;
+    if (!validIslandRoadIntent(intent)) { islandRoadIntent = null; $("islandRoadDialog").close(); return; }
+    islandRoadIntent = null; $("islandRoadDialog").close();
+    action({ type: intent.type, edge: intent.edge });
+  };
+  function requestBuild(a) {
+    if (a.type === "road" && state.room?.game?.legal.scenario?.warnIslandRoads?.includes(a.edge)) confirmIslandRoad(a.type, a.edge);
+    else action(a);
+  }
   function clearCardChanges() {
     clearTimeout(state.cardChangeTimer); state.cardChangeTimer = null; state.cardChanges.clear();
   }
@@ -272,7 +356,7 @@
     ws.addEventListener("open", () => { $("connection").textContent = "已连接 / Connected"; $("connection").classList.remove("offline"); send({ type: "hello", token: sessionStorage.getItem("catan-token") || "", avatar: window.BoardGameUI.getAvatar() }); });
     ws.addEventListener("message", (event) => {
       let data; try { data = JSON.parse(event.data); } catch { return; }
-      if (data.type === "welcome") { sessionStorage.setItem("catan-token", data.token); soundEvents.reset(); state.cardBaseline = false; clearCardChanges(); renderCardChanges(); clearChatBubbles(); }
+      if (data.type === "welcome") { sessionStorage.setItem("catan-token", data.token); soundEvents.reset(); resetBattleFeedback(); state.cardBaseline = false; clearCardChanges(); renderCardChanges(); clearChatBubbles(); }
       if (data.type === "reaction") { social.receive(data); return; }
       if (data.type === "state") { soundEvents.update(data); trackCardChanges(data); trackChatBubbles(data); state.room = data; social.sync(); state.pending = false; render(); }
       if (data.type === "error") { state.pending = false; notice(data.message); renderActions(); renderScenario(); }
@@ -328,8 +412,11 @@
   };
   function render() {
     const room = state.room, g = room?.game;
+    music.setEdition(room?.mapId || state.mapId);
+    syncIslandRoadDialog();
     $("setup").hidden = Boolean(room); $("lobby").hidden = !room || Boolean(g); $("game").hidden = !g;
     renderHarborSetup();
+    renderPirateBattle();
     management.sync();
     if (!room) { supplyRoomKey = ""; $("incomingTradeAlert").hidden = true; $("goldChoiceAlert").hidden = true; alertTradeKey = ""; return; }
     const map = Maps.get(room.mapId);
@@ -451,6 +538,8 @@
     $("selectionLabel").textContent = state.selected ? `${label} · ${state.selected.id + 1}` : "";
   }
   function selectBoard(e) {
+    const road = e.target.closest("[data-remove-road]");
+    if (road) { confirmIslandRoad("removeIslandRoad", Number(road.dataset.removeRoad)); return; }
     const target = e.target.closest("[data-vertex],[data-edge],[data-tile],[data-victim]"); if (!target || state.pending || state.room?.control?.paused) return;
     if ("victim" in target.dataset) {
       if (state.mode === "steal") {
@@ -474,14 +563,14 @@
     }
     if (["road", "ship", "settlement", "city"].includes(state.mode)) {
       state.selected = null;
-      action({ type: state.mode, [kind]: Number(target.dataset[kind]) });
+      requestBuild({ type: state.mode, [kind]: Number(target.dataset[kind]) });
       return;
     }
     state.selected = { kind, id: Number(target.dataset[kind]) }; renderBoard(); renderPrompt();
   }
   $("board").onclick = selectBoard;
   $("board").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectBoard(e); } };
-  $("confirmBuild").onclick = () => { if (!state.selected) return; action({ type: state.mode, [state.selected.kind]: state.selected.id }); state.selected = null; renderBoard(); };
+  $("confirmBuild").onclick = () => { if (!state.selected) return; requestBuild({ type: state.mode, [state.selected.kind]: state.selected.id }); state.selected = null; renderBoard(); };
   $("cancelBuild").onclick = () => { state.selected = null; if (state.room.game.phase === "main") state.mode = ""; renderBoard(); renderActions(); renderPrompt(); };
   const viewport = $("boardViewport"), boardView = { scale: 1, x: 0, y: 0 };
   let boardGesture = null, boardClickBlockedUntil = 0;
@@ -648,7 +737,7 @@
     const { game: g, seats, you } = state.room;
     const seafarers = Boolean(g.board.islands);
     const pirates = g.scenario?.kind === "pirates";
-    const routeUnavailable = g.scenario?.kind === "cloth";
+    const routeUnavailable = Maps.get(g.mapId || state.room.mapId)?.scenario?.longestRoute === false;
     $("players").closest("table").querySelector("thead th:nth-last-child(3)").innerHTML = pirates ? "战舰<small>Warships</small>" : "骑士<small>Knights</small>";
     const longestLabel = seafarers ? "最长商路 / Longest Route" : "最长道路 / Longest Road";
     $("players").closest("table").classList.toggle("seafarers-summary", seafarers);

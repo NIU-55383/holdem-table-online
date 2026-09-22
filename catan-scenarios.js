@@ -133,6 +133,11 @@ function routeAllowed(g, id, e, kind, setup, ignore) {
   return (dist.get(next) ?? Infinity) < (dist.get(tip) ?? Infinity);
 }
 
+function pirateIslandEdge(g, edge) {
+  return is(g, "pirates") && edge && edge.tiles.some(i => g.board.tiles[i].resource >= -1)
+    && edge.tiles.every(i => !g.board.tiles[i].setupAllowed);
+}
+
 const tradeVillage = (g, v) => is(g, "cloth") && g.scenario.villages.some((x) => x.vertex === v);
 const islandPoints = (g, id) => (g.players[id].discovered?.length || 0) * (is(g, "new-world") ? 1 : 2);
 const extraPoints = (g, id) => (g.players[id].scenarioPoints || 0) + Math.floor((g.players[id].cloth || 0) / 2);
@@ -225,7 +230,7 @@ function eligibleWonders(g, id, h) {
 }
 
 function legal(g, id, h) {
-  const out = { placeHarbors: [], chooseWonders: [], buildWonder: false, attackFortress: false, piratePayment: 0, pirateReward: [], steal: [] };
+  const out = { placeHarbors: [], chooseWonders: [], buildWonder: false, attackFortress: false, removeIslandRoads: [], warnIslandRoads: [], piratePayment: 0, pirateReward: [], steal: [] };
   const s = g.scenario, p = g.players[id];
   if (!s || !p || g.phase === "over") return out;
   if (g.phase === "scenarioChoice") {
@@ -243,21 +248,27 @@ function legal(g, id, h) {
   if (is(g, "pirates")) {
     const seat = s.pirateSeats[id], path = orderedShips(g, id);
     out.attackFortress = !seat.liberated && path.some((eid) => [g.board.edges[eid].a, g.board.edges[eid].b].includes(seat.fortress));
+    out.removeIslandRoads = g.board.edges.filter(e => e.owner === id && e.kind !== "ship" && pirateIslandEdge(g, e)).map(e => e.id);
   }
   return out;
 }
 
 function rollPirate(g, number, h, rng) {
   if (!is(g, "pirates") || g.board.pirate < 0) return false;
-  const s = g.scenario, power = Math.min(...g.dice), path = s.piratePath;
+  const s = g.scenario, power = Math.min(...g.dice), path = s.piratePath, from = g.board.pirate;
   g.board.pirate = path[(Math.max(0, path.indexOf(g.board.pirate)) + power) % path.length];
-  const victims = [...new Set(g.board.tiles[g.board.pirate].vertices.map((i) => g.board.vertices[i].owner))].filter((i) => i >= 0);
-  s.lastPirate = { tile: g.board.pirate, power, actor: victims[0] ?? null };
-  if (!victims.length) return false;
+  const victims = [...new Set(g.board.tiles[g.board.pirate].vertices.map(i => g.board.vertices[i]).filter(v => v.owner >= 0 && v.level > 0).map(v => v.owner))];
+  // Public battle snapshots contain counts, never the identities of lost resource cards.
+  const report = { id: g.revision + 1, kind: "raid", turn: g.turn, from, tile: g.board.pirate, dice: [...g.dice], power, actor: victims[0] ?? null, result: "clear" };
+  s.lastPirate = s.battle = report;
+  h.log(g, `海盗顺时针移动 ${power} 格 / Pirates move ${power} hexes clockwise`);
+  if (!victims.length) { h.log(g, "停靠处没有村庄或城市，无人遭袭 / No buildings beside the destination; no raid"); return false; }
   const actor = victims[0], strength = warships(g, actor);
-  if (strength === power) return false;
-  const count = Math.min(sum(g.players[actor].resources), h.pieceCount(g, actor, 2) + 1);
-  if (strength < power && !count || strength > power && !sum(g.bank)) return false;
+  Object.assign(report, { name: g.players[actor].name, strength, cities: h.pieceCount(g, actor, 2), result: strength > power ? "win" : strength === power ? "tie" : "loss", lost: 0 });
+  const comparison = strength > power ? ">" : strength === power ? "=" : "<";
+  h.log(g, `${report.name} 的沿岸建筑遭袭：战舰 ${strength} ${comparison} 海盗 ${power} / Coastal raid: ${strength} warships ${comparison} pirate strength ${power}`);
+  if (strength === power) { h.log(g, "战力相等，无损失也无奖励 / Equal strength: no losses or reward"); return false; }
+  const count = Math.min(sum(g.players[actor].resources), report.cities + 1);
   if (strength < power) {
     const p = g.players[actor];
     for (let i = 0; i < count; i++) {
@@ -265,9 +276,13 @@ function rollPirate(g, number, h, rng) {
       while (pick >= p.resources[r]) pick -= p.resources[r++];
       p.resources[r]--; g.bank[r]++;
     }
-    h.log(g, `${p.name} 随机损失 ${count} 张资源 / loses ${count} random resources`);
+    report.lost = count;
+    h.log(g, `${p.name} 防守失败：1 + ${report.cities} 座城市，应弃 ${report.cities + 1} 张，实际随机损失 ${count} 张资源 / Raid lost: 1 + ${report.cities} cities; ${count} resource cards randomly discarded`);
     return false;
   }
+  report.reward = sum(g.bank) ? "pending" : "empty";
+  h.log(g, report.reward === "pending" ? `${report.name} 击退海盗，待任选 1 张银行资源 / Wins the raid: choose 1 bank resource` : `${report.name} 击退海盗，但银行无资源可领 / Wins the raid, but the bank is empty`);
+  if (report.reward === "empty") return false;
   setPending(g, { actor, kind: "pirateReward", number });
   return true;
 }
@@ -282,6 +297,7 @@ function seven(g) {
 function filterLegal(g, id, out) {
   if (!g.scenario) return;
   const s = g.scenario;
+  if (is(g, "pirates")) out.scenario.warnIslandRoads = out.roads.filter(eid => pirateIslandEdge(g, g.board.edges[eid]));
   if (s.thieves === "robber" || is(g, "pirates") || is(g, "cloth") && !s.villages.some((v) => v.connected.includes(id))) out.pirate = [];
   if (s.thieves === "pirate") out.robber = [];
   out.robber = out.robber.filter((i) => is(g, "tribes") ? !s.robberLeftSmall || g.board.tiles[i].setupAllowed
@@ -292,9 +308,19 @@ function filterLegal(g, id, out) {
 function act(g, id, a, l, rng, h) {
   const s = g.scenario, p = g.players[id];
   if (!s) return false;
+  if (a.type === "removeIslandRoad") {
+    fail(l.scenario.removeIslandRoads.includes(a.edge), "只能在自己的建造阶段撤回自己的外岛道路 / Remove only your own pirate-island roads during your building phase");
+    const edge = g.board.edges[a.edge];
+    edge.owner = -1; delete edge.kind; delete edge.builtTurn;
+    h.updateAwards(g);
+    h.log(g, `${p.name} 撤回外岛道路，不返还资源或建造次数 / removes a pirate-island road without refunding resources or builds`);
+    return true;
+  }
   if (a.type === "pirateReward") {
     fail(g.phase === "scenarioChoice" && s.pending?.actor === id && s.pending.kind === a.type, "Not your scenario choice / 尚未轮到你选择");
     fail(l.scenario.pirateReward.includes(a.resource), "Choose an available resource / 请选择可用资源"); h.take(g, p, a.resource);
+    if (s.lastPirate?.actor === id) s.lastPirate.reward = "claimed";
+    if (s.battle?.kind === "raid" && s.battle.actor === id) s.battle.reward = "claimed";
     h.log(g, `${p.name} 击退海盗，领取 1 张资源 / defeats the pirates and collects 1 resource`);
     const number = s.pending.number; setPending(g, null); g.phase = "main"; h.finishRoll(g, number); return true;
   }
@@ -325,13 +351,16 @@ function act(g, id, a, l, rng, h) {
   if (a.type === "attackFortress") {
     fail(l.scenario.attackFortress, "Your fleet must reach your fortress / 舰队必须抵达自己的堡垒");
     const seat = s.pirateSeats[id], power = 1 + Math.floor(rng() * 6), strength = warships(g, id), path = orderedShips(g, id);
-    s.lastAttack = { actor: id, power, strength, result: strength > power ? "win" : strength === power ? "tie" : "loss" };
+    const report = { id: g.revision + 1, kind: "fortress", turn: g.turn, actor: id, name: p.name, power, strength, defensesBefore: seat.strength, shipsLost: 0, result: strength > power ? "win" : strength === power ? "tie" : "loss" };
+    s.lastAttack = s.battle = report;
     h.log(g, `${p.name} 攻击堡垒 / attacks fortress · ${strength} : ${power} · ${strength > power ? "胜利 / win" : strength === power ? "平手 / tie" : "失败 / loss"}`);
     if (strength > power) {
       seat.strength--;
       if (!seat.strength) { seat.liberated = true; Object.assign(g.board.vertices[seat.fortress], { owner: id, level: 1 }); }
       if (s.pirateSeats.every((x) => x.liberated)) { g.board.pirate = -1; g.board.pirateStart = null; }
-    } else for (const eid of path.slice(-(strength === power ? 1 : 2))) { const e = g.board.edges[eid]; e.owner = -1; delete e.kind; delete e.builtTurn; delete e.warship; }
+    } else for (const eid of path.slice(-(strength === power ? 1 : 2))) { const e = g.board.edges[eid]; e.owner = -1; delete e.kind; delete e.builtTurn; delete e.warship; report.shipsLost++; }
+    report.defenses = seat.strength; report.liberated = Boolean(seat.liberated);
+    h.log(g, strength > power ? `移除 1 层防御，剩余 ${seat.strength}/3${seat.liberated ? "，要塞收复" : ""} / Remove 1 defense; ${seat.strength}/3 remain${seat.liberated ? "; fortress liberated" : ""}` : `损失离要塞最近的 ${report.shipsLost} 艘船，防御仍为 ${seat.strength}/3 / Lose ${report.shipsLost} ships nearest the fortress; defenses remain ${seat.strength}/3`);
     h.updateAwards(g); h.checkWin(g); if (g.phase !== "over") h.endTurn(g); return true;
   }
   return false;

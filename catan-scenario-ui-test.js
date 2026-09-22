@@ -28,6 +28,7 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } }), errors = [];
     page.on("pageerror", e => errors.push(e.message));
     await page.addInitScript(() => {
+      localStorage.setItem("catan-music-enabled", "false");
       window.sent = [];
       window.WebSocket = class extends EventTarget {
         static OPEN = 1;
@@ -53,6 +54,27 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
       return JSON.stringify([...source.querySelectorAll("symbol")].map(canonical)) === JSON.stringify([...document.querySelectorAll("#catanScenarioSprite symbol")].map(canonical));
     }, read("catan-scenario-art.svg"));
     assert.equal(spriteMatch, true, "Inline scenario symbols exactly match source vectors");
+    const playerColors = await page.evaluate(() => window.CatanBoard.COLORS);
+    const warshipPixels = await page.evaluate(async colors => {
+      const symbol = document.getElementById("catan-scenario-art-warship");
+      const samples = [];
+      for (const color of colors) {
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 48 48"><defs>${symbol.outerHTML}</defs><use href="#${symbol.id}" style="color:${color}"/></svg>`;
+        const img = new Image(); img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`; await img.decode();
+        const canvas = document.createElement("canvas"); canvas.width = canvas.height = 192;
+        const ctx = canvas.getContext("2d"); ctx.drawImage(img, 0, 0);
+        const rgb = (x, y) => [...ctx.getImageData(x * 4, y * 4, 1, 1).data].slice(0, 3);
+        samples.push({ color, leftSail: rgb(18, 23), rightSail: rgb(30, 25), hull: rgb(20, 37), emblem: rgb(32, 18) });
+      }
+      return samples;
+    }, playerColors);
+    for (const sample of warshipPixels) {
+      const expected = sample.color.slice(1).match(/../g).map(value => parseInt(value, 16));
+      assert.deepEqual(sample.leftSail, expected, `${sample.color}: left sail uses owner's color`);
+      assert.deepEqual(sample.rightSail, expected, `${sample.color}: right sail uses owner's color`);
+      assert.deepEqual(sample.hull, expected, `${sample.color}: hull matches sails`);
+      assert.deepEqual(sample.emblem, [255, 220, 121], "Gold warship emblem stays unchanged");
+    }
     const artPage = await browser.newPage({ viewport: { width: 560, height: 320 }, deviceScaleFactor: 2 });
     try {
       const sizes = [14, 24, 48, 128];
@@ -77,6 +99,9 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
       assert.ok(pixels.visible > 700, "Cloth artwork has a readable filled silhouette");
       assert.equal(pixels.boundary, 0, "Cloth artwork is not clipped by its viewBox");
       await artPage.screenshot({ path: path.join(__dirname, "test-results/cloth-art-sizes.png") });
+      const warshipSwatches = playerColors.map(color => `<div style="color:${color}"><svg width="88" height="88" viewBox="0 0 48 48"><use href="#warship"/></svg></div>`).join("");
+      await artPage.setContent(`<style>body{margin:0}section{display:flex;align-items:center;justify-content:space-around;height:160px;background:#edf6ef}section+section{background:#196e8d}</style>${read("catan-scenario-art.svg").replace('<svg xmlns=', '<svg width="0" height="0" style="position:absolute" xmlns=')}<section>${warshipSwatches}</section><section>${warshipSwatches}</section>`);
+      await artPage.screenshot({ path: path.join(__dirname, "test-results/warship-player-colors.png") });
     } finally { await artPage.close(); }
     assert.equal(await page.locator('#catan-scenario-art-fortress path').last().getAttribute("fill"), "currentColor", "Fortress flags inherit their owner's color");
     const emit = data => page.evaluate(data => window.testSocket.emit(data), data);
@@ -87,12 +112,20 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
       await emit({ type: "left" });
       await page.locator('[data-edition="seafarers"]').click();
       await page.locator("#mapChoice").selectOption(map);
+      if (map === "pirates") assert.match(await page.locator("#mapSummary").textContent(), /10 分 \+ 解放要塞 \/ 10 VP \+ Liberate your fortress/);
       assert.match(await page.locator(`#mapChoice option[value="${map}"]`).textContent(), /3–4/);
       assert.equal(await page.locator("#playerCountChoice").isVisible(), true);
       await page.locator(`[data-seats="${n}"]`).click();
       await page.locator("#name").fill("Alice");
       if (map === "new-world") await page.locator('[data-thieves="pirate"]').click();
-      if (map === "pirates") assert.match(await page.locator('[data-layout="random"]').textContent(), /Random harbors/);
+      if (map === "pirates") {
+        assert.match(await page.locator('[data-layout="random"]').textContent(), /Random harbors/);
+        for (const type of ["outpost", "fortress"]) {
+          await page.locator(`#previewBoard [data-scenario-info="${type}"][data-owner="0"]`).click();
+          assert.match(await page.locator("#scenarioInfoTitle").textContent(), /红色.*1 号位.*Red.*Seat 1/);
+          await page.locator("#scenarioInfoDialog > [data-close]").click();
+        }
+      }
       await page.locator("#create").click();
       assert.equal((await last()).mapId, map); assert.equal((await last()).seats, n);
       if (map === "new-world") assert.equal((await last()).thieves, "pirate");
@@ -107,7 +140,7 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
       setup(g); await show(g);
       assert.equal(await page.locator("#game").getAttribute("data-phase"), "main");
       const routeCells = page.locator("#players .longest-count");
-      if (map === "cloth") {
+      if (Maps.get(map)?.scenario?.longestRoute === false) {
         assert.deepEqual(await routeCells.locator("b").allTextContents(), Array(n).fill("不可用"));
         assert.deepEqual(await routeCells.locator("small").allTextContents(), Array(n).fill("Not available"));
         assert.equal(await page.locator("#players .route-holder").count(), 0);
@@ -119,8 +152,40 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
       assert.deepEqual(await page.locator("#players .road-count > span:first-child b").allTextContents(), E.publicGame(g, 0).players.map(p => String(p.roads)));
       assert.deepEqual(await page.locator("#players .ship-count b").allTextContents(), E.publicGame(g, 0).players.map(p => String(p.ships)));
       assert.equal(await page.locator('#actions [data-action="road"]').count(), 1);
+      if (map === "pirates") {
+        g.scenario.pirateSeats.forEach(seat => { g.board.edges[seat.ship].warship = true; }); await show(g);
+        const colors = await page.locator('#board .built-warship use').evaluateAll(nodes => nodes.map(node => node.style.color));
+        const expectedColors = await page.evaluate(owners => owners.map(owner => { const node = document.createElement("span"); node.style.color = window.CatanBoard.COLORS[owner]; return node.style.color; }), g.board.edges.filter(edge => edge.warship).map(edge => edge.owner));
+        assert.deepEqual(colors, expectedColors, "Each on-board warship passes its owner's color to the artwork");
+        g.scenario.pirateSeats.forEach(seat => { delete g.board.edges[seat.ship].warship; }); await show(g);
+        await page.locator("#gameBaseRules").click();
+        const inventory = await page.locator("#rulesDevelopment").textContent();
+        assert.match(inventory, new RegExp(`战舰 × ${n === 3 ? 14 : 19}`));
+        assert.doesNotMatch(inventory, /胜利点|hidden victory point/);
+        assert.match(await page.locator("#rulesVictoryCard").textContent(), /没有直接加分的发展卡.*3 players.*4 players/s);
+        assert.match(await page.locator("#rulesVictoryCard").textContent(), /四人局保留这 5 张，但都当战舰卡使用，不加分/);
+        assert.match(await page.locator("#rulesScenarioNote").textContent(), /要塞收复前不能升级城市.*2 麦子 \+ 3 矿石.*4 座城市.*cannot be upgraded before liberation.*2 grain \+ 3 ore/s);
+        await page.locator("#helpAcknowledge").click();
+      }
       if (n === 3) fixtures[map] = structuredClone(g);
     }
+    // Base and the earlier sailing maps keep their numeric route lengths.
+    for (const map of [{ id: "base", players: 3 }, ...Maps.maps.filter(map => !fixtures[map.id])]) {
+      const g = setup(create(map.id, map.players));
+      await show(g);
+      assert.deepEqual(await page.locator("#players .longest-count b").allTextContents(), g.roadLengths.map(String), `${map.id} keeps numeric route lengths`);
+      assert.equal(await page.locator("#players .route-unavailable").count(), 0);
+    }
+    // Future maps use the same metadata flag, without adding another map-name exception.
+    await page.evaluate(() => { window.CatanMaps.get("wonders").scenario.longestRoute = false; });
+    try {
+      await show(fixtures.wonders);
+      assert.deepEqual(await page.locator("#players .longest-count b").allTextContents(), Array(3).fill("不可用"));
+      assert.deepEqual(await page.locator("#players .longest-count small").allTextContents(), Array(3).fill("Not available"));
+      assert.equal(await page.locator("#players .route-holder").count(), 0);
+    } finally { await page.evaluate(() => { delete window.CatanMaps.get("wonders").scenario.longestRoute; }); }
+    await show(fixtures.wonders);
+    assert.deepEqual(await page.locator("#players .longest-count b").allTextContents(), fixtures.wonders.roadLengths.map(String));
     // Special victory conditions are complete sentences, not an overflowing score suffix.
     for (const map of ["wonders", "pirates", "cloth", "tribes"]) {
       await show(fixtures[map]);
@@ -135,6 +200,7 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
       if (map === "pirates") assert.match(await page.locator("#scenarioVictoryConditions").textContent(), /必须同时满足.*至少 10 分，并收复自己的海盗要塞/s);
       if (map === "cloth") {
         assert.deepEqual(await page.locator("#scenarioVictoryConditions strong").allTextContents(), ["自己的回合达 14 分", "或有布村落仅剩 3 个：分高者胜，同分比布匹"]);
+        assert.equal(await page.locator("#scenarioVictoryConditions small").first().textContent(), "Reach 14 VP on your turn");
         assert.match(await page.locator("#scenarioVictoryConditions").textContent(), /only 3 villages have cloth: most VP wins; ties go to most cloth/);
       }
       for (const width of [320, 390, 740, 741, 980, 1440]) {
@@ -151,7 +217,7 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
           assert.ok(blocks.every((b, i) => !i || b.top >= blocks[i - 1].bottom), "Each condition has its own non-overlapping row");
           await page.locator(".board-toolbar").screenshot({ path: path.join(__dirname, "test-results", `${map === "wonders" ? "wonder" : map}-victory-conditions-${width}.png`) });
         }
-        if (map === "cloth") {
+        if (Maps.get(map)?.scenario?.longestRoute === false) {
           const fits = await page.locator("#players .route-unavailable").evaluateAll(cells => cells.every(cell => {
             const box = cell.getBoundingClientRect();
             return cell.scrollWidth <= cell.clientWidth + 1 && [...cell.children].every(child => {
@@ -159,8 +225,8 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
               return r.left >= box.left && r.right <= box.right + 1 && r.top >= box.top && r.bottom <= box.bottom + 1 && child.scrollWidth <= child.clientWidth + 1;
             });
           }));
-          assert.equal(fits, true, `Cloth unavailable labels fit each player cell at ${width}px`);
-          await page.locator(".player-overview").screenshot({ path: path.join(__dirname, "test-results", `cloth-player-routes-${width}.png`) });
+          assert.equal(fits, true, `${map} unavailable labels fit each player cell at ${width}px`);
+          await page.locator(".player-overview").screenshot({ path: path.join(__dirname, "test-results", `${map}-player-routes-${width}.png`) });
         }
       }
     }
@@ -224,6 +290,168 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
       await page.setViewportSize({ width, height: 1000 });
       await page.locator("#board").screenshot({ path: path.join(__dirname, "test-results", `cloth-desert-board-${width}.png`) });
     }
+    // Pirate landmarks explain ownership and rules without issuing gameplay actions.
+    for (const n of [3, 4]) {
+      const g = setup(create("pirates", n));
+      g.scenario.pirateSeats[0].strength = 1;
+      g.scenario.pirateSeats[1].strength = 2;
+      await show(g);
+      const before = await page.evaluate(() => window.sent.length);
+      assert.equal(await page.locator('#board [data-scenario-info="outpost"]').count(), n);
+      assert.equal(await page.locator('#board [data-scenario-info="fortress"]').count(), n);
+      for (const type of ["outpost", "fortress"]) for (let owner = 0; owner < n; owner++) {
+        const marker = page.locator(`#board [data-scenario-info="${type}"][data-owner="${owner}"]`);
+        assert.equal(await marker.getAttribute("role"), "button");
+        await marker.focus(); await page.keyboard.press(owner % 2 ? "Space" : "Enter");
+        assert.match(await page.locator("#scenarioInfoTitle").textContent(), new RegExp(`${owner + 1} 号位.*Seat ${owner + 1}`));
+        const content = await page.locator("#scenarioInfoContent").textContent();
+        if (type === "fortress") {
+          assert.ok(content.includes(`当前为 ${g.scenario.pirateSeats[owner].strength}/3`));
+          assert.match(content, /战舰数大于骰点.*相等.*小于.*进攻后立即结束回合/s);
+          assert.match(content, /自己的回合达到 10 分/);
+        } else {
+          assert.match(content, /初始村庄不能放在这里/);
+          assert.match(content, /通常费用建村、升级城市/);
+          assert.match(content, /全程不能分叉/);
+        }
+        const symbolColor = await page.locator("#scenarioInfoContent .scenario-info-symbol").evaluate(el => el.style.color);
+        assert.equal(await page.locator("#scenarioInfoContent .scenario-info-symbol svg").evaluate(el => getComputedStyle(el).color), symbolColor, "The explanation artwork uses the player's color");
+        assert.equal(symbolColor, await marker.evaluate(el => {
+          const node = document.createElement("span"); node.style.color = window.CatanBoard.COLORS[Number(el.dataset.owner)]; return node.style.color;
+        }));
+        await page.keyboard.press("Escape");
+      }
+      // Removing an earlier fortress must not change the remaining seat labels.
+      Object.assign(g.scenario.pirateSeats[0], { liberated: true, strength: 0 });
+      Object.assign(g.board.vertices[g.scenario.pirateSeats[0].fortress], { owner: 0, level: 1 });
+      await show(g);
+      assert.equal(await page.locator('#board .pirate-fortress[data-owner="0"]').count(), 0);
+      for (const child of ["use", "text"]) {
+        await page.locator(`#board .pirate-fortress[data-owner="1"] ${child}`).click();
+        assert.match(await page.locator("#scenarioInfoTitle").textContent(), /蓝色.*2 号位.*Blue.*Seat 2/);
+        assert.match(await page.locator("#scenarioInfoContent").textContent(), /当前为 2\/3/);
+        await page.locator("#scenarioInfoDialog > [data-close]").click();
+      }
+      await page.locator("#gameMapRules").click();
+      const pirateRules = await page.locator("#sailingContent > p").allTextContents();
+      for (const expected of [
+        /要塞的三层防御：.*每打赢一次进攻.*3 → 2 → 1 → 0.*Each successful attack removes one defense/s,
+        /战舰有什么用：.*每艘战舰算 1 点战力，普通船不算.*Each warship adds 1 strength; normal ships add none/s,
+        /每次掷骰，先移动海盗：.*3 和 5.*走 3 格.*lower of the two dice/s,
+        /海盗袭击谁：.*最后停下.*村庄或城市.*只有船、没有建筑，不会触发袭击.*Ships alone do not trigger a raid/s,
+        /战舰怎么来：.*1 羊毛 \+ 1 麦子 \+ 1 矿石.*随机发展卡.*下一个自己的回合.*Buy a random development card/s,
+        /怎样挡住海盗：.*4 艘战舰.*3 格，你赢.*4 格，平手.*5 格，你输.*Higher wins, equal ties, lower loses/s,
+        /袭击结果：.*银行任选 1 张.*平手.*随机交回 1 张.*每有 1 座城市再多交 1 张.*no fortress defenses/s,
+        /掷到 7：.*先移动海盗并处理袭击.*超过 7 张.*向下取整.*随机偷 1 张.*海盗不再移动.*Do not move the pirates again/s,
+        /怎样减少要塞防御：.*另掷 1 颗骰子.*4 艘战舰，掷出 3.*要塞数字减 1.*Roll one new die/s,
+        /攻打要塞的结果：.*平手或输了都不减少防御.*进攻后立刻结束回合.*Rebuild a broken route/s,
+        /胜利点卡：.*三人局移除全部 5 张.*四人局保留这 5 张，但都当战舰卡使用，不加分.*Neither game has scoring development cards/s,
+        /收复与升级：.*收复前不能升级城市.*2 麦子 \+ 3 矿石.*It cannot be upgraded before liberation.*2 grain \+ 3 ore/s,
+      ]) assert.ok(pirateRules.some(p => expected.test(p)), `Pirate map rules explain ${expected}`);
+      await page.locator('#sailingContent .pirate-outpost[data-owner="1"]').click();
+      assert.match(await page.locator("#scenarioInfoTitle").textContent(), /蓝色补给点/);
+      await page.locator("#scenarioInfoDialog > [data-close]").click();
+      assert.equal(await page.locator("#sailingDialog").isVisible(), true);
+      await page.locator('#sailingContent .pirate-fortress[data-owner="1"]').click();
+      assert.match(await page.locator("#scenarioInfoContent").textContent(), /当前为 2\/3/);
+      await page.locator("#scenarioInfoDialog > [data-close]").click();
+      await page.locator("#sailingAcknowledge").click();
+      assert.equal(await page.evaluate(() => window.sent.length), before, "Landmark help and map previews are read-only");
+    }
+    await show(fixtures.pirates);
+    for (const [width, height] of [[320, 740], [390, 844], [740, 320], [1440, 1000]]) {
+      await page.setViewportSize({ width, height });
+      for (const type of ["outpost", "fortress", "pirate-fleet"]) {
+        const marker = page.locator(`#board [data-scenario-info="${type}"]${type === "pirate-fleet" ? "" : '[data-owner="0"]'}`);
+        await marker.focus(); await page.keyboard.press("Enter");
+        if (type === "pirate-fleet") {
+          assert.match(await page.locator("#scenarioInfoContent").textContent(), /停下的海洋格旁的村庄或城市.*更多.*相等.*更少.*总点数为 7.*获得战舰.*道路不算/s);
+        }
+        const box = await page.locator("#scenarioInfoDialog").boundingBox(), close = await page.locator("#scenarioInfoDialog > [data-close]").boundingBox();
+        assert.ok(box.x >= 0 && box.x + box.width <= width + 1 && box.y >= 0 && box.y + box.height <= height + 1, `${type} dialog fits ${width}x${height}`);
+        assert.ok(close.y >= 0 && close.y + close.height <= height, "Close remains visible");
+        assert.equal(await page.locator("#scenarioInfoContent").evaluate(el => el.scrollWidth <= el.clientWidth + 1), true);
+        await page.screenshot({ path: path.join(__dirname, "test-results", `pirate-${type}-help-${width}.png`) });
+        await page.locator("#scenarioInfoContent").evaluate(el => { el.scrollTop = el.scrollHeight; });
+        assert.equal(await page.locator("#scenarioInfoContent").evaluate(el => Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) < 2), true);
+        await page.locator("#scenarioInfoDialog > [data-close]").click();
+      }
+      await page.locator("#gameMapRules").click();
+      const rulesBox = await page.locator("#sailingDialog").boundingBox(), rulesClose = await page.locator("#sailingAcknowledge").boundingBox();
+      assert.ok(rulesBox.x >= 0 && rulesBox.x + rulesBox.width <= width + 1 && rulesBox.y >= 0 && rulesBox.y + rulesBox.height <= height + 1, `Pirate rules fit ${width}x${height}`);
+      assert.ok(rulesClose.y >= 0 && rulesClose.y + rulesClose.height <= height, "Rules close button stays visible");
+      assert.equal(await page.locator("#sailingContent").evaluate(el => el.scrollWidth <= el.clientWidth + 1 && [...el.querySelectorAll("p, small")].every(p => p.scrollWidth <= p.clientWidth + 1)), true, "Bilingual pirate rules wrap within the dialog");
+      await page.locator("#sailingContent > p").filter({ hasText: "怎样挡住海盗：" }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: path.join(__dirname, "test-results", `pirate-rules-raid-${width}.png`) });
+      await page.locator("#sailingContent").evaluate(el => { el.scrollTop = el.scrollHeight; });
+      assert.equal(await page.locator("#sailingContent").evaluate(el => Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) < 2), true, "The full rules remain reachable");
+      await page.locator("#sailingAcknowledge").click();
+    }
+    // A mistaken island road is a reversible placement, never a refundable purchase.
+    const roadGame = structuredClone(fixtures.pirates), landing = roadGame.scenario.pirateSeats[0].landing;
+    Object.assign(roadGame.board.vertices[landing], { owner: 0, level: 1 });
+    roadGame.players[0].resources = [5, 5, 5, 0, 0];
+    const islandEdge = E.legal(roadGame, 0).scenario.warnIslandRoads[0];
+    assert.ok(Number.isInteger(islandEdge));
+    await show(roadGame);
+    for (const [width, height] of [[320, 740], [390, 844], [740, 320], [1440, 1000]]) {
+      await page.setViewportSize({ width, height });
+      await page.locator('#actions [data-action="road"]').click();
+      const count = await page.evaluate(() => window.sent.length);
+      await page.locator(`#board [data-edge="${islandEdge}"]`).click();
+      assert.equal(await page.locator("#islandRoadDialog").isVisible(), true);
+      assert.match(await page.locator("#islandRoadDescription").textContent(), /只有船只通往要塞才能进攻，在此建造道路没有任何收益.*Only a continuous line of ships/s);
+      assert.equal(await page.evaluate(() => window.sent.length), count);
+      const box = await page.locator("#islandRoadDialog").boundingBox(), button = await page.locator("#confirmIslandRoad").boundingBox();
+      assert.ok(box.x >= 0 && box.x + box.width <= width + 1 && box.y >= 0 && box.y + box.height <= height + 1);
+      assert.ok(button.y >= 0 && button.y + button.height <= height + 1, "Confirmation stays visible");
+      assert.equal(await page.locator("#islandRoadDescription").evaluate(el => el.scrollWidth <= el.clientWidth + 1), true);
+      await page.screenshot({ path: path.join(__dirname, "test-results", `pirate-road-warning-${width}.png`) });
+      await page.keyboard.press("Escape");
+      assert.equal(await page.evaluate(() => window.sent.length), count, "Cancel never builds a road");
+    }
+    await page.locator(`#board [data-edge="${islandEdge}"]`).click();
+    await page.locator("#confirmIslandRoad").click();
+    assert.deepEqual((await last()).action, { type: "road", edge: islandEdge });
+    E.act(roadGame, 0, (await last()).action); await show(roadGame);
+    const beforeRemoval = [...roadGame.players[0].resources];
+    const removeRoad = page.locator(`#board [data-remove-road="${islandEdge}"]`);
+    await removeRoad.focus(); await page.keyboard.press("Space");
+    assert.match(await page.locator("#islandRoadDescription").textContent(), /不退任何资源、发展卡或免费建造次数.*No resources/s);
+    const removalCount = await page.evaluate(() => window.sent.length);
+    await page.locator('#islandRoadDialog .secondary').click();
+    assert.equal(await page.evaluate(() => window.sent.length), removalCount);
+    for (const invalidation of ["revision", "pause", "replacement", "disconnect"]) {
+      await show(roadGame); await removeRoad.click();
+      if (invalidation === "revision") { roadGame.revision++; await show(roadGame); }
+      if (invalidation === "pause") await show(roadGame, 0, { control: { code: "Tpirates", you: "test-person-0", host: "test-person-0", seats: [], paused: true, now: Date.now() } });
+      if (invalidation === "replacement") { const data = room(roadGame); data.seats[0].socialId = "replacement"; await emit(data); }
+      if (invalidation === "disconnect") await page.evaluate(() => { window.testSocket.readyState = 3; window.testSocket.dispatchEvent(new CloseEvent("close", { code: 4001 })); });
+      assert.equal(await page.locator("#islandRoadDialog").isVisible(), false, `${invalidation} invalidates confirmation`);
+      if (invalidation === "disconnect") await page.evaluate(() => { window.testSocket.readyState = 1; window.testSocket.dispatchEvent(new Event("open")); });
+    }
+    await show(roadGame, 1);
+    assert.equal(await page.locator("#board [data-remove-road]").count(), 0, "Opponents cannot remove this road");
+    await show(roadGame); await removeRoad.click();
+    await page.screenshot({ path: path.join(__dirname, "test-results/pirate-road-removal-desktop.png") });
+    await page.locator("#confirmIslandRoad").click();
+    assert.deepEqual((await last()).action, { type: "removeIslandRoad", edge: islandEdge });
+    E.act(roadGame, 0, (await last()).action); await show(roadGame);
+    assert.deepEqual(roadGame.players[0].resources, beforeRemoval);
+    assert.equal(await page.locator("#board [data-remove-road]").count(), 0);
+    const outpostGame = structuredClone(fixtures.pirates), outpost = outpostGame.scenario.pirateSeats[0].landing;
+    Object.assign(outpostGame.board.edges[outpostGame.board.vertices[outpost].edges[0]], { owner: 0, kind: "ship", builtTurn: 0 });
+    outpostGame.players[0].resources = [1, 1, 1, 1, 0];
+    assert.ok(E.legal(outpostGame, 0).settlements.includes(outpost));
+    await show(outpostGame);
+    await page.locator('#board .pirate-outpost[data-owner="0"]').click();
+    await page.locator("#scenarioInfoDialog > [data-close]").click();
+    await page.locator('#actions [data-action="settlement"]').click();
+    await page.locator(`#board [data-vertex="${outpost}"]`).click();
+    assert.deepEqual((await last()).action, { type: "settlement", vertex: outpost }, "Building at an outpost still places a settlement");
+    assert.equal(await page.locator("#scenarioInfoDialog").isVisible(), false);
+    E.act(outpostGame, 0, (await last()).action); await show(outpostGame);
+    assert.equal(await page.locator('#board .pirate-outpost[data-owner="0"]').count(), 0, "The settled outpost becomes a house");
     // Gift inspection remains available and never plays a turn.
     await show(fixtures.tribes);
     assert.equal(await page.locator("#board .foreign-island text").count(), 0, "No labels on foreign island tiles");
@@ -469,6 +697,64 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
     await page.locator('[data-scenario-action="attackFortress"]').click();
     assert.deepEqual((await last()).action, { type: "attackFortress" });
     E.act(attack, 0, (await last()).action, () => .99); assert.notEqual(attack.current, 0);
+    await show(attack);
+    assert.match(await page.locator("#pirateBattle").textContent(), /另掷一颗骰子：6/);
+    assert.match(await page.locator("#pirateBattle").textContent(), /战舰 1 < 要塞骰点 6/);
+    assert.match(await page.locator("#pirateBattle").textContent(), /损失最近的 1 艘船，防御仍为 3\/3/);
+    assert.match(await page.locator("#pirateBattle").textContent(), /本回合结束/);
+    // Raid feedback is based on the server's pre-loss snapshot, with no reconnect replay.
+    const raid = structuredClone(fixtures.pirates), patrol = raid.scenario.piratePath;
+    raid.board.vertices.forEach(v => Object.assign(v, { owner: -1, level: 0 }));
+    raid.board.edges.forEach(e => { e.owner = -1; delete e.kind; delete e.warship; });
+    raid.phase = "roll"; raid.current = 0; raid.board.pirate = patrol[0];
+    const stop = raid.board.tiles[patrol[3]];
+    Object.assign(raid.board.vertices[stop.vertices[0]], { owner: 0, level: 1 });
+    Object.assign(raid.board.vertices.find(v => !stop.vertices.includes(v.id)), { owner: 0, level: 2 });
+    raid.board.edges.slice(0, 2).forEach(e => Object.assign(e, { owner: 0, kind: "ship", warship: true }));
+    raid.players.forEach((p, i) => { p.resources = i ? [1, 0, 0, 0, 0] : [4, 4, 0, 0, 0]; });
+    raid.bank = [13, 15, 19, 19, 19];
+    await show(raid);
+    const raidDice = [.4, .6]; E.act(raid, 0, { type: "roll" }, () => raidDice.shift() ?? 0);
+    await show(raid);
+    const battle = page.locator("#pirateBattle");
+    assert.equal(await battle.isVisible(), true); assert.equal(await battle.locator("li").count(), 3);
+    assert.match(await battle.textContent(), /骰子 3 \+ 4，取较小的 3：顺时针走 3 格/);
+    assert.match(await battle.textContent(), /Alice 的沿岸建筑遭袭：战舰 2 < 海盗 3/);
+    assert.match(await battle.textContent(), /随机失去 2 张资源（1 \+ 1 座城市）/);
+    assert.match(await battle.textContent(), /随后结算 7.*海盗不再移动/s);
+    assert.match(await page.locator("#notice").textContent(), /战舰 2 < 海盗 3.*随机失去 2 张/);
+    await page.evaluate(() => { window.battleNode = document.querySelector("#pirateBattle ol"); document.querySelector("#notice").hidden = true; });
+    await show(raid, 0, { chat: [{ name: "Bob", text: "hi" }] });
+    assert.equal(await page.evaluate(() => window.battleNode === document.querySelector("#pirateBattle ol")), true, "Chat cannot restart battle feedback");
+    assert.equal(await page.locator("#notice").isVisible(), false);
+    await emit({ type: "welcome", token: "test-token" }); await show(raid);
+    assert.equal(await battle.evaluate(n => n.classList.contains("battle-arrival")), false, "Reconnecting shows the report without replaying it");
+    assert.equal(await page.locator("#notice").isVisible(), false);
+    await battle.locator("summary").click(); await show(raid);
+    assert.equal(await battle.evaluate(n => n.open), false, "Repeated state preserves a collapsed report");
+    raid.scenario.battle.id++; await show(raid);
+    assert.equal(await battle.evaluate(n => n.open), true, "A new raid reopens feedback even when its outcome is identical");
+    assert.equal(await page.locator("#notice").isVisible(), true);
+    await page.evaluate(() => { document.querySelector("#notice").hidden = true; });
+    for (const width of [320, 390, 740, 1440]) {
+      await page.setViewportSize({ width, height: 1000 }); await battle.scrollIntoViewIfNeeded();
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `Raid fits ${width}`);
+      assert.equal(await battle.locator("li").evaluateAll(nodes => nodes.every(n => n.scrollWidth <= n.clientWidth + 1)), true, `Battle steps fit ${width}`);
+      await battle.screenshot({ path: path.join(__dirname, `test-results/pirate-raid-${width}.png`), animations: "disabled" });
+    }
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    assert.equal(await battle.locator("li").first().evaluate(n => getComputedStyle(n).animationName), "none");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    for (const result of ["tie", "win", "clear", "loss"]) {
+      const variant = structuredClone(raid);
+      Object.assign(variant.scenario.battle, { id: raid.scenario.battle.id + 1, result, strength: result === "win" ? 4 : result === "tie" ? 3 : 0, actor: result === "clear" ? null : 0, reward: "pending", lost: 0 });
+      await show(variant);
+      const text = await battle.textContent();
+      assert.match(text, { tie: /战力相等：不损失，也不领奖励/, win: /击退海盗：请选择 1 张银行资源/, clear: /没有村庄或城市，无人遭袭/, loss: /失去 0 张资源.*手牌不足/s }[result]);
+    }
+    await show(raid, 1); await page.evaluate(() => { document.querySelector("#notice").hidden = true; });
+    raid.scenario.battle.id += 2; await show(raid, 1);
+    assert.equal(await page.locator("#notice").isVisible(), false, "An observer sees the report without a personal loss alert");
     const warship = structuredClone(fixtures.pirates);
     warship.players[0].development = [{ type: "knight", turn: 0 }, { type: "knight", turn: 0 }, { type: "plenty", turn: 0 }];
     const starter = warship.board.edges[warship.scenario.pirateSeats[0].ship];
@@ -476,6 +762,22 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
     const nextShip = warship.board.edges.find(e => e.owner < 0 && (e.a === openEnd || e.b === openEnd) && e.tiles.some(i => warship.board.tiles[i].resource === -2));
     assert.ok(nextShip); Object.assign(nextShip, { owner: 0, kind: "ship", builtTurn: 0 });
     await show(warship);
+    assert.equal(await battle.isVisible(), false, "A fresh game has no stale battle report");
+    assert.match(await page.locator(".warship-guide").textContent(), /1 羊毛 \+ 1 麦子 \+ 1 矿石/);
+    assert.match(await page.locator(".warship-guide").textContent(), /每艘战舰 = 1 战力/);
+    for (const width of [320, 390, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const guide = page.locator(".warship-guide");
+      assert.equal(await guide.evaluate(n => n.scrollWidth <= n.clientWidth + 1), true, `Warship guide fits ${width}`);
+      await guide.screenshot({ path: path.join(__dirname, `test-results/warship-guide-${width}.png`) });
+    }
+    const sentBeforeHelp = await page.evaluate(() => window.sent.length);
+    await page.locator('[data-scenario-info="warship"]').click();
+    assert.match(await page.locator("#scenarioInfoContent").textContent(), /随机抽到骑士.*并不是每次购买/s);
+    assert.match(await page.locator("#scenarioInfoContent").textContent(), /下一个自己的回合.*最靠近主岛.*没有普通船/s);
+    assert.equal(await page.evaluate(() => window.sent.length), sentBeforeHelp, "Warship help does not send a game action");
+    await page.locator('#scenarioInfoDialog [data-close]').first().click();
+    await page.setViewportSize({ width: 390, height: 844 });
     assert.match(await page.locator('[data-dev="knight"]').first().textContent(), /战舰.*Warship/);
     await page.locator('[data-dev="knight"]').first().click();
     assert.deepEqual((await last()).action, { type: "playDevelopment", card: "knight" });

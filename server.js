@@ -1401,6 +1401,7 @@ const mimeTypes = {
   ".json": "application/json; charset=utf-8",
   ".png": "image/png",
   ".svg": "image/svg+xml",
+  ".mp3": "audio/mpeg",
 };
 
 const server = http.createServer((request, response) => {
@@ -1460,6 +1461,31 @@ const server = http.createServer((request, response) => {
     response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
     response.end("Not found");
     return;
+  }
+  if (path.extname(filePath) === ".mp3") {
+    const size = fs.statSync(filePath).size;
+    const headers = { "Content-Type": mimeTypes[".mp3"], "Cache-Control": "public, max-age=86400", "Accept-Ranges": "bytes" };
+    let start = 0, end = size - 1;
+    const range = request.headers.range;
+    if (range) {
+      const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+      if (match && (match[1] || match[2])) {
+        start = match[1] ? Number(match[1]) : Math.max(0, size - Number(match[2]));
+        end = match[1] && match[2] ? Math.min(size - 1, Number(match[2])) : size - 1;
+      }
+      if (!match || (!match[1] && !match[2]) || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= size) {
+        response.writeHead(416, { ...headers, "Content-Range": `bytes */${size}`, "Content-Length": 0 });
+        response.end(); return;
+      }
+      headers["Content-Range"] = `bytes ${start}-${end}/${size}`;
+    }
+    headers["Content-Length"] = end - start + 1;
+    response.writeHead(range ? 206 : 200, headers);
+    if (request.method === "HEAD") { response.end(); return; }
+    const stream = fs.createReadStream(filePath, { start, end });
+    stream.on("error", () => response.destroy());
+    response.on("close", () => stream.destroy());
+    stream.pipe(response); return;
   }
   response.writeHead(200, {
     "Content-Type": mimeTypes[path.extname(filePath)] || "application/octet-stream",

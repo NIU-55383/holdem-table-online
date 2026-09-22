@@ -4,7 +4,7 @@
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.CatanAudio = api;
 })(typeof window === "object" ? window : globalThis, function () {
-  const durations = { click: .07, road: .4, settlement: .65, city: .95, ship: 1.05, robber: .6, pirate: .9, monopoly: .85, plenty: .85, roads: .7, knight: .55, victory: 1.85, trade: .65, gold: .85, exchange: .45, dice: .55, cancel: .18 };
+  const durations = { click: .07, road: .4, settlement: .65, city: .95, ship: 1.05, robber: .6, pirate: .9, monopoly: .85, plenty: .85, roads: .7, knight: .55, victory: 1.85, offer: .4, trade: .65, gold: .85, exchange: .45, dice: .55, cancel: .18 };
   const banks = new WeakMap();
   function noiseBuffer(ctx) {
     if (!banks.has(ctx)) {
@@ -69,6 +69,7 @@
       case "victory":
         [523,659,784,1047].forEach((f,i) => bell(i*.18,f,.4,.19));
         [523,659,784,1047].forEach(f => tone(.9,.85,f,.07,"triangle")); break;
+      case "offer": noise(0,.16,900,.12,2600); bell(.05,659,.18,.14); bell(.15,988,.2,.14); break;
       case "trade": bell(0,880,.24,.23); bell(.18,1175,.34,.23); bell(.38,1568,.24,.13); break;
       case "gold": [1318,1760,2093].forEach((f,i) => bell(i*.19,f,.43,.19)); tone(.38,.4,659,.08); break;
       case "exchange": bell(0,1397,.25,.13); bell(.13,1865,.27,.12); break;
@@ -78,9 +79,10 @@
     return { duration: durations[kind], stop() { for (const node of nodes) { try { node.stop?.(); node.disconnect(); } catch {} } nodes.clear(); } };
   }
   function create() {
-    let ctx, compressor, volume, muted = false, unlocked = false, lastClick = -Infinity;
+    let ctx, compressor, volume, level = .6, muted = false, unlocked = false, lastClick = -Infinity;
     const playing = new Set();
     try { muted = localStorage.getItem("catan-muted") === "true"; } catch {}
+    try { const saved = localStorage.getItem("catan-sfx-volume"); if (saved !== null && saved !== undefined && saved !== "" && Number.isFinite(Number(saved))) level = Math.max(0, Math.min(1, Number(saved))); } catch {}
     function stop() { for (const voice of playing) { clearTimeout(voice.timer); voice.stop(); } playing.clear(); }
     function unlock() {
       unlocked = true;
@@ -90,14 +92,14 @@
           const Audio = globalThis.AudioContext || globalThis.webkitAudioContext;
           if (!Audio) return;
           ctx = new Audio(); compressor = ctx.createDynamicsCompressor(); volume = ctx.createGain();
-          compressor.threshold.value = -14; compressor.ratio.value = 8; volume.gain.value = .6;
+          compressor.threshold.value = -14; compressor.ratio.value = 8; volume.gain.value = level;
           compressor.connect(volume); volume.connect(ctx.destination);
         }
         if (ctx.state !== "running") ctx.resume().catch(() => {});
       } catch {}
     }
     function play(kind) {
-      if (muted || !unlocked || !ctx || ctx.state !== "running" || globalThis.document?.hidden || !durations[kind]) return false;
+      if (muted || level === 0 || !unlocked || !ctx || ctx.state !== "running" || globalThis.document?.hidden || !durations[kind]) return false;
       if (kind === "click") { if (ctx.currentTime - lastClick < .07) return false; lastClick = ctx.currentTime; }
       if (kind === "victory") stop();
       if (playing.size >= 4) { const oldest = playing.values().next().value; clearTimeout(oldest.timer); oldest.stop(); playing.delete(oldest); }
@@ -112,7 +114,14 @@
       try { localStorage.setItem("catan-muted", String(muted)); } catch {}
       if (!muted) unlock();
     }
-    return { play, unlock, stop, setMuted, get muted() { return muted; } };
+    function setVolume(value) {
+      if (!Number.isFinite(value)) return;
+      level = Math.max(0, Math.min(1, value));
+      if (volume) volume.gain.value = level;
+      if (!level) stop();
+      try { localStorage.setItem("catan-sfx-volume", String(level)); } catch {}
+    }
+    return { play, unlock, stop, setMuted, setVolume, get volume() { return level; }, get muted() { return muted; } };
   }
   function incoming(room) {
     const game = room?.game, trade = game?.trade, you = room?.you;
@@ -127,7 +136,10 @@
         previous = g ? { code: room.code, you: room.you, revision: g.revision, phase: g.phase, effect: g.effect?.id, trade: g.trade?.id, gold: goldKey(room) } : null;
         if (!before || !g || before.code !== room.code || before.you !== room.you || g.revision < before.revision || (before.phase === "over" && g.phase !== "over")) return;
         if (g.effect?.id > before.revision && g.effect.id <= g.revision && g.effect.id !== before.effect) play(g.effect.sound);
-        if (incoming(room) && g.trade.id !== before.trade) play("trade");
+        if (g.trade && g.trade.id !== before.trade) {
+          if (incoming(room)) play("trade");
+          else if (g.phase === "main" && !room.control?.paused && g.players[room.you] && g.trade.from === room.you && g.current === room.you) play("offer");
+        }
         if (goldChoice(room) && previous.gold !== before.gold) play("gold");
       }
     };

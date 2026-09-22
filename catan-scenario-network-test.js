@@ -75,6 +75,28 @@ test("advanced rooms preserve player count, scenario state, hidden cards and New
       const restored = await client(host.token), state = await restored.next((m) => m.game);
       assert.deepEqual(state.game.scenario, placed.game.scenario);
       assert.equal(state.control.idleAuto, true);
+      if (map.family === "pirates") {
+        const g = room.game, landing = g.scenario.pirateSeats[0].landing;
+        g.current = 0; g.phase = "main"; g.turn = 1;
+        const edge = g.board.vertices[landing].edges.map(i => g.board.edges[i]).find(e => e.owner < 0 && e.tiles.some(i => g.board.tiles[i].resource >= -1) && e.tiles.every(i => !g.board.tiles[i].setupAllowed));
+        assert.ok(edge); Object.assign(edge, { owner: 0, kind: "road", builtTurn: 1 });
+        const resources = [...g.players[0].resources], bank = [...g.bank];
+        const before = await restored.request({ type: "chat", text: "Road removal fixture" });
+        assert.ok(before.game.legal.scenario.removeIslandRoads.includes(edge.id));
+        const denied = await guest.request({ type: "action", action: { type: "removeIslandRoad", edge: edge.id } }, m => m.type === "error");
+        assert.equal(denied.type, "error"); assert.equal(edge.owner, 0);
+        const after = guest.messages.length;
+        const removed = await restored.request({ type: "action", action: { type: "removeIslandRoad", edge: edge.id } }, m => m.type === "error" || m.game?.board.edges[edge.id].owner === -1);
+        assert.equal(removed.type, "state", removed.message);
+        assert.equal(removed.game.board.edges[edge.id].owner, -1);
+        assert.equal(removed.game.revision, before.game.revision + 1);
+        assert.deepEqual(g.players[0].resources, resources); assert.deepEqual(g.bank, bank);
+        const observed = await guest.next(m => m.game?.revision === removed.game.revision, after);
+        assert.equal(observed.game.board.edges[edge.id].owner, -1);
+        assert.equal(observed.game.players[0].resources, null, "Removal does not expose the owner's resource hand");
+        const replay = await restored.request({ type: "action", action: { type: "removeIslandRoad", edge: edge.id } }, m => m.type === "error");
+        assert.equal(replay.type, "error"); clearTimeout(room.timer);
+      }
       restored.ws.close(); guest.ws.close(); clearTimeout(room.timer);
     }
     for (const thieves of ["both", "robber", "pirate"]) {

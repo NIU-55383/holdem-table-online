@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node integration-test.js && node --test catan-test.js catan-audio-test.js avatar-test.js social-test.js seafarers-test.js seafarers-expansion-test.js catan-scenario-maps-test.js catan-scenario-engine-test.js catan-scenario-network-test.js duel-test.js richman-test.js room-control-test.js"
+    "test": "node integration-test.js && node --test catan-test.js catan-audio-test.js catan-music-test.js avatar-test.js social-test.js seafarers-test.js seafarers-expansion-test.js catan-scenario-maps-test.js catan-scenario-engine-test.js catan-scenario-network-test.js duel-test.js richman-test.js room-control-test.js",
+    "test:music": "node catan-music-test.js --browser"
   },
   "engines": {
     "node": ">=20"

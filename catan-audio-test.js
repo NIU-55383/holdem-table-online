@@ -55,12 +55,47 @@ test("trade and action tracking ignores repeats, reconnect history and unrelated
   room.control.paused=false; room.you=0; assert.equal(A.incoming(room),false);
   tracker.update(room); assert.equal(played.length,3, "Changing local identity establishes a fresh baseline");
 });
+test("confirmed trade offers give the sender a distinct once-only cue, never on failure or reconnect", () => {
+  const g=ready();g.phase="main";g.rolled=true;g.players[1].resources=[3,3,3,3,3];
+  const heard=[[],[],[]], trackers=heard.map(sounds=>A.tracker(sound=>sounds.push(sound)));
+  const update=()=>trackers.forEach((tracker,you)=>tracker.update({code:"OFFERS",you,game:E.publicGame(g,you)}));
+  update();
+  const offer={type:"offerTrade",give:[1,0,0,0,0],want:[0,1,0,0,0],to:1};
+  E.act(g,0,offer);update();update();
+  assert.deepEqual(heard,[["offer"],["trade"],[]],"Sender and recipient hear different cues; unrelated players hear neither");
+  assert.throws(()=>E.act(g,0,{...offer,give:[999,0,0,0,0]}));update();
+  assert.deepEqual(heard,[["offer"],["trade"],[]],"A rejected action does not sound like a sent offer");
+  E.act(g,1,{type:"rejectTrade",offerId:g.trade.id});update();
+  assert.deepEqual(heard,[["offer"],["trade"],[]],"Responses do not replay the send cue");
+  E.act(g,0,{...offer,to:null});update();
+  assert.deepEqual(heard,[["offer","offer"],["trade","trade"],["trade"]],"A new public offer notifies sender and all recipients once");
+  trackers.forEach(tracker=>tracker.reset());update();
+  assert.deepEqual(heard,[["offer","offer"],["trade","trade"],["trade"]],"Reconnect establishes a silent baseline");
+  E.act(g,1,{type:"acceptTrade",offerId:g.trade.id});update();update();
+  assert.deepEqual(heard,[["offer","offer","exchange"],["trade","trade","exchange"],["trade","exchange"]],"Only acceptance plays the success sound");
+});
+
 test("audio gracefully handles unavailable APIs and saves the mute preference", () => {
   const storage=new Map(); global.localStorage={getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)};
   try {
     const a=A.create(); assert.equal(a.play("ship"),false); a.unlock(); assert.equal(a.play("ship"),false);
     a.setMuted(true); assert.equal(A.create().muted,true); a.setMuted(false); assert.equal(A.create().muted,false);
     a.stop();
+  } finally { delete global.localStorage; }
+});
+
+test("effect volume is bounded, remembered and independent of mute and music", () => {
+  const storage=new Map([["catan-music-volume","0.2"]]);
+  global.localStorage={getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)};
+  try {
+    const a=A.create(); assert.equal(a.volume,.6);
+    a.setVolume(.35); assert.equal(A.create().volume,.35);
+    a.setMuted(true); assert.equal(a.volume,.35); a.setMuted(false); assert.equal(a.volume,.35);
+    a.setVolume(0); assert.equal(a.play("ship"),false); assert.equal(a.muted,false);
+    a.setVolume(2); assert.equal(a.volume,1); a.setVolume(-1); assert.equal(a.volume,0);
+    a.setVolume(.7); a.setVolume(NaN); a.setVolume(Infinity); assert.equal(a.volume,.7);
+    for (const invalid of ["bad","NaN","Infinity",""]) { storage.set("catan-sfx-volume",invalid); assert.equal(A.create().volume,.6); }
+    assert.equal(storage.get("catan-music-volume"),"0.2");
   } finally { delete global.localStorage; }
 });
 

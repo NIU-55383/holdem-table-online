@@ -61,7 +61,11 @@ window.CatanBoard = (() => {
         return `<g><path class="harbor-pier" d="M${a.x},${a.y} L${px},${py} L${b.x},${b.y}" stroke="#dbb369" stroke-width="5" fill="none"/><circle cx="${px}" cy="${py}" r="17" fill="#e9f2e8" stroke="#b5d6d7" stroke-width="2"/>${p.resource < 0 ? `<text x="${px}" y="${py+5}" text-anchor="middle" fill="#1d5573" font-size="14" font-weight="800">3:1</text>` : `${icon(RES[p.resource], px-9, py-14, 18)}<text x="${px}" y="${py+12}" text-anchor="middle" fill="#1d5573" font-size="10" font-weight="800">2:1</text>`}</g>`;
       }).join("")}
       ${board.edges.filter((e) => e.owner >= 0).map((e) => {
-        if (e.kind !== "ship") return `<g class="built-road"><path d="M${v[e.a].x} ${v[e.a].y}L${v[e.b].x} ${v[e.b].y}" stroke="#283c4b" stroke-width="12" stroke-linecap="round"/><path d="M${v[e.a].x} ${v[e.a].y}L${v[e.b].x} ${v[e.b].y}" stroke="${COLORS[e.owner]}" stroke-width="8" stroke-linecap="round"/></g>`;
+        if (e.kind !== "ship") {
+          const removable = !preview && legal.scenario?.removeIslandRoads?.includes(e.id);
+          const hitArea = removable ? `<circle cx="${(v[e.a].x + v[e.b].x) / 2}" cy="${(v[e.a].y + v[e.b].y) / 2}" r="16" fill="transparent"/><path d="M${v[e.a].x} ${v[e.a].y}L${v[e.b].x} ${v[e.b].y}" stroke="transparent" stroke-width="26"/>` : "";
+          return `<g class="built-road ${removable ? "removable-road" : ""}" ${removable ? accessible("remove-road", e.id, "撤回外岛道路，不退资源 / Remove island road without refund") : ""}>${hitArea}<path d="M${v[e.a].x} ${v[e.a].y}L${v[e.b].x} ${v[e.b].y}" stroke="#283c4b" stroke-width="12" stroke-linecap="round"/><path d="M${v[e.a].x} ${v[e.a].y}L${v[e.b].x} ${v[e.b].y}" stroke="${COLORS[e.owner]}" stroke-width="8" stroke-linecap="round"/></g>`;
+        }
         const x = (v[e.a].x + v[e.b].x) / 2, y = (v[e.a].y + v[e.b].y) / 2;
         const movable = mode === "moveShip" && legal.moveShips?.includes(e.id), victim = mode === "steal" && thief === "pirate" && (scenario.kind === "pirates" || e.tiles.includes(board.pirate)) && legal.victims?.includes(e.owner);
         return `<g class="built-ship ${e.warship ? "built-warship" : ""} ${victim ? "steal-target" : movable ? "ship-move-target" : ""}" ${victim ? accessible("victim", e.owner, "偷取船主资源 / Steal from ship owner") : movable ? accessible("edge", e.id, "移动这艘船 / Move this ship") : ""}>${victim || movable ? `<circle cx="${x}" cy="${y}" r="23" fill="#ffea9480" stroke="#fff0b2" stroke-width="3"/>` : ""}<g filter="url(#${shadow})">${e.warship ? scenarioIcon("warship", x - 19, y - 23, 38, COLORS[e.owner]) : icon("ship", x - 19, y - 23, 38, COLORS[e.owner])}</g></g>`;
@@ -85,12 +89,13 @@ window.CatanBoard = (() => {
       }).join("")}
       ${(scenario.pirateSeats || []).map((seat, i) => {
         const point = v[seat.landing]; if (!point || point.owner >= 0) return "";
-        return `<g class="pirate-outpost" role="img" aria-label="${i + 1} 号位补给点 / Seat ${i + 1} outpost"><circle cx="${point.x}" cy="${point.y}" r="9" fill="${COLORS[seat.owner ?? i]}" stroke="#fff0c6" stroke-width="2"/></g>`;
+        const owner = seat.owner ?? i;
+        return `<g class="pirate-outpost" ${info("outpost", `${owner + 1} 号位补给点 / Seat ${owner + 1} outpost`)} data-owner="${owner}"><circle cx="${point.x}" cy="${point.y}" r="18" fill="transparent"/><circle cx="${point.x}" cy="${point.y}" r="9" fill="${COLORS[owner]}" stroke="#fff0c6" stroke-width="2"/></g>`;
       }).join("")}
-      ${(scenario.pirateSeats || []).filter((seat) => !seat.liberated && (seat.strength ?? 3) > 0).map((seat, i) => {
-        const point = v[seat.fortress]; if (!point) return "";
-        const strength = seat.strength ?? 3;
-        return `<g class="pirate-fortress" role="img" aria-label="${escape(`海盗堡垒，强度 ${strength} / Pirate fortress, strength ${strength}`)}">${scenarioIcon("fortress", point.x - 20, point.y - 25, 40, COLORS[seat.owner ?? i])}<circle cx="${point.x + 14}" cy="${point.y + 10}" r="9" fill="#fff2c3" stroke="#735b46"/><text x="${point.x + 14}" y="${point.y + 14}" text-anchor="middle" fill="#493d43" font-size="12" font-weight="800">${strength}</text></g>`;
+      ${(scenario.pirateSeats || []).map((seat, i) => {
+        const point = v[seat.fortress]; if (!point || seat.liberated || (seat.strength ?? 3) <= 0) return "";
+        const strength = seat.strength ?? 3, owner = seat.owner ?? i;
+        return `<g class="pirate-fortress" ${info("fortress", `${owner + 1} 号位海盗要塞，剩余 ${strength} 层防御 / Seat ${owner + 1} pirate fortress, ${strength} defenses left`)} data-owner="${owner}" data-strength="${strength}"><rect x="${point.x - 22}" y="${point.y - 27}" width="46" height="48" fill="transparent"/>${scenarioIcon("fortress", point.x - 20, point.y - 25, 40, COLORS[owner])}<circle cx="${point.x + 14}" cy="${point.y + 10}" r="9" fill="#fff2c3" stroke="#735b46"/><text x="${point.x + 14}" y="${point.y + 14}" text-anchor="middle" fill="#493d43" font-size="12" font-weight="800">${strength}</text></g>`;
       }).join("")}
       ${preview ? (scenario.pirateSeats || []).map((seat, i) => {
         const point = v[seat.home], edge = board.edges[seat.ship]; if (!point || !edge) return "";
@@ -122,7 +127,7 @@ window.CatanBoard = (() => {
       }).join("")}
       ${["settlement", "city"].includes(mode) ? (legal[mode === "city" ? "cities" : "settlements"] || []).map((id) => `<g ${accessible("vertex", id, mode === "city" ? "升级城市 / Upgrade city" : "建造村庄 / Build settlement")} class="board-target ${selected?.kind === "vertex" && selected.id === id ? "selected-target" : ""}"><circle cx="${v[id].x}" cy="${v[id].y}" r="19" fill="transparent"/><circle class="target-dot" cx="${v[id].x}" cy="${v[id].y}" r="10" fill="#fffbe5" stroke="#176787" stroke-width="3"/><path d="M${v[id].x-4} ${v[id].y}h8m-4-4v8" stroke="#176787" stroke-width="2"/></g>`).join("") : ""}
       ${!showPieces || !board.tiles[board.robber] ? "" : `<g class="robber-piece" role="img" aria-label="强盗 / Robber">${piece("robber", board.tiles[board.robber].x - 21, board.tiles[board.robber].y - 21, 42, board.skins)}</g>`}
-      ${!piratePosition ? "" : `<g class="pirate-piece" ${scenario.kind === "tribes" ? info("pirate", "海盗 / Pirate") : 'role="img" aria-label="海盗 / Pirate"'}>${piece("pirate", piratePosition.x - 23, piratePosition.y - 23, 46, board.skins)}</g>`}
+      ${!piratePosition ? "" : `<g class="pirate-piece" ${scenario.kind === "pirates" ? info("pirate-fleet", "海盗舰队规则 / Pirate fleet rules") : scenario.kind === "tribes" ? info("pirate", "海盗 / Pirate") : 'role="img" aria-label="海盗 / Pirate"'}>${piece("pirate", piratePosition.x - 23, piratePosition.y - 23, 46, board.skins)}</g>`}
     </svg>`;
   }
   return { render, icon, piece, escape, COLORS, RES };

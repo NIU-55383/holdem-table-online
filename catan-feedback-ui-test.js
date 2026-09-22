@@ -22,6 +22,7 @@ catan=attachCatan(server); server.on("upgrade",(req,socket,head)=>catan.upgrade(
     for(let n=0;n<2;n++) {
       const context=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true}); contexts.push(context);
       await context.addInitScript(()=>{
+        localStorage.setItem("catan-music-enabled","false");
         const Native=window.WebSocket;
         window.WebSocket=class extends Native { constructor(...args) { super(...args);window.testSocket=this;this.addEventListener("message",e=>{const m=JSON.parse(e.data);if(m.type==="state")window.testState=m;}); } };
         let api;
@@ -49,16 +50,33 @@ catan=attachCatan(server); server.on("upgrade",(req,socket,head)=>catan.upgrade(
     async function sync() { const revision=++g.revision;await send(host,{type:"chat",text:""});for(const p of pages)await p.waitForFunction(r=>testState.game.revision===r,revision); }
     await sync();
     // User gestures unlock audio. Never auto-play a history backlog on first load.
-    await guest.bringToFront();await guest.locator("#helpButton").click();await guest.locator("#sailingAcknowledge").click();
-    await guest.waitForTimeout(150);await guest.evaluate(()=>{testSounds=[];});
+    for(const page of pages) {
+      await page.bringToFront();await page.locator("#helpButton").click();await page.locator("#sailingAcknowledge").click();
+      await page.waitForTimeout(150);await page.evaluate(()=>{testSounds=[];});
+    }
     const count=(p,kind)=>p.evaluate(kind=>testSounds.filter(s=>s.kind===kind).length,kind);
-    async function offer(to=null) { const old=g.revision;await send(host,{type:"action",action:{type:"offerTrade",give:[1,0,0,0,0],want:[0,1,0,0,0],to}});await guest.waitForFunction(r=>testState.game.revision>r,old); }
-    await offer(1);await guest.locator("#incomingTradeAlert").waitFor();
-    assert.equal(await count(guest,"trade"),1);assert.equal(await count(host,"trade"),0,"Offer sender is not notified");
+    async function offer(to=null,throughUI=false) {
+      const old=g.revision;
+      if(throughUI) {
+        await host.locator('[data-action="trade"]').click();await host.locator('[data-trade-mode="players"]').click();
+        await host.locator('[data-add-trade="give"][data-resource="0"]').click();
+        await host.locator('[data-add-trade="want"][data-resource="1"]').click();
+        await host.locator("#tradeTarget").selectOption(to===null?"all":String(to));
+        assert.equal(await count(host,"offer"),0,"Choosing trade cards does not send an offer");
+        await host.locator("#confirmTrade").click();
+      } else await send(host,{type:"action",action:{type:"offerTrade",give:[1,0,0,0,0],want:[0,1,0,0,0],to}});
+      for(const page of pages)await page.waitForFunction(r=>testState.game.revision>r,old);
+    }
+    await offer(1,true);await guest.locator("#incomingTradeAlert").waitFor();
+    assert.equal(await count(guest,"trade"),1);assert.equal(await count(host,"trade"),0,"Sender does not hear the incoming-offer alert");
+    assert.equal(await count(host,"offer"),1);assert.equal(await count(guest,"offer"),0);
+    assert.equal(await count(host,"exchange"),0,"Sending an offer does not play the success sound");
+    assert.equal(await host.evaluate(()=>testSounds.find(s=>s.kind==="offer").audible),true,"A confirmed offer plays the sender's cue");
     assert.equal(await guest.evaluate(()=>testSounds.find(s=>s.kind==="trade").audible),true,"Unlocked trade chime plays");
     assert.equal(await guest.locator("#tradeOffer").evaluate(el=>el.classList.contains("incoming-offer")),true);
     await send(host,{type:"chat",text:"Still the same offer"});await guest.waitForFunction(()=>testState.chat.at(-1)?.text==="Still the same offer");
     assert.equal(await count(guest,"trade"),1,"Chat and unchanged state do not replay the alert");
+    assert.equal(await count(host,"offer"),1,"Chat does not replay the sender's cue");
     for(const [width,height] of [[320,568],[390,844],[844,390],[1440,1000]]) {
       await guest.setViewportSize({width,height});await guest.evaluate(()=>scrollTo(0,0));
       assert.equal(await guest.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`No overflow at ${width}px`);
@@ -86,6 +104,16 @@ catan=attachCatan(server); server.on("upgrade",(req,socket,head)=>catan.upgrade(
     await guest.locator("#viewIncomingTrade").click();await guest.locator('[data-offer="acceptTrade"]').click();
     await guest.waitForFunction(()=>!testState.game.trade);assert.equal(await count(guest,"exchange"),1);
     assert.equal(await guest.locator("#incomingTradeAlert").isVisible(),false);
+    await host.locator("#soundToggle").click();await offer(1);
+    assert.equal(await host.evaluate(()=>testSounds.filter(s=>s.kind==="offer").at(-1).audible),false,"The send cue obeys mute");
+    await host.reload();await host.locator("#game").waitFor();await host.locator("#tradeOffer").waitFor();
+    assert.equal(await count(host,"offer"),0,"Reconnect does not replay the sender's existing offer");
+    assert.equal(await host.locator("#soundToggle").getAttribute("aria-pressed"),"false");
+    await host.locator("#soundToggle").click();await host.waitForTimeout(100);await offer(1);
+    assert.equal(await count(host,"offer"),1);
+    assert.equal(await host.evaluate(()=>testSounds.find(s=>s.kind==="offer").audible),true,"A new offer sounds after unmuting");
+    await send(host,{type:"action",action:{type:"cancelTrade",offerId:g.trade.id}});
+    await host.waitForFunction(()=>!testState.game.trade);
     // A real winning action is heard once; rereading the resulting state is silent.
     g.phase="gold";g.goldResume="main";g.goldQueue=[{id:1,count:2},{id:0,count:1}];await sync();
     await guest.locator("#goldChoiceAlert").waitFor();
@@ -150,7 +178,7 @@ catan=attachCatan(server); server.on("upgrade",(req,socket,head)=>catan.upgrade(
     fs.writeFileSync("test-results/catan-audio-measurements.json",JSON.stringify(rendered,null,2));
     await guest.emulateMedia({reducedMotion:"reduce"});
     assert.equal(await guest.locator("#incomingTradeAlert").evaluate(el=>getComputedStyle(el).animationName),"none");
-    assert.deepEqual(errors,[]);console.log("PASS trade/gold targeting, mobile alerts, building limit explanations, sound delivery, mute, reconnect deduplication, victory, and 17 distinct non-clipping audio recipes");
+    assert.deepEqual(errors,[]);console.log(`PASS trade send/receive, gold targeting, mobile alerts, building limit explanations, sound delivery, mute, reconnect deduplication, victory, and ${rendered.length} distinct non-clipping audio recipes`);
     for(const context of contexts)await context.close();
   } finally { await browser?.close();for(const room of catan.rooms.values())clearTimeout(room.timer);server.close();server.emit("close"); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

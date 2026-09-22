@@ -26,7 +26,7 @@
     <path d="M7 41V16h7v6h7v-6h7v6h7v-6h7v25z" fill="#a4b7b5" stroke="#315564" stroke-width="2.5" stroke-linejoin="round"/><path d="M18 41V31a6 6 0 0 1 12 0v10" fill="#3e6775" stroke="#315564" stroke-width="2"/><path d="M12 28h4m17 0h4M9 35h5m21 0h5M24 6v12" stroke="#315564" stroke-width="2"/><path d="M25 6h12l-4 5 4 4H25z" fill="currentColor" stroke="#315564" stroke-width="2"/>
   </symbol>
   <symbol id="catan-scenario-art-warship" viewBox="0 0 48 48">
-    <path d="M5 32h38l-7 10H14z" fill="currentColor" stroke="#315564" stroke-width="2.5"/><path d="M24 5v28" stroke="#315564" stroke-width="3"/><path d="M21 8 7 28h14zm6 1v19h15z" fill="#e17e6d" stroke="#315564" stroke-width="2"/><path d="m32 15 4 3-4 5-4-5z" fill="#ffdc79"/><path d="m14 35 3 4m6-4 3 4m6-4 3 4" stroke="#ffedc2" stroke-width="2"/><path d="M5 46q5-4 10 0t10 0 10 0 9 0" fill="none" stroke="#6fb6c4" stroke-width="2"/>
+    <path d="M5 32h38l-7 10H14z" fill="currentColor" stroke="#315564" stroke-width="2.5"/><path d="M24 5v28" stroke="#315564" stroke-width="3"/><path d="M21 8 7 28h14zm6 1v19h15z" fill="currentColor" stroke="#315564" stroke-width="2"/><path d="m32 15 4 3-4 5-4-5z" fill="#ffdc79"/><path d="m14 35 3 4m6-4 3 4m6-4 3 4" stroke="#ffedc2" stroke-width="2"/><path d="M5 46q5-4 10 0t10 0 10 0 9 0" fill="none" stroke="#6fb6c4" stroke-width="2"/>
   </symbol>
   <symbol id="catan-scenario-art-wonder-bridge" viewBox="0 0 160 96">
     <path d="M0 0h160v96H0z" fill="#c6e3de"/><path d="M0 68q35-8 80 0t80 0v28H0z" fill="#79b9c5"/><path d="M0 60h27v28H0zm131 0h29v28h-29z" fill="#7d9d77"/>
@@ -54,6 +54,7 @@
     <a class="island-brand" href="catan.html"><span class="hex-logo">C</span><span>卡坦岛 <small>CATAN</small></span></a>
     <span id="connection" class="connection" role="status">连接中 / Connecting</span>
     <button class="icon-button" id="soundToggle" type="button" title="关闭音效 / Mute sounds" aria-label="关闭音效 / Mute sounds" aria-pressed="true"><i data-lucide="volume-2" aria-hidden="true"></i></button>
+    <button class="icon-button" id="audioSettings" type="button" title="声音设置 / Audio settings" aria-label="声音设置 / Audio settings"><i data-lucide="settings" aria-hidden="true"></i></button>
     <button class="icon-button" id="helpButton" title="规则 / Rules" aria-label="规则 / Rules">?</button>
   </header>
   <aside id="incomingTradeAlert" class="incoming-trade-alert" role="status" aria-live="polite" hidden><i data-lucide="handshake" aria-hidden="true"></i><div><strong id="incomingTradeName"></strong><small>向你发起交易 / Trade offer</small></div><button id="viewIncomingTrade" type="button" class="primary">查看<small>View</small></button></aside>
@@ -99,6 +100,7 @@
         <section class="board-section">
           <div class="board-toolbar"><span id="phaseLabel"></span><div id="victoryTarget" class="victory-target" title="在自己的回合达到目标分数即可获胜 / Reach the target on your own turn to win"><span class="victory-target-heading"><i data-lucide="trophy" aria-hidden="true"></i><span id="victoryTargetLabel">胜利目标 / Target</span></span><strong id="victoryTargetScore"><b id="victoryTargetValue">10</b><small> 分 / VP</small></strong><div id="scenarioVictoryConditions" class="scenario-victory-conditions" hidden></div></div></div>
           <aside id="harborSetupBanner" class="harbor-setup-banner" role="status" aria-live="polite" hidden><svg viewBox="0 0 48 48" aria-hidden="true"><use href="#catan-art-settlement"></use></svg><div><strong id="harborSetupPhase"></strong><small>港口已全部放置 / All harbors placed</small></div></aside>
+          <details id="pirateBattle" class="pirate-battle" aria-label="海盗战报 / Pirate battle report" open hidden></details>
           <div class="board-viewport" id="boardViewport" tabindex="0" role="region" aria-label="卡坦岛棋盘，双指缩放；键盘加减号缩放，0 复位 / Catan board: pinch to zoom; keyboard plus/minus to zoom, 0 to reset"><div id="board"></div></div>
           <div class="turn-banner"><div class="numbered-avatar" id="turnAvatar"></div><div id="turnPrompt" aria-live="polite"></div><div id="dice" class="dice-pair"></div></div>
           <div id="selection" class="selection" hidden><span id="selectionLabel"></span><button class="primary" id="confirmBuild">确认 / Confirm</button><button class="icon-button" id="cancelBuild" title="取消 / Cancel" aria-label="取消 / Cancel">×</button></div>
@@ -129,10 +131,23 @@
       </div>
     </section>
   </main>
+  <dialog id="audioSettingsDialog" aria-labelledby="audioSettingsTitle">
+    <div class="dialog-heading"><h2 id="audioSettingsTitle">声音设置<small>Audio settings</small></h2><button class="icon-button" data-close="audioSettingsDialog" aria-label="关闭 / Close">×</button></div>
+    <div class="audio-settings-body">
+      <div class="audio-setting"><label class="audio-check"><input id="musicEnabled" type="checkbox"><span>背景音乐<small>Background music</small></span></label><p class="music-credit"><a id="musicTrackCredit" target="_blank" rel="noopener noreferrer"></a><small>PeriTune</small></p><div class="audio-slider"><label for="musicVolume">音量 / Volume</label><output id="musicVolumeValue" for="musicVolume"></output><input id="musicVolume" type="range" min="0" max="100" step="1" aria-label="背景音乐音量 / Background music volume"></div><p id="musicError" role="status" hidden>音乐暂时无法播放<small>Music is currently unavailable</small></p></div>
+      <div class="audio-setting"><label class="audio-check"><input id="sfxEnabled" type="checkbox"><span>游戏音效<small>Sound effects</small></span></label><div class="audio-slider"><label for="sfxVolume">音量 / Volume</label><output id="sfxVolumeValue" for="sfxVolume"></output><input id="sfxVolume" type="range" min="0" max="100" step="1" aria-label="游戏音效音量 / Sound effects volume"></div></div>
+    </div>
+    <button class="primary wide" data-close="audioSettingsDialog">完成 / Done</button>
+  </dialog>
   <dialog id="scenarioInfoDialog" aria-labelledby="scenarioInfoTitle">
     <div class="dialog-heading"><h2 id="scenarioInfoTitle"></h2><button class="icon-button" data-close="scenarioInfoDialog" aria-label="关闭 / Close">×</button></div>
     <div id="scenarioInfoContent" class="rules-content" tabindex="0" role="region" aria-label="外岛与礼物说明 / Foreign island and gift details"></div>
     <button class="primary wide" data-close="scenarioInfoDialog">知道了 / Got it</button>
+  </dialog>
+  <dialog id="islandRoadDialog" aria-labelledby="islandRoadTitle" aria-describedby="islandRoadDescription">
+    <div class="dialog-heading"><h2 id="islandRoadTitle"></h2><button class="icon-button" data-close="islandRoadDialog" aria-label="关闭 / Close">×</button></div>
+    <p id="islandRoadDescription"></p>
+    <div class="island-road-actions"><button class="secondary" data-close="islandRoadDialog" autofocus>取消 / Cancel</button><button class="primary" id="confirmIslandRoad"></button></div>
   </dialog>
   <dialog id="harborSetupDialog" class="harbor-setup-dialog" aria-labelledby="harborSetupTitle" aria-describedby="harborSetupDescription harborSetupActor">
     <div class="harbor-setup-body">
@@ -228,6 +243,6 @@
   </dialog>
   <dialog id="leaveDialog"><div class="dialog-heading"><h2>离开岛屿？<small>Leave the island?</small></h2><button class="icon-button" data-close="leaveDialog" aria-label="关闭 / Close">×</button></div><p>进行中的对局会保留你的座位，等待你返回或由房主管理替换，不会自动开启托管。<small>Your seat remains in the current game until you return or the host arranges a replacement. Leaving does not enable automatic play.</small></p><button id="confirmLeave" class="primary wide">离开房间 / Leave Room</button></dialog>
   <dialog id="sailingDialog" aria-labelledby="sailingTitle"><div class="dialog-heading"><h2 id="sailingTitle"></h2><button class="icon-button" data-close="sailingDialog" aria-label="关闭 / Close">×</button></div><div id="sailingContent" class="rules-content" tabindex="0" role="region" aria-label="航海规则与地图规则 / Seafarers and map rules"></div><button class="primary wide" id="sailingAcknowledge">已阅读 / Got it</button></dialog>
-  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-ui.js"></script><script src="catan-scenario-maps.js"></script><script src="catan-maps.js"></script><script src="catan-board.js"></script><script src="catan-audio.js"></script><script src="catan-scenario-ui.js"></script><script src="catan.js"></script>
+  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-ui.js"></script><script src="catan-scenario-maps.js"></script><script src="catan-maps.js"></script><script src="catan-board.js"></script><script src="catan-audio.js"></script><script src="catan-music.js"></script><script src="catan-scenario-ui.js"></script><script src="catan.js"></script>
 </body>
 </html>

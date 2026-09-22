@@ -273,6 +273,91 @@ test("all four pirate fleets can reach their own fortresses without interfering 
   }
 });
 
+test("foreign roads can be removed without refund so a blocked fortress can be reached by ships", () => {
+  const g = main(game("pirates", 4)), path = fleetToFortress(g), seat = g.scenario.pirateSeats[0];
+  Object.assign(g.board.vertices[seat.landing], { owner: 0, level: 1 });
+  const roads = path.filter(i => g.board.edges[i].tiles.some(t => g.board.tiles[t].resource >= -1) && g.board.edges[i].tiles.every(t => !g.board.tiles[t].setupAllowed));
+  assert.ok(roads.length >= 3);
+  roads.forEach(i => { Object.assign(g.board.edges[i], { kind: "road", builtTurn: 0 }); });
+  assert.equal(E.legal(g, 0).scenario.attackFortress, false);
+  assert.deepEqual([...E.legal(g, 0).scenario.removeIslandRoads].sort(), [...roads].sort());
+  hand(g, 0, [roads.length, 0, roads.length, 0, 0]);
+  const resources = structuredClone(g.players.map(p => p.resources)), bank = [...g.bank], deck = [...g.deck], cards = structuredClone(g.players[0].development);
+  g.developmentPlayed = true; g.freeRoads = 0;
+  for (const edge of roads) {
+    const revision = g.revision;
+    E.act(g, 0, { type: "removeIslandRoad", edge });
+    assert.equal(g.revision, revision + 1); assert.equal(g.phase, "main"); assert.equal(g.current, 0);
+    assert.equal(g.board.edges[edge].owner, -1); assert.equal(g.board.edges[edge].kind, undefined); assert.equal(g.board.edges[edge].builtTurn, undefined);
+    assert.deepEqual(g.players.map(p => p.resources), resources); assert.deepEqual(g.bank, bank); assert.deepEqual(g.deck, deck);
+    assert.deepEqual(g.players[0].development, cards); assert.equal(g.developmentPlayed, true); assert.equal(g.freeRoads, 0);
+    unchanged(g, 0, { type: "removeIslandRoad", edge }, /Remove only/);
+  }
+  assert.equal(E.publicGame(g, 0).players[0].roads, 0);
+  for (const edge of roads) { assert.ok(E.legal(g, 0).ships.includes(edge), `rebuild ${edge} as ship`); E.act(g, 0, { type: "ship", edge }); }
+  assert.equal(E.legal(g, 0).scenario.attackFortress, true); invariant(g);
+});
+
+test("island road removal rejects ships, mainland, other players, wrong phases and other scenarios", () => {
+  const g = main(game("pirates")), path = fleetToFortress(g), seat = g.scenario.pirateSeats[0];
+  const edge = path.at(-1); g.board.edges[edge].kind = "road";
+  const mainland = g.board.edges.find(e => e.owner < 0 && e.tiles.some(t => g.board.tiles[t].setupAllowed));
+  Object.assign(mainland, { owner: 0, kind: "road" });
+  for (const bad of [mainland.id, path[0], -1, 9999, String(edge)]) unchanged(g, 0, { type: "removeIslandRoad", edge: bad }, /Remove only/);
+  for (const phase of ["roll", "freeRoads", "setupSettlement", "setupRoad", "discard", "scenarioChoice", "over"]) {
+    const x = structuredClone(g); x.phase = phase;
+    assert.deepEqual(E.legal(x, 0).scenario.removeIslandRoads, []);
+    unchanged(x, 0, { type: "removeIslandRoad", edge }, /Remove only|not active/i);
+  }
+  unchanged(g, 1, { type: "removeIslandRoad", edge }, /Remove only|turn/);
+  g.current = 1; unchanged(g, 1, { type: "removeIslandRoad", edge }, /Remove only/);
+  g.current = 0; delete g.board.edges[edge].kind;
+  assert.ok(E.legal(g, 0).scenario.removeIslandRoads.includes(edge), "legacy roads without kind remain removable");
+  for (const kind of ["cloth", "tribes", "wonders", "new-world"]) {
+    const x = main(game(kind)); x.scenario.pending = null;
+    Object.assign(x.board.edges[edge], { owner: 0, kind: "road" });
+    assert.deepEqual(E.legal(x, 0).scenario.removeIslandRoads, []);
+    unchanged(x, 0, { type: "removeIslandRoad", edge }, /Remove only/);
+  }
+  assert.notEqual(seat.fortress, mainland.a);
+});
+
+test("foreign-island road warnings apply to paid and free builds but not mainland roads", () => {
+  const g = main(game("pirates")), path = fleetToFortress(g), seat = g.scenario.pirateSeats[0];
+  Object.assign(g.board.vertices[seat.landing], { owner: 0, level: 1 });
+  const last = path.at(-1); g.board.edges[last].owner = -1; delete g.board.edges[last].kind;
+  const island = g.board.edges.find(e => e.owner < 0 && [e.a, e.b].includes(seat.landing) && e.tiles.some(t => g.board.tiles[t].resource >= -1));
+  assert.ok(island);
+  hand(g, 0, [4, 4, 4, 0, 0]);
+  for (const phase of ["main", "freeRoads"]) {
+    g.phase = phase; g.freeRoads = 2;
+    const l = E.legal(g, 0);
+    assert.ok(l.scenario.warnIslandRoads.includes(island.id));
+    assert.ok(l.roads.some(e => !l.scenario.warnIslandRoads.includes(e)), "mainland roads need no warning");
+    assert.ok(l.scenario.warnIslandRoads.every(e => l.roads.includes(e)));
+  }
+});
+
+test("liberated fortress upgrades like a normal settlement on a later turn, within the city limit", () => {
+  const g = main(game("pirates")), path = fleetToFortress(g), seat = g.scenario.pirateSeats[0];
+  hand(g, 0, [0, 0, 0, 2, 3]);
+  assert.ok(!E.legal(g, 0).cities.includes(seat.fortress));
+  unchanged(g, 0, { type: "city", vertex: seat.fortress }, /Choose your settlement/);
+  path.slice(0, 2).forEach(i => { g.board.edges[i].warship = true; }); seat.strength = 1;
+  E.act(g, 0, { type: "attackFortress" }, () => 0);
+  assert.equal(seat.liberated, true); assert.equal(g.board.vertices[seat.fortress].level, 1);
+  assert.notEqual(g.current, 0); unchanged(g, 0, { type: "city", vertex: seat.fortress }, /turn/);
+  main(g);
+  const capped = structuredClone(g);
+  capped.board.vertices.filter(v => v.id !== seat.fortress && v.tiles.some(t => capped.board.tiles[t].setupAllowed)).slice(0, 4).forEach(v => Object.assign(v, { owner: 0, level: 2 }));
+  assert.ok(!E.legal(capped, 0).cities.includes(seat.fortress));
+  const score = E.publicGame(g, 0).players[0].score;
+  assert.ok(E.legal(g, 0).cities.includes(seat.fortress));
+  E.act(g, 0, { type: "city", vertex: seat.fortress });
+  assert.equal(g.board.vertices[seat.fortress].level, 2); assert.deepEqual(g.players[0].resources, [0,0,0,0,0]);
+  assert.equal(E.publicGame(g, 0).players[0].score, score + 1); invariant(g);
+});
+
 test("pirate knights convert nearest ordinary ships on distinct turns, never on the purchase turn", () => {
   const g = main(game("pirates")), path = fleetToFortress(g); g.turn = 5; g.phase = "roll";
   g.players[0].development = [{ type: "knight", turn: 1 }, { type: "knight", turn: 1 }];
@@ -348,6 +433,9 @@ test("pirate raid losses are automatic weighted random discards before productio
   const draws = [0,0,.99,0]; E.act(g, 0, { type: "roll" }, () => draws.shift() ?? 0);
   assert.equal(g.board.pirate, g.scenario.piratePath[1]); assert.equal(g.phase, "main");
   assert.deepEqual(g.players[1].resources, [0,0,0,0,1]); assert.equal(g.scenario.pending, null);
+  const report = E.publicGame(g, 0).scenario.battle;
+  assert.deepEqual(report, { id: g.revision, kind: "raid", turn: 1, from: g.scenario.piratePath[0], tile: g.board.pirate, dice: [1, 1], power: 1, actor: 1, result: "loss", name: "Bob", strength: 0, cities: 1, lost: 2 });
+  assert.deepEqual(E.publicGame(g, 2).scenario.battle, report, "Observers see only public counts, never lost resource types");
   unchanged(g, 1, { type: "piratePayment", resources: [0,0,0,0,1] }, /Not your turn/); invariant(g);
 });
 
@@ -359,15 +447,52 @@ test("pirate raid wins schedule the affected player, restrict bank choice, then 
   E.act(g, 0, { type: "roll" }, () => 0);
   assert.equal(g.phase, "scenarioChoice"); assert.deepEqual(E.requiredActors(g), [1]);
   assert.equal(g.scenario.pending.kind, "pirateReward"); assert.deepEqual(E.legal(g, 0).scenario.pirateReward, []);
+  const battleId = g.scenario.battle.id;
+  assert.equal(g.scenario.battle.reward, "pending"); assert.equal(g.scenario.battle.strength, 2);
   unchanged(g, 0, { type: "pirateReward", resource: 0 }, /choice/);
   unchanged(g, 1, { type: "pirateReward", resource: 8 }, /resource/);
   E.act(g, 1, { type: "pirateReward", resource: 0 }); assert.equal(g.phase, "main"); assert.equal(g.players[1].resources[0] >= 1, true); invariant(g);
+  assert.equal(g.scenario.battle.id, battleId); assert.equal(g.scenario.battle.reward, "claimed");
+});
+
+test("pirates raid buildings only at their destination, not ships or buildings passed en route", () => {
+  for (const variant of ["ships", "passed-settlement", "passed-city", "final-settlement", "final-city"]) {
+    const g = raidFixture(3), path = g.scenario.piratePath;
+    emptyBoard(g); hand(g, 1, [5, 0, 0, 0, 0]);
+    g.board.tiles.forEach(t => { t.number = 0; });
+    const destination = g.board.tiles[path[3]];
+    if (variant === "ships") {
+      const edge = g.board.edges.find(e => e.tiles.includes(destination.id));
+      Object.assign(edge, { owner: 1, kind: "ship" });
+    } else {
+      const v = variant.startsWith("final") ? g.board.vertices[destination.vertices[0]]
+        : g.board.vertices[g.board.tiles[path[1]].vertices.find(id => !destination.vertices.includes(id))];
+      assert.ok(v); Object.assign(v, { owner: 1, level: variant.endsWith("city") ? 2 : 1 });
+    }
+    const dice = [.4, .6]; E.act(g, 0, { type: "roll" }, () => dice.shift() ?? 0);
+    const attacked = variant.startsWith("final"), report = g.scenario.battle;
+    assert.equal(g.board.pirate, destination.id);
+    assert.equal(report.actor, attacked ? 1 : null, variant);
+    assert.equal(report.result, attacked ? "loss" : "clear", variant);
+    assert.equal(E.sum(g.players[1].resources), attacked ? variant.endsWith("city") ? 3 : 4 : 5, variant);
+    invariant(g);
+  }
+});
+
+test("empty-hand losses and empty-bank wins still produce complete raid reports", () => {
+  const empty = raidFixture(); E.act(empty, 0, { type: "roll" }, () => 0);
+  assert.equal(empty.scenario.battle.result, "loss"); assert.equal(empty.scenario.battle.lost, 0);
+  const win = raidFixture(); win.board.edges.slice(0, 2).forEach(e => Object.assign(e, { owner: 1, kind: "ship", warship: true }));
+  hand(win, 0, [19, 19, 19, 19, 19]); E.act(win, 0, { type: "roll" }, () => 0);
+  assert.equal(win.scenario.battle.result, "win"); assert.equal(win.scenario.battle.reward, "empty");
+  assert.equal(win.phase, "main"); invariant(win);
 });
 
 test("pirate raid ties change no cards, and random losses happen before checking seven's discard threshold", () => {
   const tie = raidFixture(); Object.assign(tie.board.edges[0], { owner: 1, kind: "ship", warship: true }); hand(tie, 1, [2,0,0,0,0]);
   tie.board.tiles.forEach((t) => { t.number = 0; }); E.act(tie, 0, { type: "roll" }, () => 0);
   assert.equal(tie.phase, "main"); assert.deepEqual(tie.players[1].resources, [2,0,0,0,0]);
+  assert.equal(tie.scenario.battle.result, "tie"); assert.equal(tie.scenario.battle.strength, 1);
   const loss = raidFixture(); hand(loss, 1, [8,0,0,0,0]);
   const dice = [0,.99,0]; E.act(loss, 0, { type: "roll" }, () => dice.shift() ?? 0);
   assert.equal(loss.players[1].resources[0], 7); assert.deepEqual(loss.discard, {}); assert.equal(loss.phase, "steal");
@@ -391,6 +516,9 @@ test("fortress combat removes nearest ships on ties/losses, liberates at three w
     if (result === "win") { s.strength = 1; g.scenario.pirateSeats.slice(1).forEach((x) => { x.liberated = true; x.strength = 0; }); }
     E.act(g, 0, { type: "attackFortress" }, () => 0);
     assert.equal(g.current, 1); assert.equal(g.phase, "roll"); assert.equal(g.scenario.lastAttack.result, result);
+    assert.equal(g.scenario.battle.id, g.revision); assert.equal(g.scenario.battle.kind, "fortress");
+    assert.equal(g.scenario.battle.defenses, s.strength);
+    assert.equal(g.scenario.battle.shipsLost, result === "loss" ? 2 : result === "tie" ? 1 : 0);
     if (result === "win") {
       assert.equal(s.strength, 0); assert.equal(s.liberated, true); assert.equal(g.board.vertices[s.fortress].owner, 0);
       assert.equal(g.board.pirate, -1); assert.equal(g.board.pirateStart, null);
@@ -399,6 +527,23 @@ test("fortress combat removes nearest ships on ties/losses, liberates at three w
       assert.equal(g.board.edges[path.at(-2)].owner, result === "loss" ? -1 : 0);
       assert.equal(s.strength, 3); assert.equal(E.legal(g, 0).scenario.attackFortress, false);
     }
+  }
+});
+
+test("the rules example removes one fortress defense per win, from three to zero", () => {
+  const g = main(game("pirates")), path = fleetToFortress(g), fortress = g.scenario.pirateSeats[0];
+  path.slice(0, 4).forEach((id) => { g.board.edges[id].warship = true; });
+  assert.equal(S.warships(g, 0), 4);
+  for (const remaining of [2, 1, 0]) {
+    g.phase = "main"; g.current = 0; g.turn++;
+    E.act(g, 0, { type: "attackFortress" }, () => 0.4);
+    assert.equal(g.scenario.lastAttack.power, 3);
+    assert.equal(g.scenario.lastAttack.result, "win");
+    assert.equal(fortress.strength, remaining);
+    assert.equal(fortress.liberated, remaining === 0);
+    assert.equal(g.board.vertices[fortress.fortress].owner, remaining ? -1 : 0);
+    assert.equal(S.warships(g, 0), 4, "Winning an attack keeps the fleet intact");
+    assert.equal(g.current, 1, "Each attack ends the turn");
   }
 });
 

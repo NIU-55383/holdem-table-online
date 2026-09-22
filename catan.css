@@ -85,6 +85,23 @@
 .offer-target {color: #315c6a; font-weight: 700; overflow-wrap: anywhere;}
 .trade-offer h3 {overflow-wrap: anywhere;}
 #soundToggle svg {width: 21px; height: 21px; pointer-events: none;}
+#audioSettings svg {width: 21px; height: 21px; pointer-events: none;}
+#audioSettingsDialog {width: 480px;}
+#audioSettingsDialog[open] {display: flex; flex-direction: column; gap: 16px; overflow: hidden;}
+#audioSettingsDialog .dialog-heading, #audioSettingsDialog > button {flex: 0 0 auto; margin: 0;}
+.audio-settings-body {min-height: 0; overflow-y: auto;}
+.audio-setting {padding: 16px 0; border-bottom: 1px solid #c4dcda;}
+.audio-setting:first-child {padding-top: 0;}
+.audio-setting:last-child {border: 0; padding-bottom: 0;}
+.audio-check {display: flex; align-items: center; gap: 10px; cursor: pointer;}
+.audio-check input {width: 20px; height: 20px; margin: 0; accent-color: #176789;}
+.audio-check small, .music-credit small, #musicError small {display: block;}
+.music-credit {margin: 12px 0; font-size: 13px; overflow-wrap: anywhere;}
+.music-credit a {color: #176789;}
+.audio-slider {display: grid; grid-template-columns: minmax(0, 1fr) 48px; align-items: center; gap: 6px; margin-top: 12px; font-size: 13px;}
+.audio-slider output {text-align: right; font-variant-numeric: tabular-nums;}
+.audio-slider input {grid-column: 1 / -1; width: 100%; min-width: 0; height: 32px; margin: 0; padding: 0; accent-color: #176789;}
+#musicError {color: #a34e37; font-size: 12px; margin-bottom: 0;}
 #soundToggle[aria-pressed="false"] {color: #c8d9df;}
 .incoming-trade-alert {position: fixed; z-index: 40; top: calc(88px + env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); display: flex; align-items: center; gap: 10px; width: max-content; max-width: min(350px, calc(100vw - 24px)); padding: 10px 12px; color: #173f51; background: #fff3bb; border: 2px solid #edbd43; border-radius: 8px; box-shadow: 0 5px 18px #16364740; animation: trade-arrival .55s ease-out;}
 .incoming-trade-alert > svg {width: 26px; height: 26px; flex: 0 0 26px;}
@@ -411,6 +428,16 @@
   .victory-target strong {font-size: 15px;}
   .victory-target small {font-size: 10px;}
 }
+.removable-road {cursor: pointer;}
+.removable-road:focus-visible {outline: 2px solid #fff5d4; outline-offset: 3px;}
+#islandRoadDialog {width: 620px;}
+#islandRoadDialog[open] {display: flex; flex-direction: column; gap: 16px; overflow: hidden;}
+#islandRoadDialog .dialog-heading, .island-road-actions {flex: 0 0 auto; margin: 0;}
+#islandRoadDialog h2 {min-width: 0; overflow-wrap: anywhere;}
+#islandRoadDescription {min-height: 0; margin: 0; overflow: auto; line-height: 1.7; overflow-wrap: anywhere;}
+#islandRoadDescription small {display: block; margin-top: 10px;}
+.island-road-actions {display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px;}
+.island-road-actions button {min-height: 44px; white-space: normal;}
 #helpDialog[open], #sailingDialog[open], #scenarioInfoDialog[open] {
   display: flex;
   flex-direction: column;
@@ -429,7 +456,7 @@
 #helpContent, #sailingContent, #scenarioInfoContent {flex: 1 1 auto; min-width: 0; min-height: 0; max-height: none; margin-bottom: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-right: 8px; overflow-wrap: anywhere;}
 #helpAcknowledge, #sailingAcknowledge, #scenarioInfoDialog > .primary {flex: 0 0 auto; margin-bottom: 3px;}
 .scenario-info-symbol {margin-bottom: 12px;}
-.scenario-info-symbol svg {width: 44px; height: 44px;}
+.scenario-info-symbol svg {width: 44px; height: 44px; color: inherit;}
 [data-scenario-info] {cursor: help;}
 [data-scenario-info]:hover .gift-badge, [data-scenario-info]:focus-visible .gift-badge {stroke: #215b70; stroke-width: 3;}
 .gift-coast, .gift-connector {pointer-events: none;}
@@ -477,6 +504,34 @@
 .scenario-fortresses small {font-size: 9px; line-height: 1.2;}
 .scenario-fortresses .scenario-art {width: 23px; height: 23px; flex-basis: 23px;}
 .scenario-fortresses > div > span:last-child .scenario-art {color: var(--player);}
+.warship-guide {margin: 10px 0; padding: 10px 0; border-top: 1px solid #b9d3cc; border-bottom: 1px solid #b9d3cc;}
+.warship-guide > button {display: flex; align-items: center; gap: 8px; text-align: left; padding: 3px 0; min-height: 44px; color: #194f65;}
+.warship-guide p {margin: 6px 0 0; font-size: 13px; line-height: 1.55; overflow-wrap: anywhere;}
+.warship-guide small {display: block; color: #517783; font-size: 11px; line-height: 1.45;}
+.pirate-battle {margin: 0 0 12px; padding: 0 12px 10px; color: #194f65; background: #edf5ef; border-block: 2px solid #e7c163; overflow-wrap: anywhere;}
+.pirate-battle[data-result="loss"] {border-color: #e9977f;}
+.pirate-battle > summary {display: flex; align-items: center; gap: 8px; min-height: 48px; cursor: pointer; font-size: 14px;}
+.pirate-battle > summary::after {content: "+"; margin-left: 4px; font-size: 22px;}
+.pirate-battle[open] > summary::after {content: "−";}
+.pirate-battle > summary > svg {width: 28px; height: 28px; flex: 0 0 28px;}
+.pirate-battle > summary > span {margin-left: auto; font-size: 11px; text-align: right;}
+.pirate-battle small {display: block; font-size: 11px; line-height: 1.45; font-weight: 400; color: #517783;}
+.pirate-battle ol {display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 4px 0 10px; padding: 0; list-style: none;}
+.pirate-battle li {display: flex; align-items: flex-start; gap: 6px; min-width: 0;}
+.battle-step-number {display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 20px; color: #fff9df; background: #23667a; border-radius: 50%; font-size: 11px; font-weight: 700;}
+.battle-step-label {display: block; margin-bottom: 4px; color: #517783; font-size: 11px;}
+.pirate-battle li strong {display: block; margin-bottom: 4px; font-size: 13px; line-height: 1.5;}
+.battle-follow {margin: 0; padding-top: 8px; border-top: 1px solid #c8dcd6; font-size: 12px; line-height: 1.5;}
+.battle-arrival li {animation: battle-step .65s ease-out;}
+.battle-arrival li:nth-child(2) {animation-delay: .3s;}
+.battle-arrival li:nth-child(3) {animation-delay: .6s;}
+@keyframes battle-step {from {background-color: #fff2b8;} to {background-color: transparent;}}
+@media (max-width: 740px) {
+  .pirate-battle {padding-inline: 10px;}
+  .pirate-battle ol {grid-template-columns: 1fr; gap: 10px;}
+  .pirate-battle li > div {min-width: 0;}
+}
+@media (prefers-reduced-motion: reduce) {.battle-arrival li {animation: none;}}
 .scenario-attack,.scenario-resource-choice {display: flex; justify-content: center; align-items: center; gap: 8px; width: 100%; margin-top: 8px;}
 .scenario-resource-choice {margin: 0; font-size: 12px; padding: 8px;}
 .scenario-resource-choice small {display: block; font-size: 11px;}

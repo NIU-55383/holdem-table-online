@@ -8,6 +8,8 @@
 .reaction-menu button {margin: 0; min-width: 0; min-height: 44px; padding: 4px; border: 1px solid transparent; border-radius: 5px; color: inherit; background: transparent; cursor: pointer;}
 .reaction-menu button:hover, .reaction-menu button:focus-visible {background: #dfefe7; border-color: #8fb4a4;}
 .reaction-heading button {flex: 0 0 44px; font-size: 24px;}
+.reaction-tools {display: flex; flex: 0 0 auto;}
+.reaction-tools svg {width: 18px; height: 18px;}
 .reaction-options {display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px;}
 .reaction-options button {display: grid; justify-items: center; align-content: center; gap: 4px; min-height: 68px;}
 .reaction-options span {font: 28px/1.2 "Apple Color Emoji", "Segoe UI Emoji", sans-serif;}

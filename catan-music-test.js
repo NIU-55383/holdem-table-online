@@ -206,6 +206,7 @@ test("real mobile and desktop audio controls, playback, loop, edition changes an
     await page.evaluate(() => { testMedia[0].currentTime = 10; });
     await page.locator("#name").fill("Music test"); await page.locator("#create").click();
     await page.locator("#lobby").waitFor();
+    await page.locator("#sailingAcknowledge").click();
     assert.equal(await page.evaluate(() => testMusic.track.title), "Harbor Morning");
     assert.ok(await page.evaluate(() => testMedia[0].currentTime >= 10), "Room renders must not restart the track");
     await page.locator("#audioSettings").tap(); await slider("#musicVolume", 0);

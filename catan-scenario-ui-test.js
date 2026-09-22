@@ -25,7 +25,7 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
   fs.mkdirSync(path.join(__dirname, "test-results"), { recursive: true });
   const browser = await playwright.chromium.launch({ executablePath: process.env.CHROME_PATH || "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true });
   try {
-    const page = await browser.newPage({ viewport: { width: 390, height: 844 } }), errors = [];
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true }), errors = [];
     page.on("pageerror", e => errors.push(e.message));
     await page.addInitScript(() => {
       localStorage.setItem("catan-music-enabled", "false");
@@ -105,8 +105,95 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
     } finally { await artPage.close(); }
     assert.equal(await page.locator('#catan-scenario-art-fortress path').last().getAttribute("fill"), "currentColor", "Fortress flags inherit their owner's color");
     const emit = data => page.evaluate(data => window.testSocket.emit(data), data);
-    const show = (g, you = 0, patch = {}) => emit(room(g, you, patch));
+    const show = async (g, you = 0, patch = {}) => {
+      await emit(room(g, you, patch));
+      if (await page.locator("#sailingDialog").isVisible()) await page.locator("#sailingAcknowledge").click();
+    };
     const last = () => page.evaluate(() => window.sent.at(-1));
+    const introGame = create("pirates"), introRoom = { ...room(introGame), code: "INTRO", game: null, previewBoard: introGame.board };
+    await emit(introRoom);
+    assert.match(await page.locator("#sailingTitle").textContent(), /海盗巢穴.*The Pirate Islands/);
+    assert.equal(await page.locator("#sailingContent .map-rules-preview svg").count(), 1);
+    await page.locator("#sailingContent").evaluate(el => { el.scrollTop = 200; });
+    const introScroll = await page.locator("#sailingContent").evaluate(el => el.scrollTop);
+    await emit({ ...introRoom, chat: [{ name: "Alice", text: "Hello" }] });
+    assert.equal(await page.locator("#sailingContent").evaluate(el => el.scrollTop), introScroll, "Room updates do not reset reading position");
+    await page.keyboard.press("Escape");
+    await emit({ type: "welcome", token: "intro-test" }); await emit(introRoom);
+    assert.equal(await page.locator("dialog[open]").count(), 0, "Reconnect does not repeat the introduction");
+    await emit({ ...room(introGame), code: "INTRO" });
+    assert.equal(await page.locator("dialog[open]").count(), 0, "Starting the same room does not repeat the introduction");
+    await page.locator("#audioSettings").click();
+    const nextIntro = { ...room(create("cloth")), code: "NEXT-INTRO" };
+    await emit(nextIntro);
+    assert.equal(await page.locator("dialog[open]").count(), 1, "Map introductions wait behind another dialog");
+    assert.equal(await page.locator("#sailingDialog").isVisible(), false);
+    await page.locator('#audioSettingsDialog > [data-close]').click();
+    await page.locator("#sailingDialog").waitFor();
+    assert.match(await page.locator("#sailingTitle").textContent(), /Cloth for Catan/);
+    await page.locator("#sailingAcknowledge").click();
+    await page.reload(); await page.waitForFunction(() => window.testSocket?.readyState === 1);
+    await emit(nextIntro);
+    assert.equal(await page.locator("dialog[open]").count(), 0, "Reload remembers the current room introduction");
+    await emit({ type: "left" }); await emit(nextIntro);
+    assert.equal(await page.locator("#sailingDialog").isVisible(), true, "An explicit new entry shows the introduction again");
+    await page.locator("#sailingAcknowledge").click();
+    const actionCount = () => page.evaluate(() => window.sent.filter(message => message.type === "action").length);
+    for (const [map, type] of [["base", "robber"], ["shores-2", "robber"], ["shores-2", "pirate"]]) {
+      for (const input of ["click", "Enter", "Space"]) {
+        const g = create(map, 4); g.phase = "robber"; g.resumePhase = "main";
+        await page.setViewportSize({ width: input === "click" ? 1440 : 390, height: 900 });
+        await show(g);
+        if (type === "pirate") await page.locator('[data-thief="pirate"]').click();
+        const tile = E.legal(g, 0)[type][0], target = page.locator(`#board [data-tile="${tile}"]`);
+        assert.match(await target.getAttribute("aria-label"), type === "pirate" ? /Move pirate/ : /Move robber/);
+        const before = await actionCount();
+        await page.locator("#board .hex-tile:not([data-tile])").first().click({ force: true });
+        assert.equal(await actionCount(), before, "Non-target tiles cannot move either piece");
+        if (input === "click") await target.click();
+        else { await target.focus(); await page.keyboard.press(input); }
+        assert.equal(await actionCount(), before + 1, `${map}/${type}/${input}: destination submits immediately`);
+        assert.deepEqual((await last()).action, { type, tile });
+        assert.equal(await page.locator("#selection").isVisible(), false, "No destination confirmation is shown");
+        await target.dispatchEvent("click");
+        assert.equal(await actionCount(), before + 1, "Repeated clicks while pending cannot send twice");
+        E.act(g, 0, (await last()).action, seeded(9)); await show(g);
+        assert.equal(g.board[type], tile);
+        assert.equal(g.phase, "main", "No victims resumes the turn without another click");
+      }
+      const g = create(map, 4); g.phase = "robber"; g.resumePhase = "main";
+      const tile = E.legal(g, 0)[type][0];
+      const sites = type === "pirate" ? g.board.edges.filter(edge => edge.tiles.includes(tile)) : g.board.tiles[tile].vertices.map(id => g.board.vertices[id]);
+      for (const [index, owner] of [[0, 1], [2, 2]]) {
+        Object.assign(sites[index], type === "pirate" ? { owner, kind: "ship" } : { owner, level: 1 });
+        g.players[owner].resources = [2, 0, 0, 0, 0];
+      }
+      await show(g);
+      if (type === "pirate") await page.locator('[data-thief="pirate"]').click();
+      await page.locator(`#board [data-tile="${tile}"]`).click();
+      E.act(g, 0, (await last()).action, seeded(9));
+      const afterMove = await actionCount(); await show(g);
+      assert.equal(g.phase, "steal", "Multiple opponents still require a victim choice");
+      assert.equal(await actionCount(), afterMove);
+      assert.equal(await page.locator("#selection").isVisible(), false);
+      await page.locator('#board [data-victim="1"]').first().click();
+      assert.deepEqual((await last()).action, { type: "steal", victim: 1 });
+      E.act(g, 0, (await last()).action, seeded(9)); await show(g);
+      assert.equal(g.phase, "main");
+
+      g.phase = "robber"; await show(g, 1);
+      assert.equal(await page.locator("#board [data-tile]").count(), 0, "Other players cannot move the piece");
+      await show(g, 0, { control: { code: `T${map}`, you: "test-person-0", host: "test-person-0", seats: [], paused: true, now: Date.now() } });
+      assert.equal(await page.locator("#board [data-tile]").count(), 0, "Paused rooms cannot move either piece");
+      await show(g);
+      if (type === "pirate") await page.locator('[data-thief="pirate"]').click();
+      await page.evaluate(() => { window.testSocket.readyState = 3; });
+      const beforeDisconnectClick = await actionCount();
+      await page.locator("#board [data-tile]").first().click();
+      assert.equal(await actionCount(), beforeDisconnectClick, "Disconnected destinations cannot submit");
+      assert.equal(await page.locator("#selection").isVisible(), false);
+      await page.evaluate(() => { window.testSocket.readyState = 1; });
+    }
     const fixtures = {};
     for (const map of ["tribes", "cloth", "pirates", "wonders", "new-world"]) for (const n of [3, 4]) {
       await emit({ type: "left" });
@@ -126,10 +213,18 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
           await page.locator("#scenarioInfoDialog > [data-close]").click();
         }
       }
+      if (map === "wonders") {
+        for (const type of ["wonder-warning", "wonder-bridge", "wonder-wall"]) {
+          const marker = page.locator(`#previewBoard [data-scenario-info="${type}"]`).first();
+          await marker.focus(); await page.keyboard.press("Enter");
+          assert.equal(await page.locator("#scenarioInfoDialog").isVisible(), true, `${type} is explained in the lobby preview`);
+          await page.locator("#scenarioInfoDialog > [data-close]").click();
+        }
+      }
       await page.locator("#create").click();
       assert.equal((await last()).mapId, map); assert.equal((await last()).seats, n);
       if (map === "new-world") assert.equal((await last()).thieves, "pirate");
-      assert.equal(await page.locator("dialog[open]").count(), 0, "rules are manual only");
+      assert.equal(await page.locator("dialog[open]").count(), 0, "A create request alone does not show an introduction before server confirmation");
       const g = create(map, n); await show(g);
       if (map === "new-world") { assert.equal(g.phase, "scenarioChoice"); assert.match(await page.locator("#scenarioPanel").textContent(), /Initial Harbors/); assert.equal(g.scenario.harborRemaining, 10); }
       const action = E.chooseBotAction(g, E.requiredActors(g)[0] ?? g.current);
@@ -335,18 +430,18 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
       await page.locator("#gameMapRules").click();
       const pirateRules = await page.locator("#sailingContent > p").allTextContents();
       for (const expected of [
-        /要塞的三层防御：.*每打赢一次进攻.*3 → 2 → 1 → 0.*Each successful attack removes one defense/s,
-        /战舰有什么用：.*每艘战舰算 1 点战力，普通船不算.*Each warship adds 1 strength; normal ships add none/s,
-        /每次掷骰，先移动海盗：.*3 和 5.*走 3 格.*lower of the two dice/s,
-        /海盗袭击谁：.*最后停下.*村庄或城市.*只有船、没有建筑，不会触发袭击.*Ships alone do not trigger a raid/s,
-        /战舰怎么来：.*1 羊毛 \+ 1 麦子 \+ 1 矿石.*随机发展卡.*下一个自己的回合.*Buy a random development card/s,
-        /怎样挡住海盗：.*4 艘战舰.*3 格，你赢.*4 格，平手.*5 格，你输.*Higher wins, equal ties, lower loses/s,
-        /袭击结果：.*银行任选 1 张.*平手.*随机交回 1 张.*每有 1 座城市再多交 1 张.*no fortress defenses/s,
-        /掷到 7：.*先移动海盗并处理袭击.*超过 7 张.*向下取整.*随机偷 1 张.*海盗不再移动.*Do not move the pirates again/s,
-        /怎样减少要塞防御：.*另掷 1 颗骰子.*4 艘战舰，掷出 3.*要塞数字减 1.*Roll one new die/s,
-        /攻打要塞的结果：.*平手或输了都不减少防御.*进攻后立刻结束回合.*Rebuild a broken route/s,
-        /胜利点卡：.*三人局移除全部 5 张.*四人局保留这 5 张，但都当战舰卡使用，不加分.*Neither game has scoring development cards/s,
-        /收复与升级：.*收复前不能升级城市.*2 麦子 \+ 3 矿石.*It cannot be upgraded before liberation.*2 grain \+ 3 ore/s,
+        /进攻要塞：.*3 → 2 → 1 → 0.*赢三次收复.*three wins liberate it/s,
+        /战舰：.*全部战舰.*每艘 1 战力，普通船 0.*1 strength each, normal ships 0/s,
+        /海盗巡航：.*3 和 5.*走 3 格.*lower die/s,
+        /海盗巡航：.*最后停下.*村庄或城市.*船只和沿途建筑不触发.*not ships or buildings passed en route/s,
+        /战舰：.*1 羊毛 \+ 1 麦子 \+ 1 矿石.*随机发展卡.*Buy a random development card/s,
+        /遭遇海盗：.*4 艘战舰.*3／4／5.*赢／平／输.*win\/tie\/loss/s,
+        /遭遇海盗：.*银行任选 1 张.*相等无事.*随机交回 1 张.*每座城市 1 张.*no ships, buildings or fortress defenses/s,
+        /掷到 7：.*先巡航、结算袭击.*超过 7 张.*向下取整.*随机偷 1 张.*海盗不再移动.*No second pirate move/s,
+        /进攻要塞：.*另掷 1 颗骰子.*4 舰对 3 点.*rolling 1 new die/s,
+        /进攻要塞：.*防御不减.*立即结束回合.*rebuild a broken line/s,
+        /牌堆与出牌：.*三人局移除全部 5 张.*四人局保留这 5 张但改作战舰.*没有加分卡.*Neither deck scores VP/s,
+        /收复、升级与获胜：.*收复前.*不能升级.*2 麦子 \+ 3 矿石.*cannot upgrade.*2 grain \+ 3 ore/s,
       ]) assert.ok(pirateRules.some(p => expected.test(p)), `Pirate map rules explain ${expected}`);
       await page.locator('#sailingContent .pirate-outpost[data-owner="1"]').click();
       assert.match(await page.locator("#scenarioInfoTitle").textContent(), /蓝色补给点/);
@@ -381,7 +476,7 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
       assert.ok(rulesBox.x >= 0 && rulesBox.x + rulesBox.width <= width + 1 && rulesBox.y >= 0 && rulesBox.y + rulesBox.height <= height + 1, `Pirate rules fit ${width}x${height}`);
       assert.ok(rulesClose.y >= 0 && rulesClose.y + rulesClose.height <= height, "Rules close button stays visible");
       assert.equal(await page.locator("#sailingContent").evaluate(el => el.scrollWidth <= el.clientWidth + 1 && [...el.querySelectorAll("p, small")].every(p => p.scrollWidth <= p.clientWidth + 1)), true, "Bilingual pirate rules wrap within the dialog");
-      await page.locator("#sailingContent > p").filter({ hasText: "怎样挡住海盗：" }).scrollIntoViewIfNeeded();
+      await page.locator("#sailingContent > p").filter({ hasText: "遭遇海盗：" }).scrollIntoViewIfNeeded();
       await page.screenshot({ path: path.join(__dirname, "test-results", `pirate-rules-raid-${width}.png`) });
       await page.locator("#sailingContent").evaluate(el => { el.scrollTop = el.scrollHeight; });
       assert.equal(await page.locator("#sailingContent").evaluate(el => Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) < 2), true, "The full rules remain reachable");
@@ -617,6 +712,54 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
       await page.locator(`[data-loot="${loot}"]`).click();
       assert.deepEqual((await last()).action, { type: "steal", victim: 1, loot });
       E.act(cloth, 0, (await last()).action, seeded(2));
+    }
+    const wonderMarkers = [
+      ["wonder-warning", "感叹号：初始村庄禁放点", /第一座和第二座村庄.*Neither of your two starting settlements.*开局后/s, 4],
+      ["wonder-bridge", "紫色方块：大桥施工点", /任一紫色方块.*大桥的施工条件.*预留 1 艘.*四个阶段.*out of four/s, 2],
+      ["wonder-wall", "棕色方块：长城施工点", /任一棕色方块.*长城的施工条件.*预留 1 艘.*四个阶段.*out of four/s, 5]
+    ];
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 844 }); await show(fixtures.wonders);
+      for (const [type, title, details, count] of wonderMarkers) {
+        const markers = page.locator(`#board [data-scenario-info="${type}"]`), before = await actionCount();
+        assert.equal(await markers.count(), count);
+        assert.equal(await markers.first().getAttribute("role"), "button");
+        if (width === 390) await markers.first().tap();
+        else await markers.first().click();
+        assert.ok((await page.locator("#scenarioInfoTitle").textContent()).includes(title));
+        assert.match(await page.locator("#scenarioInfoContent").textContent(), details);
+        const box = await page.locator("#scenarioInfoDialog").boundingBox();
+        assert.ok(box.x >= 0 && box.y >= 0 && box.x + box.width <= width + 1 && box.y + box.height <= 845);
+        assert.equal(await page.locator("#scenarioInfoContent").evaluate(el => el.scrollWidth <= el.clientWidth + 1), true);
+        await page.screenshot({ path: path.join(__dirname, `test-results/${type}-help-${width}.png`) });
+        await page.keyboard.press("Escape");
+        await markers.first().focus(); await page.keyboard.press("Space");
+        assert.equal(await page.locator("#scenarioInfoDialog").isVisible(), true, "Markers also open with the keyboard");
+        await page.locator("#scenarioInfoDialog > [data-close]").click();
+        assert.equal(await actionCount(), before, "Inspecting a wonder marker never submits a game action");
+      }
+    }
+    await page.locator("#gameMapRules").click();
+    for (const [type, title] of wonderMarkers) {
+      await page.locator(`#sailingContent [data-scenario-info="${type}"]`).first().click();
+      assert.ok((await page.locator("#scenarioInfoTitle").textContent()).includes(title));
+      await page.locator("#scenarioInfoDialog > [data-close]").click();
+      assert.equal(await page.locator("#sailingDialog").isVisible(), true, "Closing marker details returns to map rules");
+    }
+    await page.locator("#sailingAcknowledge").click();
+    for (const [type] of wonderMarkers) {
+      const build = create("wonders"); build.phase = "main"; build.players[0].resources = [4, 4, 4, 4, 4];
+      const sites = build.scenario.wonderSites;
+      const vertex = type === "wonder-bridge" ? sites.bridge[0] : type === "wonder-wall" ? sites.wall[0]
+        : sites.setupForbidden.find(id => !sites.bridge.includes(id) && !sites.wall.includes(id));
+      Object.assign(build.board.edges[build.board.vertices[vertex].edges[0]], { owner: 0, kind: "road" });
+      assert.ok(E.legal(build, 0).settlements.includes(vertex));
+      await show(build); await page.locator('[data-action="settlement"]').click();
+      await page.locator(`#board [data-vertex="${vertex}"]`).click();
+      assert.equal(await page.locator("#scenarioInfoDialog").isVisible(), false, "An active build target takes priority over the marker below it");
+      assert.deepEqual((await last()).action, { type: "settlement", vertex });
+      E.act(build, 0, (await last()).action); await show(build);
+      assert.equal(build.board.vertices[vertex].owner, 0);
     }
     const wonder = structuredClone(fixtures.wonders);
     Object.assign(wonder.board.vertices[wonder.scenario.wonderSites.bridge[0]], { owner: 0, level: 1 });

@@ -1,10 +1,10 @@
 "use strict";
 (function (root, factory) {
-  const api = factory();
+  const api = factory(typeof module === "object" && module.exports ? require("./game-audio") : root.BoardGameAudio);
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.CatanAudio = api;
-})(typeof window === "object" ? window : globalThis, function () {
-  const durations = { click: .07, road: .4, settlement: .65, city: .95, ship: 1.05, robber: .6, pirate: .9, monopoly: .85, plenty: .85, roads: .7, knight: .55, victory: 1.85, offer: .4, trade: .65, gold: .85, exchange: .45, dice: .55, cancel: .18 };
+})(typeof window === "object" ? window : globalThis, function (shared) {
+  const durations = { ...shared.durations, click: .07, road: .4, settlement: .65, city: .95, ship: 1.05, robber: .6, pirate: .9, monopoly: .85, plenty: .85, roads: .7, knight: .55, victory: 1.85, offer: .4, trade: .65, gold: .85, exchange: .45, dice: .55, cancel: .18 };
   const banks = new WeakMap();
   function noiseBuffer(ctx) {
     if (!banks.has(ctx)) {
@@ -17,6 +17,7 @@
   }
   // Small, local Foley-style layers. No media downloads or speech synthesis.
   function synthesize(ctx, destination, kind, start = ctx.currentTime) {
+    if (Object.hasOwn(shared.durations, kind)) return shared.synthesize(ctx, destination, kind, start);
     if (!durations[kind]) return null;
     const output = ctx.createGain(), nodes = new Set([output]); output.gain.value = .65; output.connect(destination);
     let sources = 0;
@@ -79,49 +80,7 @@
     return { duration: durations[kind], stop() { for (const node of nodes) { try { node.stop?.(); node.disconnect(); } catch {} } nodes.clear(); } };
   }
   function create() {
-    let ctx, compressor, volume, level = .6, muted = false, unlocked = false, lastClick = -Infinity;
-    const playing = new Set();
-    try { muted = localStorage.getItem("catan-muted") === "true"; } catch {}
-    try { const saved = localStorage.getItem("catan-sfx-volume"); if (saved !== null && saved !== undefined && saved !== "" && Number.isFinite(Number(saved))) level = Math.max(0, Math.min(1, Number(saved))); } catch {}
-    function stop() { for (const voice of playing) { clearTimeout(voice.timer); voice.stop(); } playing.clear(); }
-    function unlock() {
-      unlocked = true;
-      if (muted) return;
-      try {
-        if (!ctx) {
-          const Audio = globalThis.AudioContext || globalThis.webkitAudioContext;
-          if (!Audio) return;
-          ctx = new Audio(); compressor = ctx.createDynamicsCompressor(); volume = ctx.createGain();
-          compressor.threshold.value = -14; compressor.ratio.value = 8; volume.gain.value = level;
-          compressor.connect(volume); volume.connect(ctx.destination);
-        }
-        if (ctx.state !== "running") ctx.resume().catch(() => {});
-      } catch {}
-    }
-    function play(kind) {
-      if (muted || level === 0 || !unlocked || !ctx || ctx.state !== "running" || globalThis.document?.hidden || !durations[kind]) return false;
-      if (kind === "click") { if (ctx.currentTime - lastClick < .07) return false; lastClick = ctx.currentTime; }
-      if (kind === "victory") stop();
-      if (playing.size >= 4) { const oldest = playing.values().next().value; clearTimeout(oldest.timer); oldest.stop(); playing.delete(oldest); }
-      try {
-        const voice = synthesize(ctx, compressor, kind); if (!voice) return false;
-        playing.add(voice); voice.timer = setTimeout(() => playing.delete(voice), (voice.duration + .1) * 1000);
-        return true;
-      } catch { return false; }
-    }
-    function setMuted(value) {
-      muted = Boolean(value); stop();
-      try { localStorage.setItem("catan-muted", String(muted)); } catch {}
-      if (!muted) unlock();
-    }
-    function setVolume(value) {
-      if (!Number.isFinite(value)) return;
-      level = Math.max(0, Math.min(1, value));
-      if (volume) volume.gain.value = level;
-      if (!level) stop();
-      try { localStorage.setItem("catan-sfx-volume", String(level)); } catch {}
-    }
-    return { play, unlock, stop, setMuted, setVolume, get volume() { return level; }, get muted() { return muted; } };
+    return shared.create({ render: synthesize, sounds: durations, storagePrefix: "catan" });
   }
   function incoming(room) {
     const game = room?.game, trade = game?.trade, you = room?.you;

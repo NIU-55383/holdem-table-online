@@ -40,8 +40,10 @@ catan=attachCatan(server); server.on("upgrade",(req,socket,head)=>catan.upgrade(
     const [host,guest]=pages;
     const send=(page,data)=>page.evaluate(data=>testSocket.send(JSON.stringify(data)),data);
     await send(host,{type:"create",name:"Captain",seats:3,mapId:"shores-1"});await host.locator("#lobby").waitFor();
+    await host.locator("#sailingAcknowledge").click();
     const code=await host.locator("#copyCode").textContent();
     await send(guest,{type:"join",name:"Reader",code});await guest.locator("#lobby").waitFor();
+    await guest.locator("#sailingAcknowledge").click();
     await send(host,{type:"fillBots"});await host.waitForFunction(()=>testState.seats.length===3);
     await send(host,{type:"start"});await host.locator("#game").waitFor();
     const room=catan.rooms.get(code),g=room.game;clearTimeout(room.timer);

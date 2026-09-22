@@ -23,6 +23,20 @@
     if (type === "development") return { title: ["礼物：免费发展卡", "Gift: free development card"], icon: "development", paragraphs: [arrival, ["免费获得事先背面朝下放置的 1 张发展卡，领取前不公开卡面。行动卡从下一个自己的回合起才能使用，每回合最多一张；胜利点卡立即计分。", "Receive one pre-dealt face-down development card for free. Its identity is private until collected. Action cards are playable on a later turn of your own, at most one per turn; VP cards count immediately."]] };
     return null;
   }
+  function wonderInfo(type) {
+    if (type === "wonder-warning") return { title: ["感叹号：初始村庄禁放点", "Exclamation mark: no starting settlement"], paragraphs: [
+      ["初始布置时，第一座和第二座村庄都不能放在感叹号位置。", "Neither of your two starting settlements may be placed at an exclamation mark."],
+      ["开局后，自己的道路或航线连到这里，并满足村庄间距等正常规则，就可以付费建村，之后也可以升级城市。", "After setup, once your own road or shipping route reaches this site and the usual distance rule is met, you may pay to build a settlement here and later upgrade it to a city."]
+    ] };
+    if (!["wonder-bridge", "wonder-wall"].includes(type)) return null;
+    const bridge = type === "wonder-bridge", name = bridge ? "大桥" : "长城", english = bridge ? "Great Bridge" : "Great Wall";
+    const color = bridge ? "紫色" : "棕色", colorEn = bridge ? "Purple" : "Brown";
+    return { title: [`${color}方块：${name}施工点`, `${colorEn} square: ${english} site`], paragraphs: [
+      [`初始村庄不能放在这里。开局后，按正常连接和间距规则，在任一${color}方块处拥有自己的村庄或城市，就满足${name}的施工条件。`, `No starting settlement here. After setup, owning a settlement or city at any ${colorEn.toLowerCase()} square, built under the usual connection and distance rules, meets the ${english}'s building requirement.`],
+      [`若${name}尚未被认领，且你还没选择奇观，可在自己的建造阶段到奇观区认领，并预留 1 艘库存船作为标记。每人只能选择一座奇观，选定后不能更换。`, `If the ${english} is unclaimed and you have not chosen a wonder, claim it in the Wonders section during your building phase and reserve 1 ship from supply as its marker. Each player may choose only one wonder and cannot switch later.`],
+      ["认领后，每支付一次卡面费用，建成一个阶段；共四个阶段。", "After claiming it, each payment of the card's cost completes one stage, out of four."]
+    ] };
+  }
   function pirateInfo(type, owner, strength = 3) {
     if (type === "pirate-fleet") return { title: ["海盗舰队", "Pirate fleet"], icon: "pirate", paragraphs: [
       ["每位玩家掷骰后，海盗按两颗骰子中较小的点数顺时针移动。只袭击停下的海洋格旁的村庄或城市；经过的地方和船只不受袭击。", "After each player's roll, move the pirates clockwise by the lower die. They raid settlements or cities beside the final sea hex, not ships or places passed along the way."],
@@ -161,5 +175,5 @@
     }
     return { panel, wonders };
   }
-  root.CatanScenarioUI = { art, phases, playerRange, target, kind, devName, choice, render, tribeInfo, pirateInfo, battleReport };
+  root.CatanScenarioUI = { art, phases, playerRange, target, kind, devName, choice, render, tribeInfo, wonderInfo, pirateInfo, battleReport };
 })(typeof globalThis === "object" ? globalThis : this);

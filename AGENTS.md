@@ -1,6 +1,6 @@
 # Shared Game UI
 
-- Every game must load `avatar-data.js` and `social-data.js` before `game-ui.js`, plus `game-ui.css`, and use the shared `BoardGameUI` avatar picker, renderer, presence indicators and avatar interactions.
+- Every game must load `avatar-data.js`, `social-data.js` and `game-audio.js` before `game-ui.js`, plus `game-ui.css`, and use the shared `BoardGameUI` avatar picker, renderer, presence indicators and avatar interactions.
 - Human avatars default to the first grapheme of the player's name. Offer upload, user-triggered camera capture, one emoji, and reset-to-initial; never assign the old fixed illustrated human faces (`avatar-0` through `avatar-3`).
 - Store the avatar preference locally as `boardclub-avatar`. Photos must be center-cropped and re-encoded to small JPEGs in the browser before transmission; never send original photos. Normalize all incoming avatar data with `avatar-data.js` on both client and server. Allowlisted illustrated symbols are for server-assigned bots only.
 - Choose a bot's illustrated emoji or name initial once when adding its seat, and preserve it across actions and reconnects. Live profile updates only change the requesting connection's own seat, and broadcast through the existing room state.
@@ -16,6 +16,7 @@
 - Clicking another player's avatar opens the shared flowers, splash, heart, applause, cheers and good-luck picker. Clicking one's own avatar keeps the avatar editor. Include bots, game tables and room lobbies; preserve keyboard operation, bilingual labels and mobile bounds.
 - Servers use `game-social.js` to assign public IDs and validate room membership, target, allowlisted emoji and sender cooldown. Derive the sender from the authenticated connection, never from request fields. Do not expose authentication tokens as avatar IDs.
 - Broadcast reactions as transient room-only events, not game actions or chat history. They must not change the game revision, consume a turn, restart AI searches or replay on reconnect. Keep effects brief, bounded and pointer-transparent; support reduced motion.
+- Confirmed reactions use the six shared local sound recipes in `game-audio.js`. Play once on receipt, including for the sender, never optimistically on send or for invalid, duplicate or foreign-room events. Respect browser audio unlock, hidden pages, mute and volume; do not queue old sounds. Games with an existing effects controller pass it to `mountInteractions` as `{ audio, onSoundChange }` so reaction and game audio share their controls. Keep the reaction menu mute button available in every game.
 - Chat bubbles must use content-sized width with a capped maximum width/height, never stretch across an entire player row.
 
 ## Catan Seats

@@ -12,6 +12,19 @@
   let viewedTradeKey = "", alertTradeKey = "";
   let harborSetupKey = "", harborSetupAcknowledged = false;
   let islandRoadIntent = null;
+  let mapIntroKey = "";
+  try { mapIntroKey = sessionStorage.getItem("catan-map-intro") || ""; } catch {}
+  const introKey = room => room ? `${room.code}:${room.mapId}:${room.layout || "default"}` : "";
+  function rememberMapIntro(room) {
+    mapIntroKey = introKey(room);
+    try { if (mapIntroKey) sessionStorage.setItem("catan-map-intro", mapIntroKey); else sessionStorage.removeItem("catan-map-intro"); } catch {}
+  }
+  function showMapIntroduction() {
+    const room = state.room;
+    if (!room || !Maps.get(room.mapId) || introKey(room) === mapIntroKey || document.querySelector("dialog[open]")) return;
+    showSailingRules(room.mapId);
+  }
+  document.addEventListener("close", showMapIntroduction, true);
   function renderSoundToggle() {
     const button = $("soundToggle"), label = audio.muted ? "开启音效 / Enable sounds" : "关闭音效 / Mute sounds";
     button.title = label; button.setAttribute("aria-label", label); button.setAttribute("aria-pressed", String(!audio.muted));
@@ -49,7 +62,7 @@
   state.mapId = "base"; state.layout = "default"; state.moveFrom = null; state.thieves = "both"; state.harbor = null; state.victim = null;
   try { state.skins = window.GameSocialData.normalizeSkins(JSON.parse(localStorage.getItem("catan-piece-skins") || "null")); }
   catch { state.skins = window.GameSocialData.normalizeSkins(); }
-  const social = window.BoardGameUI.mountInteractions(() => state.room && ({ code: state.room.code, players: state.room.seats, you: state.room.seats[state.room.you]?.socialId, connected: state.socket?.readyState === WebSocket.OPEN }), send);
+  const social = window.BoardGameUI.mountInteractions(() => state.room && ({ code: state.room.code, players: state.room.seats, you: state.room.seats[state.room.you]?.socialId, connected: state.socket?.readyState === WebSocket.OPEN }), send, { audio, onSoundChange: () => { renderSoundToggle(); renderAudioSettings(); } });
   const management = window.BoardGameUI.mountRoomControl(() => state.room?.control, send, () => document.querySelector(state.room?.game ? ".game-rule-links" : "#lobby .room-heading"));
   function renderSkins() {
     $("pieceSkins").innerHTML = Object.entries(window.GameSocialData.skins).map(([kind, choices]) => `<fieldset ${kind === "pirate" && state.mapId === "base" ? "hidden" : ""}><legend>${kind === "robber" ? "强盗 / Robber" : "海盗 / Pirate"}</legend><div class="skin-options">${choices.map((s) => `<button type="button" data-skin-kind="${kind}" data-skin="${s.id}" title="${s.label}" aria-label="${s.label}" aria-pressed="${state.skins[kind] === s.id}">${s.emoji || `<svg viewBox="0 0 48 48" aria-hidden="true">${B.icon(s.art)}</svg>`}</button>`).join("")}</div></fieldset>`).join("");
@@ -77,10 +90,12 @@
     }
     if (!$("sailingDialog").open) $("sailingDialog").showModal();
     $("sailingContent").scrollTop = 0;
+    if (!general && state.room?.mapId === mapId) rememberMapIntro(state.room);
   }
   $("sailingAcknowledge").onclick = () => $("sailingDialog").close();
   function showScenarioInfo(target) {
     const info = S.pirateInfo(target.dataset.scenarioInfo, Number(target.dataset.owner), Number(target.dataset.strength ?? 3))
+      || S.wonderInfo(target.dataset.scenarioInfo)
       || S.tribeInfo(target.dataset.scenarioInfo, Number(target.dataset.resource ?? -1));
     if (!info) return;
     $("scenarioInfoTitle").innerHTML = `${B.escape(info.title[0])}<small>${B.escape(info.title[1])}</small>`;
@@ -358,9 +373,9 @@
       let data; try { data = JSON.parse(event.data); } catch { return; }
       if (data.type === "welcome") { sessionStorage.setItem("catan-token", data.token); soundEvents.reset(); resetBattleFeedback(); state.cardBaseline = false; clearCardChanges(); renderCardChanges(); clearChatBubbles(); }
       if (data.type === "reaction") { social.receive(data); return; }
-      if (data.type === "state") { soundEvents.update(data); trackCardChanges(data); trackChatBubbles(data); state.room = data; social.sync(); state.pending = false; render(); }
+      if (data.type === "state") { soundEvents.update(data); trackCardChanges(data); trackChatBubbles(data); state.room = data; social.sync(); state.pending = false; render(); showMapIntroduction(); }
       if (data.type === "error") { state.pending = false; notice(data.message); renderActions(); renderScenario(); }
-      if (data.type === "left") { audio.stop(); soundEvents.reset(); viewedTradeKey = ""; clearCardChanges(); clearChatBubbles(); resetBoardView(); state.cardBaseline = false; state.room = null; state.phaseKey = ""; state.pending = false; state.mode = ""; state.selected = null; state.moveFrom = null; document.querySelectorAll("dialog[open]").forEach((d) => d.close()); render(); if (data.reason) notice(data.reason); }
+      if (data.type === "left") { audio.stop(); soundEvents.reset(); viewedTradeKey = ""; clearCardChanges(); clearChatBubbles(); resetBoardView(); state.cardBaseline = false; state.room = null; rememberMapIntro(null); state.phaseKey = ""; state.pending = false; state.mode = ""; state.selected = null; state.moveFrom = null; document.querySelectorAll("dialog[open]").forEach((d) => d.close()); render(); if (data.reason) notice(data.reason); }
     });
     ws.addEventListener("close", (event) => {
       audio.stop(); soundEvents.reset(); $("incomingTradeAlert").hidden = true;
@@ -561,6 +576,14 @@
       else if (state.moveFrom !== null && l.shipDestinations[state.moveFrom]?.includes(edge)) { action({ type: "moveShip", from: state.moveFrom, edge }); state.moveFrom = null; }
       return;
     }
+    if (["robber", "pirate"].includes(state.mode)) {
+      const g = state.room.game, tile = Number(target.dataset.tile);
+      if (kind === "tile" && g.phase === "robber" && g.current === state.room.you && g.legal[state.mode]?.includes(tile)) {
+        state.selected = null;
+        action({ type: state.mode, tile });
+      }
+      return;
+    }
     if (["road", "ship", "settlement", "city"].includes(state.mode)) {
       state.selected = null;
       requestBuild({ type: state.mode, [kind]: Number(target.dataset[kind]) });
@@ -711,8 +734,8 @@
     if (winner) { const names = (g.winners?.length ? g.winners : [g.winner]).map(id => g.players[id].name).join(" & "); zh = `${names} ${g.winners?.length > 1 ? "共同胜利" : "胜利"}`; en = `${names} ${g.winners?.length > 1 ? "win together" : "wins"}`; }
     if (own && g.phase === "robber") {
       const pirate = state.mode === "pirate";
-      zh = state.selected ? `确认移动${pirate ? "海盗" : "强盗"}` : `${pirate ? "海盗" : "强盗"}：选择空心圆`;
-      en = state.selected ? `Confirm the ${pirate ? "pirate" : "robber"}'s destination` : `${pirate ? "Pirate" : "Robber"}: choose a circle`;
+      zh = `${pirate ? "海盗" : "强盗"}：选择空心圆`;
+      en = `${pirate ? "Pirate" : "Robber"}: choose a circle`;
     }
     if (own && g.phase === "steal") {
       zh = g.thief === "pirate" ? "偷取资源：点击发光的船" : "偷取资源：点击发光的房子";

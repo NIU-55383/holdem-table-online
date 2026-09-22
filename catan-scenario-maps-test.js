@@ -211,3 +211,42 @@ test("shared rules state standard development inventory without hiding Pirate Is
   assert.match(english, /25-card.*14 Knights, 5 Victory Points, 2 Road Building, 2 Year of Plenty and 2 Monopoly/);
   assert.match(english, /remove the 5 VP cards with three players; treat them as Knights with four/);
 });
+
+test("compact Pirate Islands rules retain every rule group, inventory and combat example in both languages", () => {
+  const rules = Maps.get("pirates").rules;
+  const zh = rules.map(r => r[0]).join("\n"), en = rules.map(r => r[1]).join("\n");
+  assert.equal(rules.length, 12, "Ten thematic sections plus player/layout notes");
+  assert.ok(zh.length < 1300 && en.length < 3650, "Keep the condensed length without reducing font size");
+  const facts = [
+    ["initial pieces", /1 座沿海村庄、1 艘船.*东侧主岛建 2 座村庄/, /1 coastal settlement and 1 ship.*2 settlements on the eastern mainland/],
+    ["three-player seat", /三人局不用第 4 号位/, /Omit seat 4 with three players/],
+    ["disabled pieces and awards", /没有强盗、最长商路或最大军队/, /No robber, Longest Trade Route or Largest Army/],
+    ["route and owner", /最短可行路线.*自己的西侧彩色圆点.*同色旗帜要塞/, /shortest available shipping route.*your colored western dot.*your matching fortress/],
+    ["route restrictions", /不能分叉、绕路挡人或越过要塞造船/, /unbranched.*No blocking detours or ships beyond the fortress/],
+    ["outpost buildings", /连到圆点后可付费建村、升级城市.*初始村庄不能放这里.*其他外岛位置也不能建村/, /Reach your dot to pay for a settlement and later a city.*no initial settlements there or other foreign settlement sites/],
+    ["ships not roads", /只有连续船线通往要塞才能进攻.*道路不算.*外岛建路没有收益.*占造船位置/, /Only a continuous ship line.*permits attacks.*Roads give no benefit.*occupy ship sites/],
+    ["road removal", /本站允许.*自己的建造阶段点击自己的外岛道路.*确认后收回棋子/, /On this site.*during your building phase, click and confirm your own island road to recover its piece/],
+    ["no refund or removal of others", /不退资源、发展卡或免费建造次数.*主岛道路、船只和他人道路不能/, /no resource, development-card or free-build refund.*Mainland roads, ships and others' roads cannot/],
+    ["random card cost and display", /1 羊毛 \+ 1 麦子 \+ 1 矿石买随机发展卡.*骑士显示为「战舰」/, /random development card for 1 wool \+ 1 grain \+ 1 ore.*Knights appear as Warships/],
+    ["upgrade and prerequisite", /免费升级最靠主岛的 1 艘普通船.*没有普通船不能用/, /upgrade your normal ship nearest the mainland for free.*need a normal ship/],
+    ["strength in both battles", /防守海盗和进攻要塞.*全部战舰.*每艘 1 战力，普通船 0/, /both raids and fortress attacks.*all your warships.*1 strength each, normal ships 0/],
+    ["three-player deck", /三人局移除全部 5 张胜利点卡.*20 张（14 战舰）/, /Three players remove all 5 VP cards: 20 cards, including 14 Warships/],
+    ["four-player deck", /四人局保留这 5 张但改作战舰.*25 张（19 战舰）/, /Four players keep the 5 as Warships: 25 cards, including 19 Warships/],
+    ["no scoring cards and action counts", /没有加分卡.*道路建设、丰收、垄断各 2 张/, /Neither deck scores VP.*2 Road Building, 2 Year of Plenty and 2 Monopoly/],
+    ["card timing and exhaustion", /每回合最多打出 1 张行动卡.*新买的须等下一个自己的回合.*用过不放回.*耗尽不能再买/, /at most 1 action card per turn, never one bought that turn.*Used cards never return.*empty deck ends purchases/],
+    ["patrol and example", /每人掷骰后.*较小骰点.*顺时针.*移动格数.*战力.*3 和 5 走 3 格、战力 3.*双骰相同就按该点数/, /After each roll.*clockwise.*lower die.*movement is raid strength.*3 and 5 means 3 spaces and strength 3.*doubles use that value/],
+    ["raid target and order", /只袭击最后停下的海洋格旁的村庄或城市.*船只和沿途建筑不触发.*先结算袭击.*骰子总和产资源或处理 7/, /Raid only settlements or cities beside the final sea hex, not ships or buildings passed en route.*raids before production for the total.*7/],
+    ["raid comparison and gains", /全部战舰数与海盗移动格数相比.*大于就赢.*任选 1 张有库存.*相等无事/, /all your warships with pirate movement.*Higher: choose 1 available bank resource.*Equal: nothing/],
+    ["raid losses and shortage", /小于就输.*随机交回 1 张资源 \+ 自己每座城市 1 张.*不够就交完/, /Lower: return 1 random resource plus 1 per city you own, or all if short/],
+    ["raid example and limits", /4 艘战舰.*3／4／5.*赢／平／输.*不拆船、建筑.*不减少要塞防御/, /4 warships.*3\/4\/5.*win\/tie\/loss.*no ships, buildings or fortress defenses/],
+    ["seven order and discard", /掷到 7：仍先巡航、结算袭击.*超过 7 张的所有玩家弃一半.*向下取整，发展卡不算/, /Rolling 7: Patrol and resolve raids first.*everyone with over 7 resource cards discards half, rounded down.*development cards do not count/],
+    ["seven theft and no production", /掷骰者从任一有资源的对手随机偷 1 张.*不限距离.*海盗不再移动.*不按骰点产资源/, /roller steals 1 random resource from any opponent holding one, at any distance.*No second pirate move and no production/],
+    ["attack eligibility and new die", /船线接到自己的要塞.*每回合末可进攻一次.*另掷 1 颗骰子/, /ship line reaches your fortress.*once at turn end.*rolling 1 new die/],
+    ["attack comparison and example", /全部战舰数大于骰点，防御减 1.*4 舰对 3 点.*相等损失离要塞最近的 1 艘船.*小于损失.*2 艘船，防御不减/, /More warships than the roll removes 1 defense.*4 warships vs 3.*Equal loses the ship nearest the fortress.*fewer loses the nearest 2, with no defense removed/],
+    ["three defenses, ending turn and repair", /3 → 2 → 1 → 0.*赢三次收复.*任何结果都立即结束回合.*断线须补回要塞才能再攻/, /3 → 2 → 1 → 0.*three wins liberate it.*Any result ends your turn.*rebuild a broken line before attacking again/],
+    ["occupied and liberated fortress", /收复前要塞不产资源、不计分、不能升级.*收复后变成自己的村庄，产资源、计 1 分/, /occupied fortress produces nothing, scores no VP and cannot upgrade.*Liberated.*producing settlement worth 1 VP/],
+    ["city cost, output, pieces and timing", /之后自己的建造阶段.*2 麦子 \+ 3 矿石.*2 分、产量翻倍.*1 枚城市棋子.*上限 4 座.*不能在攻城后马上升级/, /later building phase.*2 grain \+ 3 ore.*2 VP, double production.*1 of your 4 city pieces.*never immediately after an attack/],
+    ["victory and all fortresses", /自己的回合达 10 分且收复自己的要塞.*所有要塞收复后移走海盗.*巡航、袭击停止/, /Win on your turn with 10 VP and your fortress liberated.*all fortresses are free, remove the pirates and stop patrols and raids/],
+  ];
+  for (const [name, chinese, english] of facts) { assert.match(zh, chinese, name + " (Chinese)"); assert.match(en, english, name + " (English)"); }
+});

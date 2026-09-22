@@ -33,7 +33,7 @@ window.CatanBoard = (() => {
         const robbable = !preview && ["robber", "pirate"].includes(mode) && legal[mode]?.includes(t.id);
         const chosen = robbable && selected?.kind === "tile" && selected.id === t.id;
         const rolled = dice.length && dice[0] + dice[1] === t.number && t.id !== board.robber;
-        return `<g ${robbable ? `${accessible("tile", t.id, "移动强盗 / Move robber")} aria-pressed="${chosen}"` : foreign ? info("foreign", "外岛，不产资源，不能建村 / Foreign island, no production or settlements") : ""} class="hex-tile ${foreign ? "foreign-island" : ""} ${clothIsland ? "cloth-island" : ""} ${r === 8 ? "fog-tile" : ""} ${robbable ? "target-tile" : ""} ${chosen ? "chosen-tile" : ""} ${rolled ? "producing" : ""}">
+        return `<g ${robbable ? `${accessible("tile", t.id, mode === "pirate" ? "移动海盗 / Move pirate" : "移动强盗 / Move robber")} aria-pressed="${chosen}"` : foreign ? info("foreign", "外岛，不产资源，不能建村 / Foreign island, no production or settlements") : ""} class="hex-tile ${foreign ? "foreign-island" : ""} ${clothIsland ? "cloth-island" : ""} ${r === 8 ? "fog-tile" : ""} ${robbable ? "target-tile" : ""} ${chosen ? "chosen-tile" : ""} ${rolled ? "producing" : ""}">
           <title>${foreign ? "外岛 · 不产资源 · 不能建村 / Foreign island · No production or settlements" : names[r]}${t.number ? ` · ${t.number}` : ""}</title>
           <polygon points="${points(t)}" fill="${r === 8 ? "#b9d5d7" : r === 6 ? "#197c9e" : "#ebca80"}" stroke="${r >= 6 && r !== 7 ? "#51a1b2" : "#f6df9e"}" stroke-width="2"/>
           <polygon class="hex-land" points="${points(t, .88)}" fill="${FILL[r]}" stroke="#384b3f" stroke-opacity=".25" stroke-width="1.5"/>
@@ -104,11 +104,11 @@ window.CatanBoard = (() => {
       }).join("") : ""}
       ${["bridge", "wall"].flatMap((kind) => (scenario.wonderSites?.[kind] || []).map((id) => {
         const point = v[id]; if (!point || point.owner >= 0) return "";
-        return `<g class="wonder-site" role="img" aria-label="${kind === "bridge" ? "大桥施工位置 / Great Bridge site" : "长城施工位置 / Great Wall site"}"><rect x="${point.x - 6}" y="${point.y - 6}" width="12" height="12" fill="${kind === "bridge" ? "#bd80cf" : "#cd9859"}" stroke="#fff0c6" stroke-width="2"/></g>`;
+        return `<g class="wonder-site" ${info(`wonder-${kind}`, kind === "bridge" ? "紫色方块：大桥施工点 / Purple square: Great Bridge site" : "棕色方块：长城施工点 / Brown square: Great Wall site")}><circle cx="${point.x}" cy="${point.y}" r="18" fill="transparent"/><rect x="${point.x - 6}" y="${point.y - 6}" width="12" height="12" fill="${kind === "bridge" ? "#bd80cf" : "#cd9859"}" stroke="#fff0c6" stroke-width="2"/></g>`;
       })).join("")}
       ${(scenario.wonderSites?.setupForbidden || []).filter((id) => !(scenario.wonderSites.bridge || []).includes(id) && !(scenario.wonderSites.wall || []).includes(id)).map((id) => {
         const point = v[id]; if (!point || point.owner >= 0) return "";
-        return `<g class="wonder-warning" role="img" aria-label="初始村庄禁放位置 / No starting settlement"><path d="m${point.x} ${point.y - 8} 7 8-7 8-7-8z" fill="#ffe37a" stroke="#81683d" stroke-width="1.5"/><text x="${point.x}" y="${point.y + 4}" text-anchor="middle" font-size="12" font-weight="800" fill="#594726">!</text></g>`;
+        return `<g class="wonder-warning" ${info("wonder-warning", "感叹号：初始村庄禁放点 / Exclamation mark: no starting settlement")}><circle cx="${point.x}" cy="${point.y}" r="18" fill="transparent"/><path d="m${point.x} ${point.y - 8} 7 8-7 8-7-8z" fill="#ffe37a" stroke="#81683d" stroke-width="1.5"/><text x="${point.x}" y="${point.y + 4}" text-anchor="middle" font-size="12" font-weight="800" fill="#594726">!</text></g>`;
       }).join("")}
       ${mode === "placeHarbor" ? (legal.scenario?.placeHarbors?.find((entry) => entry.harbor === options.harbor)?.edges || []).map((id) => {
         const edge = board.edges[id], a = v[edge.a], b = v[edge.b], x = (a.x + b.x) / 2, y = (a.y + b.y) / 2;

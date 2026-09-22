@@ -96,6 +96,7 @@
     refresh();
   }
   const socialContexts = [], effects = new Set();
+  let defaultReactionAudio;
   let reactionMenu = null, menuContext = null, menuTarget = "", returnFocus = null;
   function socialAnchor(id) {
     return [...document.querySelectorAll("[data-social-id]")].find((el) => el.dataset.socialId === id && el.getClientRects().length && !el.closest("[hidden]"));
@@ -103,6 +104,13 @@
   function closeReactions(focus = false) {
     reactionMenu?.remove(); reactionMenu = null; menuContext = null;
     if (focus && returnFocus?.isConnected) returnFocus.focus();
+  }
+  function renderReactionSound(context) {
+    const button = reactionMenu?.querySelector("[data-reaction-sound]"); if (!button) return;
+    const label = context.audio.muted ? "开启音效 / Enable sounds" : "关闭音效 / Mute sounds";
+    button.title = label; button.setAttribute("aria-label", label); button.setAttribute("aria-pressed", String(!context.audio.muted));
+    button.innerHTML = `<i data-lucide="${context.audio.muted ? "volume-x" : "volume-2"}" aria-hidden="true"></i>`;
+    window.lucide?.createIcons({ root: button });
   }
   function openReactions(anchor) {
     const id = anchor.dataset.socialId;
@@ -113,12 +121,14 @@
     const room = view.code;
     reactionMenu = document.createElement("div"); reactionMenu.className = "reaction-menu";
     reactionMenu.setAttribute("role", "dialog"); reactionMenu.setAttribute("aria-label", "互动 / Reactions");
-    reactionMenu.innerHTML = `<div class="reaction-heading"><strong>${escape(player.name)}</strong><button type="button" data-reaction-close aria-label="关闭 / Close">×</button></div><div class="reaction-options">${Object.entries(window.GameSocialData.reactions).map(([id, r]) => `<button type="button" data-reaction="${id}" title="${r.label}" aria-label="${r.label}"><span>${r.emoji}</span><small>${r.label}</small></button>`).join("")}</div>`;
+    reactionMenu.innerHTML = `<div class="reaction-heading"><strong>${escape(player.name)}</strong><div class="reaction-tools"><button type="button" data-reaction-sound></button><button type="button" data-reaction-close aria-label="关闭 / Close">×</button></div></div><div class="reaction-options">${Object.entries(window.GameSocialData.reactions).map(([id, r]) => `<button type="button" data-reaction="${id}" title="${r.label}" aria-label="${r.label}"><span>${r.emoji}</span><small>${r.label}</small></button>`).join("")}</div>`;
     document.body.append(reactionMenu);
+    renderReactionSound(context);
     const box = anchor.getBoundingClientRect(), menu = reactionMenu.getBoundingClientRect();
     reactionMenu.style.left = `${Math.max(8, Math.min(innerWidth - menu.width - 8, box.left))}px`;
     reactionMenu.style.top = `${Math.max(8, Math.min(innerHeight - menu.height - 8, box.bottom + 8))}px`;
     reactionMenu.onclick = (event) => {
+      if (event.target.closest("[data-reaction-sound]")) { event.stopPropagation(); context.audio.setMuted(!context.audio.muted); context.onSoundChange?.(); renderReactionSound(context); return; }
       const button = event.target.closest("[data-reaction]");
       if (event.target.closest("[data-reaction-close]")) return closeReactions(true);
       if (!button) return;
@@ -143,17 +153,19 @@
   });
   window.addEventListener("resize", () => closeReactions());
   document.addEventListener("scroll", (event) => { if (!reactionMenu?.contains(event.target)) closeReactions(); }, true);
-  function mountInteractions(view, send) {
-    const context = { view, send }, seen = new Set(); socialContexts.push(context);
+  function mountInteractions(view, send, options = {}) {
+    const audio = options.audio || (defaultReactionAudio ||= window.BoardGameAudio.create());
+    const context = { view, send, audio, onSoundChange: options.onSoundChange }, seen = new Set(); socialContexts.push(context);
     return {
       sync() {
         if (menuContext === context && (!view()?.connected || !view()?.players.some((p) => p?.socialId === menuTarget))) closeReactions();
       },
       receive(event) {
         const current = view(), reaction = window.GameSocialData.reactions[event.kind];
-        if (!reaction || !current || current.code !== event.room || seen.has(event.id) || !current.players.some((p) => p?.socialId === event.to) || !current.players.some((p) => p?.socialId === event.from)) return;
+        if (!reaction || !current?.connected || current.code !== event.room || seen.has(event.id) || !current.players.some((p) => p?.socialId === event.to) || !current.players.some((p) => p?.socialId === event.from)) return;
         seen.add(event.id); if (seen.size > 100) seen.delete(seen.values().next().value);
         if (effects.size >= 4) return;
+        audio.play(`reaction-${event.kind}`);
         const effect = document.createElement("div"); effect.className = "avatar-reaction"; effect.dataset.reactionKind = event.kind;
         effect.setAttribute("role", "status"); effect.setAttribute("aria-label", `${event.fromName} → ${event.toName}: ${reaction.label}`);
         effect.innerHTML = `<span>${reaction.emoji}</span><small>${escape(event.fromName)} → ${escape(event.toName)}</small>`;
@@ -175,6 +187,13 @@
       },
     };
   }
+  for (const type of ["pointerdown", "pointerup", "keydown"]) document.addEventListener(type, event => {
+    if (type === "keydown" && !["Enter", " ", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    for (const audio of new Set(socialContexts.map(context => context.audio))) audio.unlock();
+  }, { capture: true });
+  const stopReactionAudio = () => { for (const audio of new Set(socialContexts.map(context => context.audio))) audio.stop(); };
+  document.addEventListener("visibilitychange", () => { if (document.hidden) stopReactionAudio(); });
+  window.addEventListener("pagehide", stopReactionAudio);
   let removalDialog, removalRequest, removalStep = 0;
   function syncRemoval() {
     if (removalRequest && !removalRequest.valid()) {

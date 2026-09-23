@@ -79,6 +79,10 @@ async function waitForRoom(client, predicate, after = 0, label = "room condition
     const pageResponse = await fetch(`http://127.0.0.1:${port}/index.html`);
     const page = await pageResponse.text();
     assert(pageResponse.ok && page.includes('id="onlineView"'), "Online page was not served");
+    for (const asset of ["vendor/engines/manifest.json", "vendor/engines/pikafish/pikafish.nnue.part1", "vendor/engines/rapfi/pbrain-rapfi-windows-sse.exe"]) {
+      const response = await fetch(`http://127.0.0.1:${port}/${asset}`);
+      assert(response.status === 404, "Native engine assets must stay server-side: " + asset);
+    }
     const infoResponse = await fetch(`http://127.0.0.1:${port}/api/info`, {
       headers: {
         "x-forwarded-proto": "https",

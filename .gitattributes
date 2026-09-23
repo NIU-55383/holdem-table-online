@@ -1,0 +1,2 @@
+# Preserve pinned engine hashes on Windows checkouts and Linux deployments.
+vendor/engines/** -text

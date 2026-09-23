@@ -82,3 +82,26 @@ test("AI rooms isolate games, cancel obsolete searches on undo, and keep avatars
   a.send({type:"move",revision:2,to:112});const replied=await a.next(m=>m.game?.revision===4);assert.equal(replied.game.moves.length,2);assert.deepEqual(replied.seats[1].avatar,bot);
   const b=await client();b.send({type:"create",kind:"xiangqi",difficulty:"easy",side:1,ai:true,name:"Second"});const second=await b.next(m=>m.game?.moves.length===1);assert.equal(second.game.type,"xiangqi");assert.equal(room.game.moves.length,2);
 }));
+
+test("Native queue: cancelling a queued room, pausing an active bot, and replacing it cannot apply stale moves", {timeout:30000}, () => live(async (client, duel) => {
+  const a = await client();
+  a.send({type:"create",kind:"xiangqi",difficulty:"hard",side:1,ai:true,name:"First"});
+  const first = await a.next(m => m.game && m.thinking), room = duel.rooms.get(first.code), job = room.job;
+  const cursor = a.messages.length;
+  a.send({type:"chat",text:"Keep thinking"});
+  await a.next(m => m.chat?.length, cursor);
+  assert.equal(room.job, job, "Chat must not restart search");
+  const b = await client();
+  b.send({type:"create",kind:"xiangqi",difficulty:"hard",side:1,ai:true,name:"Queued"});
+  const second = await b.next(m => m.game && m.thinking);
+  b.send({type:"resign"}); await b.next(m => m.game?.phase === "over");
+  a.send({type:"roomControl",action:"kick",target:first.seats[0].socialId});
+  const paused = await a.next(m => m.control?.paused);
+  await new Promise(r => setTimeout(r, 1000));
+  assert.equal(room.game.moves.length, 0); assert.equal(room.job, null);
+  assert.equal(duel.rooms.get(second.code).game.moves.length, 0);
+  a.send({type:"roomControl",action:"fillBot",target:paused.control.seats[0].id});
+  const resumed = await a.next(m => m.game?.moves.length === 1);
+  assert.notEqual(resumed.seats[0].socialId, first.seats[0].socialId);
+  assert.equal(resumed.game.current, 1);
+}));

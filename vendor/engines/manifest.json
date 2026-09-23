@@ -1,0 +1,39 @@
+{
+  "rapfi": {
+    "version": "0.43.01 / 250615",
+    "source": "https://github.com/dhbloo/rapfi/tree/1be1551ced57e38d53ed58f6d74bf6f8b4bdc230",
+    "executables": { "win32": "pbrain-rapfi-windows-sse.exe", "linux": "pbrain-rapfi-linux-clang-sse" },
+    "files": {
+      "pbrain-rapfi-windows-sse.exe": "dc98082d74e862547fd7f45130399782f21f6023ae15676a2ad471ecd1daca4c",
+      "pbrain-rapfi-linux-clang-sse": "4553babac37221372752b3bf16c225d5818c8e1fdef7e4d777762269a4a5fa03",
+      "config.toml": "054acb7b350f715a881ecff82b1246cdc173c7c1a27c7cdc4aef56f37feaaeaf",
+      "model210901.bin": "2fa08cb15cf240d9533548c3e011b03d46809f6858362e97ee873d0632aa2015",
+      "mix9svqfreestyle_bsmix.bin.lz4": "6bc0d1b0ff8e1d857f7f412923cd458f38f1a435087c91ae71fec3676c23ef62"
+    }
+  },
+  "pikafish": {
+    "version": "2026-09-06",
+    "linuxBuild": {
+      "archive": "source.tar.gz",
+      "sha256": "dde6748080072b0fc9152eb8e559bd9f1db6cb22d8242db7f87c2066f2c2e366",
+      "recipe": "gcc-sse41-popcnt-v1",
+      "commit": "4c17cee1",
+      "date": "20260906"
+    },
+    "source": "https://github.com/official-pikafish/Pikafish/tree/4c17cee11f888ae1d48a9494f2e2239f019f0a1f",
+    "executables": { "win32": "Pikafish-Windows-x86-64-universal.exe", "linux": "Pikafish-Linux-x86-64-universal" },
+    "files": {
+      "Pikafish-Windows-x86-64-universal.exe": "0d57d64c212e78f96cba9e5e4f140d8872f8faa42ea631a27ab6c5db08509da3",
+      "Pikafish-Linux-x86-64-universal": "727828293830de8082a80b224bf47b32700c2d1a441908ea11b3c9197178c20c"
+    },
+    "network": {
+      "file": "pikafish.nnue",
+      "sha256": "7d13d73569a9b571ba0eb20cf1596247bc2a42738967e61afef6482b231e900e",
+      "parts": {
+        "pikafish.nnue.part1": "ec6c7a54fc5cfeb60ec2a44b4ee3615a39278cf1cc817cd5bc010dd196096678",
+        "pikafish.nnue.part2": "5ef43f347a2d45ec970a2317ed09697a0e38e075f432f0fd5303c28c05353195",
+        "pikafish.nnue.part3": "51edfa9ef61f06973e7c746754a57b5c4e31ab17f57d5f113bbb3bc3f739bf55"
+      }
+    }
+  }
+}

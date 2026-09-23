@@ -1,7 +1,7 @@
 "use strict";
 const { WebSocketServer, WebSocket } = require("ws");
-const { Worker } = require("node:worker_threads");
-const crypto = require("node:crypto"), path = require("node:path");
+const crypto = require("node:crypto");
+const { startSearch } = require("./duel-bot");
 const E = require("./duel-engine"), Avatar = require("./avatar-data");
 const ensure = E.requireRule;
 const Social = require("./game-social");
@@ -39,27 +39,33 @@ function attachDuel(server) {
   }
   function pump() {
     if (closed) return;
-    while (running < 2 && queue.length) {
+    // One native search at a time keeps CPU and NNUE memory bounded across rooms.
+    while (running < 1 && queue.length) {
       const job = queue.shift(); if (job.cancelled) continue;
       running++;
-      const { room, game, revision } = job, worker = new Worker(path.join(__dirname, "duel-ai.js"), { workerData: { game: E.snapshot(game), level: room.difficulty } });
-      let best = E.legal(game)[0], done = false;
-      const started = Date.now(), budget = { easy: 450, normal: 1100, hard: 2100 }[room.difficulty];
-      let timer, settle;
+      const { room, game, revision } = job, search = startSearch(E.snapshot(game), room.difficulty);
+      let done = false, settled = false, result, settle;
+      const started = Date.now();
       const complete = () => {
-        if (done) return; done = true; clearTimeout(timer); clearTimeout(settle); worker.terminate(); running--;
-        if (!job.cancelled && !control.paused(room) && room.game === game && game.revision === revision && game.phase === "playing") {
+        if (done) return; done = true; clearTimeout(settle); running--;
+        if (!job.cancelled && room.job === job && !control.paused(room) && room.game === game && game.revision === revision && game.phase === "playing") {
           room.job = null;
-          try { if (best) E.move(game, game.current, best); } catch (error) { console.error("Duel AI:", error.message); const fallback = E.legal(game)[0]; if (fallback) E.move(game, game.current, fallback); }
+          try { if (result?.move) E.move(game, game.current, result.move); }
+          catch (error) { console.error("Duel AI:", error.message); result = null; }
+          if (!result?.move) {
+            room.seats.forEach(p => { if (p && !p.bot) send(p.ws, { type: "error", message: "AI 暂时无法落子，请重新开局 / AI unavailable; please restart the game" }); });
+            broadcast(room); pump(); return;
+          }
           room.pending = null; broadcast(room); schedule(room);
         }
         pump();
       };
-      job.cancel = complete;
-      worker.on("message", ({ move }) => { if (E.legal(game).some((m) => m.to === move?.to && m.from === move.from)) best = move; });
-      worker.on("error", (error) => { console.error("Duel worker:", error.message); complete(); });
-      worker.on("exit", () => { if (!done) settle = setTimeout(complete, Math.max(0, 550 - (Date.now() - started))); });
-      timer = setTimeout(complete, budget);
+      job.cancel = () => { search.cancel(); if (settled) complete(); };
+      search.done.then(value => { result = value; }, error => { console.error("Duel AI:", error.message); }).finally(() => {
+        settled = true;
+        if (job.cancelled) complete();
+        else settle = setTimeout(complete, Math.max(0, 550 - (Date.now() - started)));
+      });
     }
   }
   function schedule(room) {

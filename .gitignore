@@ -7,3 +7,8 @@ test-results/
 *.zip
 *.cmd
 *.bat
+vendor/engines/pikafish/pikafish.nnue
+vendor/engines/pikafish/*.tmp
+vendor/engines/pikafish/.build-*/
+vendor/engines/pikafish/pikafish-linux-local
+vendor/engines/pikafish/linux-build.json

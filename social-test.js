@@ -27,7 +27,7 @@ test("skin whitelist covers classic/robber/pirate choices and rejects arbitrary 
   for (const kind of ["robber", "pirate"]) for (const skin of Data.skins[kind]) assert.equal(Data.normalizeSkins({ [kind]: skin.id })[kind], skin.id);
 });
 async function client(kind, token, serverPort = port) {
-  const socket = new WebSocket(`ws://127.0.0.1:${serverPort}/${kind === "poker" ? "ws" : kind === "catan" ? "catan-ws" : kind === "richman" ? "richman-ws" : "duel-ws"}`), messages = [];
+  const socket = new WebSocket(`ws://127.0.0.1:${serverPort}/${kind === "poker" ? "ws" : kind === "catan" ? "catan-ws" : "duel-ws"}`), messages = [];
   sockets.push(socket); socket.on("message", (raw) => messages.push(JSON.parse(raw))); await once(socket, "open");
   const send = (m) => socket.send(JSON.stringify(m));
   async function wait(predicate, cursor = 0) { for (let i = 0; i < 350; i++) { const m = messages.slice(cursor).find(predicate); if (m) return m; await new Promise((r) => setTimeout(r, 20)); } throw Error(`Missing ${kind} message: ${JSON.stringify(messages.at(-1))}`); }
@@ -53,7 +53,7 @@ test("Catan rematch keeps the room's skins and public identities", async () => {
     assert.notEqual(room.game, old); assert.deepEqual(fresh.game.board.skins, skins); assert.equal(fresh.seats[0].socialId, lobby.seats[0].socialId);
   } finally { host?.socket.terminate(); server.close(); server.closeAllConnections(); }
 });
-for (const kind of ["catan", "poker", "gomoku", "xiangqi", "richman"]) test(`${kind}: room-only reactions, forged sender ignored, reconnect stable, skins shared`, async () => {
+for (const kind of ["catan", "poker", "gomoku", "xiangqi"]) test(`${kind}: room-only reactions, forged sender ignored, reconnect stable, skins shared`, async () => {
   const a = await client(kind), b = await client(kind), outsider = await client(kind);
   const create = { type: "create", name: "Alice", kind, seats: 3, maxPlayers: 3, players: 3, side: 0, difficulty: "easy", funds: 50000, days: 30, mapId: "shores-1", skins: { robber: "angry", pirate: "flag" } };
   const unwrap = (m) => m.room || m, players = (s) => s.players || s.seats;

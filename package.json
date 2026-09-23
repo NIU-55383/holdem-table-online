@@ -5,8 +5,11 @@
   "description": "Bilingual board game club with Texas Hold'em and Catan multiplayer rooms.",
   "main": "server.js",
   "scripts": {
+    "postinstall": "node engine-setup.js",
+    "test:ai": "node --test duel-bot-test.js duel-test.js",
+    "benchmark:ai": "node duel-ai-benchmark.js",
     "start": "node server.js",
-    "test": "node integration-test.js && node --test catan-test.js catan-audio-test.js catan-music-test.js game-audio-test.js avatar-test.js social-test.js seafarers-test.js seafarers-expansion-test.js catan-scenario-maps-test.js catan-scenario-engine-test.js catan-scenario-network-test.js duel-test.js richman-test.js room-control-test.js",
+    "test": "node integration-test.js && node --test four-game-test.js catan-test.js catan-audio-test.js catan-music-test.js game-audio-test.js avatar-test.js social-test.js seafarers-test.js seafarers-expansion-test.js catan-scenario-maps-test.js catan-scenario-engine-test.js catan-scenario-network-test.js duel-test.js room-control-test.js && node --test duel-bot-test.js",
     "test:music": "node catan-music-test.js --browser"
   },
   "engines": {

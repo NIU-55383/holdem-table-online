@@ -87,11 +87,11 @@ test("election follows chosen seat order and all vacancies must be filled before
   } finally { control.close(); }
 });
 
-test("all five games: consent, closest online human, kick/pause, human and bot replacement", {timeout:30000}, async () => {
+test("all four games: consent, closest online human, kick/pause, human and bot replacement", {timeout:30000}, async () => {
   const port=18942, server=spawn(process.execPath,[require.resolve("./server")],{env:{...process.env,PORT:String(port),AUTO_OPEN:"0"},stdio:["ignore","pipe","pipe"]}), sockets=[];
   let errors="";server.stderr.on("data",chunk=>{errors+=chunk;});
   async function client(kind,name,token) {
-    const poker=kind==="poker", endpoint=poker?"ws":kind==="catan"?"catan-ws":kind==="richman"?"richman-ws":"duel-ws";
+    const poker=kind==="poker", endpoint=poker?"ws":kind==="catan"?"catan-ws":"duel-ws";
     const ws=new WebSocket(`ws://127.0.0.1:${port}/${endpoint}`), messages=[];sockets.push(ws);
     ws.on("message",raw=>messages.push(JSON.parse(raw)));
     await once(ws,"open"); token ||= crypto.randomUUID();
@@ -105,16 +105,16 @@ test("all five games: consent, closest online human, kick/pause, human and bot r
   }
   try {
     await once(server.stdout,"data");
-    for(const kind of ["catan","poker","gomoku","xiangqi","richman"]) {
+    for(const kind of ["catan","poker","gomoku","xiangqi"]) {
       const duel=["gomoku","xiangqi"].includes(kind), a=await client(kind,"Alice"), b=await client(kind,"Bob"), c=duel?null:await client(kind,"Carol");
       const created=await a.request({type:"create",name:a.name,seats:4,maxPlayers:4,players:4,startingStack:150,funds:50000,days:30,kind,difficulty:"easy",side:0,ai:false});
       const code=created.code, join=(p)=>p.request({type:"join",code,name:p.name});
       await join(b); if(c)await join(c);
-      if(!duel)await a.request({type:kind==="richman"?"bots":"fillBots",fill:true});
+      if(!duel)await a.request({type:"fillBots",fill:true});
       const latest=(p)=>p.state(p.messages.filter(m=>m.type==="state").at(-1));
       if(!duel) {
         const botSeat=latest(a).control.seats.findLast(s=>s?.bot);
-        const rejected=await a.request(kind==="richman"?{type:"bots",remove:botSeat.index,target:"stale-id"}:{type:"removeBot",target:"stale-id"},"error");
+        const rejected=await a.request({type:"removeBot",target:"stale-id"},"error");
         assert.match(rejected.message,/Seat changed/);
       }
       const ownId=p=>latest(p).control.you;
@@ -155,7 +155,7 @@ test("all five games: consent, closest online human, kick/pause, human and bot r
       await a.request({type:"roomControl",action:"respond",id:request.control.pending.id,accept:true});
       await hostChange(guest,a);
       if(kind==="poker")await a.request({type:"toggleAutoNext",enabled:false});
-      if(duel||kind==="richman") { await guest.request({type:"ready",ready:true}); if(c)await reconnected.request({type:"ready",ready:true}); }
+      if(duel) { await guest.request({type:"ready",ready:true}); if(c)await reconnected.request({type:"ready",ready:true}); }
       const started=await a.request({type:"start"});assert.equal(started.control.started,true);
       assert.match((await guest.request({type:"roomControl",action:"kick",target:ownId(a)},"error")).message,/Host only/);
       assert.match((await a.request({type:"roomControl",action:"kick",target:ownId(a)},"error")).message,/other player/);
@@ -208,13 +208,13 @@ test("all five games: consent, closest online human, kick/pause, human and bot r
   } finally { sockets.forEach(ws=>ws.terminate());server.kill();await once(server,"exit"); }
 });
 
-test("all five games: default waits, opted-in actor is warned and auto-play advances", {timeout:40000}, async () => {
+test("all four games: default waits, opted-in actor is warned and auto-play advances", {timeout:40000}, async () => {
   const port=18944, server=spawn(process.execPath,[require.resolve("./server")],{windowsHide:true,env:{...process.env,PORT:String(port),AUTO_OPEN:"0",ROOM_IDLE_MS:"700",ROOM_WARNING_MS:"300"},stdio:["ignore","pipe","pipe"]}), sockets=[];
   let errors="";server.stderr.on("data",s=>{errors+=s;});
   try {
     await once(server.stdout,"data");
-    for(const kind of ["catan","poker","gomoku","xiangqi","richman"]) {
-      const poker=kind==="poker", duel=["gomoku","xiangqi"].includes(kind), endpoint=poker?"ws":kind==="catan"?"catan-ws":kind==="richman"?"richman-ws":"duel-ws";
+    for(const kind of ["catan","poker","gomoku","xiangqi"]) {
+      const poker=kind==="poker", duel=["gomoku","xiangqi"].includes(kind), endpoint=poker?"ws":kind==="catan"?"catan-ws":"duel-ws";
       const ws=new WebSocket(`ws://127.0.0.1:${port}/${endpoint}`), states=[];sockets.push(ws);
       ws.on("message",raw=>{const m=JSON.parse(raw);if(m.type==="state")states.push(m.room||m);});
       await once(ws,"open");const send=m=>ws.send(JSON.stringify(m));
@@ -222,7 +222,7 @@ test("all five games: default waits, opted-in actor is warned and auto-play adva
       send(poker?{type:"hello",clientId:crypto.randomUUID()}:{type:"hello"});
       send({type:"create",kind,name:"Idle player",seats:3,maxPlayers:2,players:2,funds:50000,days:30,difficulty:"easy",side:0,ai:true});
       await wait(s=>s.code);
-      if(!duel&&kind!=="richman") {send({type:"fillBots"}); if(poker)send({type:"toggleAutoNext",enabled:false});send({type:"start"});}
+      if(!duel) {send({type:"fillBots"}); if(poker)send({type:"toggleAutoNext",enabled:false});send({type:"start"});}
       const idle=await wait(s=>s.control.started&&(poker?s.actor===s.viewerIndex:s.game?.current===s.you));
       assert.equal(idle.control.idleAuto,false);assert.equal(idle.control.warning,null);
       await sleep(1100);send({type:"chat",text:"Still here"});await sleep(60);
@@ -242,11 +242,11 @@ test("all five games: default waits, opted-in actor is warned and auto-play adva
   } finally { sockets.forEach(s=>s.terminate());server.kill();await once(server,"exit"); }
 });
 
-test("all five games: disconnected humans wait beyond the old takeover timeout", {timeout:50000}, async () => {
+test("all four games: disconnected humans wait beyond the old takeover timeout", {timeout:50000}, async () => {
   const port=18946,server=spawn(process.execPath,[require.resolve("./server")],{windowsHide:true,env:{...process.env,PORT:String(port),AUTO_OPEN:"0",ROOM_IDLE_MS:"300",ROOM_WARNING_MS:"100"},stdio:["ignore","pipe","pipe"]});
   const sockets=[],checks=[];let errors="";server.stderr.on("data",s=>errors+=s);
   async function client(kind) {
-    const endpoint=kind==="poker"?"ws":kind==="catan"?"catan-ws":kind==="richman"?"richman-ws":"duel-ws";
+    const endpoint=kind==="poker"?"ws":kind==="catan"?"catan-ws":"duel-ws";
     const ws=new WebSocket(`ws://127.0.0.1:${port}/${endpoint}`),messages=[];sockets.push(ws);
     ws.on("message",raw=>{const m=JSON.parse(raw);if(m.type==="state")messages.push(m.room||m);});
     await once(ws,"open");
@@ -258,12 +258,12 @@ test("all five games: disconnected humans wait beyond the old takeover timeout",
   const assets=(kind,s)=>kind==="poker"?JSON.stringify([s.status,s.actor,s.street,s.pot,s.board,s.players.map(p=>[p.chips,p.bet,p.totalBet,p.folded])]):JSON.stringify([s.game.revision,s.game.current,s.game.phase,s.game.day,s.game.turn]);
   try {
     await once(server.stdout,"data");
-    for(const kind of ["catan","poker","gomoku","xiangqi","richman"]) {
+    for(const kind of ["catan","poker","gomoku","xiangqi"]) {
       const duel=["gomoku","xiangqi"].includes(kind),a=await client(kind),b=await client(kind);
       const room=await a.request({type:"create",kind,name:"Host",seats:3,maxPlayers:3,players:3,funds:50000,days:30,difficulty:"easy",side:0,ai:false});
       await b.request({type:"join",code:room.code,name:"Guest"});
-      if(!duel)await a.request({type:kind==="richman"?"bots":"fillBots",fill:true},s=>s.control.seats.some(p=>p?.bot));
-      if(duel||kind==="richman")await b.request({type:"ready",ready:true},s=>s.seats[1]?.ready);
+      if(!duel)await a.request({type:"fillBots",fill:true},s=>s.control.seats.some(p=>p?.bot));
+      if(duel)await b.request({type:"ready",ready:true},s=>s.seats[1]?.ready);
       if(kind==="poker")await a.request({type:"toggleAutoNext",enabled:false},s=>!s.autoNext);
       a.send({type:"start"});
       const before=await a.wait(s=>s.control.started&&(kind==="poker"?s.actor>=0&&s.actor<2:s.game.current===0));

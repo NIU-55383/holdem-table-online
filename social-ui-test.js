@@ -12,7 +12,7 @@ const origin = process.env.TEST_ORIGIN || "http://127.0.0.1:18764";
       await new Promise((resolve, reject) => { const timer = setTimeout(() => reject(Error("Test server timeout")), 8000); testServer.stdout.once("data", () => { clearTimeout(timer); resolve(); }); testServer.once("error", reject); testServer.stderr.once("data", (e) => { clearTimeout(timer); reject(Error(String(e))); }); });
     }
     browser = await playwright.chromium.launch({ executablePath: process.env.CHROME_PATH || "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true });
-    for (const kind of ["catan", "poker", "gomoku", "xiangqi", "richman"]) {
+    for (const kind of ["catan", "poker", "gomoku", "xiangqi"]) {
       const contexts = [], pages = [];
       for (let i = 0; i < 2; i++) {
         const context = await browser.newContext({ viewport: { width: i ? 1440 : 390, height: i ? 1000 : 844 }, hasTouch: !i }); contexts.push(context);
@@ -32,7 +32,7 @@ const origin = process.env.TEST_ORIGIN || "http://127.0.0.1:18764";
           window.WebSocket = class extends Native { constructor(...args) { super(...args); window.testSocket = this; this.addEventListener("message", (e) => { const m = JSON.parse(e.data); if (m.type === "state") window.testState = m.room || m; (window.testEvents ||= []).push(m); }); } };
         });
         const page = await context.newPage(); page.on("pageerror", (e) => errors.push(`${kind}: ${e.message}`)); pages.push(page);
-        await page.goto(`${origin}/${kind === "catan" ? "catan.html" : kind === "poker" ? "index.html?game=poker" : kind === "richman" ? "richman.html" : `duel.html?game=${kind}`}`);
+        await page.goto(`${origin}/${kind === "catan" ? "catan.html" : kind === "poker" ? "index.html?game=poker" : `duel.html?game=${kind}`}`);
         await page.waitForFunction(() => window.testSocket?.readyState === WebSocket.OPEN);
       }
       const [a, b] = pages;
@@ -53,7 +53,6 @@ const origin = process.env.TEST_ORIGIN || "http://127.0.0.1:18764";
       if (kind === "poker") { await send(a, { type: "start" }); await a.waitForFunction(() => testState.status !== "lobby"); }
       else if (kind !== "catan") {
         await send(b, { type: "ready", ready: true });
-        if (kind === "richman") await send(a, { type: "bots", fill: true });
         await a.waitForFunction(() => testState.seats.every((p) => p?.ready));
         await send(a, { type: "start" }); await a.waitForFunction(() => testState.game);
       }
@@ -134,6 +133,7 @@ const origin = process.env.TEST_ORIGIN || "http://127.0.0.1:18764";
           await a.locator(".player-overview").screenshot({ path: `test-results/social-bubble-${width}.png` });
         }
         await a.setViewportSize({ width: 390, height: 844 });
+        await a.waitForFunction(()=>{const last=testEvents.filter(e=>e.type==="reaction"&&e.room===testState.code&&e.fromName==="Alice").at(-1);return !last||Date.now()-last.time>=GameSocialData.COOLDOWN;});
         await (await visibleAvatar(a, target)).click(); await a.locator('[data-reaction="splash"]').click();
         await b.locator('[data-reaction-kind="splash"]').waitFor();
         assert.equal(await a.evaluate(() => testState.game.phase), "setupSettlement", "Social action does not consume the game turn");

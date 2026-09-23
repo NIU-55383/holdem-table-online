@@ -18,7 +18,7 @@ let playwright; try { playwright = require("playwright"); } catch { playwright =
     await once(server.stdout, "data");
     browser = await playwright.chromium.launch({ executablePath: process.env.CHROME_PATH || "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true });
     fs.mkdirSync("test-results", { recursive: true });
-    for (const kind of ["catan", "poker", "gomoku", "xiangqi", "richman"]) {
+    for (const kind of ["catan", "poker", "gomoku", "xiangqi"]) {
       const duel = ["gomoku", "xiangqi"].includes(kind), pages = [];
       for (let i = 0; i < 2; i++) {
         const context = await browser.newContext({ viewport: { width: i ? 1440 : 390, height: i ? 1000 : 844 }, hasTouch: !i }); contexts.push(context);
@@ -31,7 +31,7 @@ let playwright; try { playwright = require("playwright"); } catch { playwright =
           };
         });
         const p = await context.newPage(); pages.push(p); p.on("pageerror", e => errors.push(`${kind}: ${e.message}`));
-        const file = kind === "poker" ? "index.html?game=poker" : kind === "catan" ? "catan.html" : kind === "richman" ? "richman.html" : `duel.html?game=${kind}`;
+        const file = kind === "poker" ? "index.html?game=poker" : kind === "catan" ? "catan.html" : `duel.html?game=${kind}`;
         await p.goto(`http://127.0.0.1:${port}/${file}`);
         await p.waitForFunction(() => window.testSocket?.readyState === WebSocket.OPEN); await close(p);
       }
@@ -85,7 +85,7 @@ let playwright; try { playwright = require("playwright"); } catch { playwright =
         assert.equal(await a.evaluate(()=>testRemovals.length),before+1,"Exactly one removal after two confirmations");
       }
       if (!duel) {
-        const addBots=async()=>{await send(a,{type:kind==="richman"?"bots":"fillBots",fill:true});await a.waitForFunction(()=>testState.control.seats.filter(Boolean).length===3);};
+        const addBots=async()=>{await send(a,{type:"fillBots",fill:true});await a.waitForFunction(()=>testState.control.seats.filter(Boolean).length===3);};
         await addBots();
         const name=await a.evaluate(()=>testState.control.seats.find(s=>s?.bot).name);
         const selector=kind==="catan"?"#removeBot":kind==="poker"?"#removeOnlineBotBtn":"[data-remove-bot]";
@@ -94,7 +94,7 @@ let playwright; try { playwright = require("playwright"); } catch { playwright =
         await addBots();
       }
       if (kind === "poker") await send(a, { type: "toggleAutoNext", enabled: false });
-      if (duel || kind === "richman") { await send(b, { type: "ready", ready: true }); await a.waitForFunction(() => testState.seats.every(s => s?.ready)); }
+      if (duel) { await send(b, { type: "ready", ready: true }); await a.waitForFunction(() => testState.seats.every(s => s?.ready)); }
       await send(a, { type: "start" }); await a.waitForFunction(() => testState.control.started); await close(a); await close(b);
       await a.locator('[data-room-manage]').click();
       for(const change of ["host","target"]) {

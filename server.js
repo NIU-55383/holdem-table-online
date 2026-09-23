@@ -6,12 +6,13 @@ const os = require("os");
 const { execFile } = require("child_process");
 const { attachCatan } = require("./catan-server");
 const { attachDuel } = require("./duel-server");
-const { attachRichman } = require("./richman-server");
 const AvatarData = require("./avatar-data");
 const Social = require("./game-social");
 
 const PORT = Number(process.env.PORT) || 8002;
+const BIND_HOST = process.env.LOCAL_ONLY === "1" ? "127.0.0.1" : "0.0.0.0";
 const ROOT = __dirname;
+const RETIRED_FILES = new Set(require("./retired-files.json").map(file => file.toLowerCase()));
 const BLIND_LEVELS = [[1, 2], [2, 4], [3, 6], [5, 10], [10, 20], [15, 30], [20, 40]];
 const rooms = new Map();
 const clients = new Set();
@@ -1433,7 +1434,7 @@ const server = http.createServer((request, response) => {
     const forwardedHost = String(request.headers["x-forwarded-host"] || "").split(",")[0].trim();
     const protocol = forwardedProto || (request.socket.encrypted ? "https" : "http");
     const publicUrl = `${protocol}://${forwardedHost || request.headers.host}/index.html`;
-    const addresses = Object.values(os.networkInterfaces())
+    const addresses = (BIND_HOST === "127.0.0.1" ? [] : Object.values(os.networkInterfaces()))
       .flat()
       .filter((entry) => entry && entry.family === "IPv4" && !entry.internal)
       .map((entry) => `http://${entry.address}:${PORT}/index.html`);
@@ -1455,6 +1456,8 @@ const server = http.createServer((request, response) => {
   if (
     relativePath.startsWith("..")
     || path.isAbsolute(relativePath)
+    || RETIRED_FILES.has(relativePath.replace(/\\/g, "/").toLowerCase())
+    || /^vendor[\\/]engines(?:[\\/]|$)/i.test(relativePath)
     || !fs.existsSync(filePath)
     || fs.statSync(filePath).isDirectory()
   ) {
@@ -1496,10 +1499,8 @@ const server = http.createServer((request, response) => {
 
 const catan = attachCatan(server);
 const duel = attachDuel(server);
-const richman = attachRichman(server);
 
 server.on("upgrade", (request, socket, head) => {
-  if (request.url === "/richman-ws") { richman.upgrade(request, socket, head); return; }
   if (request.url === "/duel-ws") { duel.upgrade(request, socket, head); return; }
   if (request.url === "/catan-ws") {
     catan.upgrade(request, socket, head);
@@ -1540,10 +1541,10 @@ const pokerHeartbeat = setInterval(() => {
 pokerHeartbeat.unref();
 server.on("close", () => { roomControl.close(); clearInterval(pokerHeartbeat); });
 
-server.listen(PORT, "0.0.0.0", () => {
+server.listen(PORT, BIND_HOST, () => {
   const localUrl = `http://127.0.0.1:${PORT}/index.html`;
   console.log(`Hold'em multiplayer server: ${localUrl}`);
-  Object.values(os.networkInterfaces()).flat().forEach((entry) => {
+  (BIND_HOST === "127.0.0.1" ? [] : Object.values(os.networkInterfaces())).flat().forEach((entry) => {
     if (entry && entry.family === "IPv4" && !entry.internal) {
       console.log(`LAN invitation URL: http://${entry.address}:${PORT}/index.html`);
     }

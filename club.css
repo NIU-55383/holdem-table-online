@@ -6,7 +6,6 @@
 
 .poker-section-nav {display: flex; align-items: center; gap: 24px; margin: 8px 0; border-bottom: 1px solid var(--line);}
 .gomoku-art{background:#759c8a}.xiangqi-art{background:#ac6060}.club-game-art>img{display:block;width:100%;height:100%;object-fit:cover}.gomoku-game .club-play{color:#366e52}.xiangqi-game .club-play{color:#974d4b}
-.richman-art{background:#8bcbd1}.richman-game .club-play{color:#9c7140}
 .poker-section-nav > strong {font-size: 14px; color: var(--ink);}
 .poker-section-nav > strong small {display: block; font-size: 10px; font-weight: 500; color: var(--muted);}
 .poker-section-nav > div {display: flex; gap: 6px;}

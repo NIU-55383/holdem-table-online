@@ -14,10 +14,11 @@ const duel=attachDuel(server);server.on("upgrade",duel.upgrade);
   try {
     server.listen(0,"127.0.0.1");await once(server,"listening");const base=`http://127.0.0.1:${server.address().port}`;
     browser=await playwright.chromium.launch({executablePath:process.env.CHROME_PATH||"C:/Program Files/Google/Chrome/Application/chrome.exe",headless:true});
-    fs.mkdirSync(path.join(__dirname,"test-results"),{recursive:true});const errors=[];
+    fs.mkdirSync(path.join(__dirname,"test-results"),{recursive:true});const errors=[], engineRequests=[];
     async function player(kind,name){const ctx=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true});await ctx.addInitScript(()=>{const Native=WebSocket;window.WebSocket=class extends Native{constructor(...args){super(...args);this.addEventListener("message",e=>{const m=JSON.parse(e.data);if(m.type==="state")window.testState=m;});}};});const page=await ctx.newPage();page.on("pageerror",e=>errors.push(e.message));await page.goto(`${base}/duel.html?game=${kind}`);await page.getByText("已连接 / Connected",{exact:true}).waitFor();await page.locator("#playerName").fill(name);return{ctx,page};}
     for(const kind of ["gomoku","xiangqi"]){
       const {ctx,page}=await player(kind,"Connie");
+      ctx.on("request",request=>{if(request.url().includes("/vendor/engines/"))engineRequests.push(request.url());});
       assert.equal(await page.locator("#roomInput").getAttribute("placeholder"),"房间号 / Room code");
       for(const width of [320,390,1440]){await page.setViewportSize({width,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:`test-results/${kind}-setup-${width}.png`,fullPage:true});}
       await page.setViewportSize({width:390,height:844});await page.locator("#rulesBtn").click();await page.locator("#rulesDialog[open]").waitFor();await page.locator('[data-close="rulesDialog"]').click();
@@ -52,7 +53,8 @@ const duel=attachDuel(server);server.on("upgrade",duel.upgrade);
     assert.equal(await xGuest.page.locator("#roomCode").textContent(),xCode,"The displayed Xiangqi code can be entered as-is, without another prefix");
     assert.equal(await xGuest.page.evaluate(()=>window.testState.kind),"xiangqi");
     await xGuest.ctx.close();await xHost.ctx.close();
-    const hub=await browser.newPage({viewport:{width:390,height:844}});await hub.goto(`${base}/index.html`);assert.equal(await hub.locator(".club-game").count(),5);await hub.screenshot({path:"test-results/club-five-games-mobile.png",fullPage:true});assert.equal(await hub.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
-    assert.deepEqual(errors,[]);console.log("PASS: two games, direct room-code joining, all mobile/desktop layouts, AI, moves, undo, rematch, live chat/avatar/presence, reconnect and club links");
+    const hub=await browser.newPage({viewport:{width:390,height:844}});await hub.goto(`${base}/index.html`);assert.equal(await hub.locator(".club-game").count(),4);await hub.screenshot({path:"test-results/club-four-games-mobile.png",fullPage:true});assert.equal(await hub.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    assert.deepEqual(engineRequests,[],"Native models must never be downloaded by browsers");
+    assert.deepEqual(errors,[]);console.log("PASS: two games, direct room-code joining, all mobile/desktop layouts, native AI, server-only models, moves, undo, rematch, live chat/avatar/presence, reconnect and club links");
   } finally {await browser?.close();server.close();server.emit("close");}
 })().catch(e=>{console.error(e);process.exitCode=1;});

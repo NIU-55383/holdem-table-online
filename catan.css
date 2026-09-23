@@ -12,6 +12,14 @@
 .seat-number {position: absolute; right: -3px; bottom: -3px; display: grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; border: 1px solid #ecf5ee; background: #315d70; color: #fff; font-size: 10px; font-weight: 700; line-height: 1; pointer-events: none;}
 .lobby-seat {min-width: 0; padding: 12px; gap: 7px;}
 .lobby-seat.own-seat {border-color: #ffe19a; box-shadow: inset 0 0 0 1px #ffe19a;}
+#seatChoice {display: flex; flex-wrap: wrap;}
+#seatChoice button {flex: 1 1 85px;}
+#seatChoice button[hidden] {display: none;}
+.paired-turn-banner {padding: 9px 0; margin-bottom: 6px; border-block: 1px solid #ffffff40; color: #d0e5e8; font-size: 12px; overflow-wrap: anywhere;}
+.paired-turn-banner > div {display: flex; flex-wrap: wrap; gap: 5px 8px; align-items: baseline;}
+.paired-turn-banner .active {color: #ffe29a; font-weight: 700;}
+.paired-turn-banner small {display: block; margin-top: 5px; font-size: 11px; line-height: 1.5;}
+@media(min-width:741px) {.lobby-seats.extended-seats {grid-template-columns: repeat(3, minmax(0, 1fr));}}
 .lobby-seat .seat-label {font-size: 11px; font-weight: 700; color: #c2e3e7;}
 .lobby-seat strong {max-width: 100%; overflow-wrap: anywhere; text-align: center;}
 .lobby-seat .seat-choice {min-height: 44px; width: 100%; margin-top: auto; font-size: 12px; line-height: 1.2; background: #ffffff10;}

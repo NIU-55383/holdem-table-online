@@ -150,11 +150,12 @@ function attachCatan(server) {
           fail(["default", "random"].includes(layout), "未知地图模式 / Unknown map layout");
           const thieves = map?.family === "new-world" ? data.thieves ?? "both" : "both";
           fail(["both", "robber", "pirate"].includes(thieves), "请选择有效的强盗与海盗设置 / Invalid robber and pirate option");
+          const requestedPlayers = data.seats == null ? 4 : Number(data.seats);
+          fail(Number.isInteger(requestedPlayers) && requestedPlayers >= 3 && requestedPlayers <= (map ? 4 : 6), "基础版可选 3–6 人；航海家最多 4 人 / Base: 3–6 players; Seafarers: up to 4");
           detach(session, true);
-          const requestedPlayers = Number(data.seats) === 3 ? 3 : 4;
           const maxPlayers = map ? map.minPlayers === 3 ? requestedPlayers : map.players : requestedPlayers;
           const room = { code: roomCode(), mapId, layout, thieves, host: session.token, maxPlayers, seats: [], seatSwap: null, game: null, chat: [], updated: Date.now(), timer: null };
-          room.previewBoard = E.makeBoard(undefined, mapId, layout);
+          room.previewBoard = E.makeBoard(undefined, mapId, layout, maxPlayers);
           if (map?.family === "pirates") room.previewBoard.scenario.pirateSeats = room.previewBoard.scenario.pirateSeats.slice(0, maxPlayers);
           if (thieves === "pirate") room.previewBoard.robber = null;
           if (thieves === "robber") { room.previewBoard.pirate = null; room.previewBoard.pirateStart = null; }
@@ -235,6 +236,7 @@ function attachCatan(server) {
   heartbeat.unref();
   server.on("close", () => { control.close(); clearInterval(heartbeat); rooms.forEach((r) => clearTimeout(r.timer)); wss.clients.forEach((ws) => ws.terminate()); wss.close(); });
   const previews = new Map([["base", E.makeBoard()], ...Maps.maps.map((map) => [map.id, E.makeBoard(undefined, map.id)])]);
+  previews.set("base:5-6", E.makeBoard(undefined, "base", "default", 6));
   Maps.maps.forEach((map) => previews.set(`${map.id}:random`, E.makeBoard(undefined, map.id, "random")));
   return { upgrade(request, socket, head) { wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request)); }, rooms, preview: previews.get("base"), previews };
 }

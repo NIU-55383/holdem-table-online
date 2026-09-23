@@ -1,6 +1,6 @@
 "use strict";
 window.CatanBoard = (() => {
-  const COLORS = ["#f16d66", "#53b5ed", "#ffc85c", "#ba97ee"];
+  const COLORS = ["#f16d66", "#53b5ed", "#ffc85c", "#ba97ee", "#64cf98", "#f2eee1"];
   const RES = ["wood", "brick", "wool", "grain", "ore", "desert", "sea", "gold", "fog"];
   const FILL = ["#249b63", "#dd7650", "#a8c847", "#edc448", "#a0b8b8", "#dece96", "#197c9e", "#d6b457", "#a3c6ca"];
   const names = ["森林 / Forest", "丘陵 / Hills", "牧场 / Pasture", "麦田 / Fields", "山地 / Mountains", "沙漠 / Desert", "海洋 / Sea", "金矿 / Gold fields", "未知海域 / Unexplored"];

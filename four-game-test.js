@@ -15,6 +15,7 @@ test("four-game server serves current assets and rejects retired URLs and websoc
   try{
     await once(server.stdout,"data");const base=`http://127.0.0.1:${port}`;
     for(const file of ["index.html","catan.html","duel.html?game=gomoku","duel.html?game=xiangqi","catan-scenarios.js","avatar-data.js","social-data.js","game-audio.js","game-ui.js","vendor/lucide.min.js"]){const response=await fetch(base+"/"+file);assert.equal(response.status,200,file);await response.arrayBuffer();}
+    for(const players of [3,4,5,6]){const response=await fetch(`${base}/api/catan-preview?map=base&players=${players}`);assert.equal(response.status,200);const board=await response.json();assert.equal(board.tiles.length,players>4?30:19);assert.equal(board.ports.length,players>4?11:9);}
     for(const file of retired){const response=await fetch(base+"/"+file,{method:"HEAD"});assert.equal(response.status,404,file);}
     const response=await fetch(base+"/RICHMAN.HTML",{method:"HEAD"});assert.equal(response.status,404);
     const ws=new WebSocket(`ws://127.0.0.1:${port}/richman-ws`);let opened=false;ws.on("open",()=>{opened=true;ws.close();});ws.on("error",()=>{});await new Promise(resolve=>ws.once("close",resolve));assert.equal(opened,false);

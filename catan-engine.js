@@ -5,6 +5,7 @@ const { randomInt } = require("node:crypto");
 const Maps = require("./catan-maps");
 const randomizeMap = require("./catan-random");
 const Scenarios = require("./catan-scenarios");
+const BaseExtension = require("./catan-base-extension");
 const RES = ["wood", "brick", "wool", "grain", "ore"];
 const COST = { road: [1, 1, 0, 0, 0], ship: [1, 0, 1, 0, 0], settlement: [1, 1, 1, 1, 0], city: [0, 0, 0, 2, 3], development: [0, 0, 1, 1, 1] };
 const LABEL = { wood: "木材 / Lumber", brick: "砖块 / Brick", wool: "羊毛 / Wool", grain: "麦子 / Grain", ore: "矿石 / Ore" };
@@ -21,14 +22,15 @@ const affordable = (p, cost) => cost.every((n, i) => p.resources[i] >= n);
 const resourceArray = (value) => Array.isArray(value) && value.length === 5 && value.every((n) => Number.isSafeInteger(n) && n >= 0 && n <= 95);
 const pips = (n) => n ? 6 - Math.abs(7 - n) : 0;
 
-function makeBoard(rng = random, mapId = "base", layout = "default") {
+function makeBoard(rng = random, mapId = "base", layout = "default", playerCount = 4) {
   const map = Maps.get(mapId);
+  const extended = mapId === "base" && playerCount > 4;
   requireRule(mapId === "base" || map, "未知地图 / Unknown map");
   requireRule(["default", "random"].includes(layout), "未知地图模式 / Unknown map layout");
   const Hex = defineHex({ dimensions: 53, origin: { x: 0, y: 0 } });
-  const grid = new Grid(Hex, map ? map.tiles.map(({ q, r }) => ({ q, r })) : spiral({ radius: 2 }));
+  const grid = new Grid(Hex, map ? map.tiles.map(({ q, r }) => ({ q, r })) : extended ? BaseExtension.COORDINATES : spiral({ radius: 2 }));
   const vertices = [], edges = [], tiles = [], vm = new Map(), em = new Map();
-  const terrain = shuffle([0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, -1], rng);
+  const terrain = shuffle(extended ? BaseExtension.TERRAIN : [0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, -1], rng);
   grid.forEach((hex, id) => {
     const fixed = map?.tiles[tiles.length];
     const tile = { id: tiles.length, q: hex.q, r: hex.r, x: hex.x, y: hex.y, resource: fixed?.resource ?? terrain[tiles.length], number: fixed?.number || 0, vertices: [], ...(fixed ? { row: fixed.row, col: fixed.col, frame: fixed.frame, setupAllowed: fixed.setupAllowed, noSettlement: fixed.noSettlement, noProduction: fixed.noProduction, robberAllowed: fixed.robberAllowed, ...(map.family === "desert" ? { region: fixed.region } : {}) } : {}) };
@@ -93,6 +95,7 @@ function makeBoard(rng = random, mapId = "base", layout = "default") {
     Scenarios.prepareBoard(board, map);
     return board;
   }
+  if (extended) return BaseExtension.finishBoard(tiles, edges, vertices, rng, shuffle);
   const numbered = tiles.filter((t) => t.resource >= 0);
   // Keep high-probability 6/8 tokens apart on the randomized base-game island.
   for (let attempt = 0; attempt < 10000; attempt++) {
@@ -112,15 +115,19 @@ function makeBoard(rng = random, mapId = "base", layout = "default") {
 }
 
 function createGame(names, rng = random, mapId = "base", layout = "default", preparedBoard = null, options = {}) {
-  requireRule(names.length === 3 || names.length === 4, "基础版需要 3–4 人 / Base game needs 3–4 players");
+  requireRule(names.length >= 3 && names.length <= (mapId === "base" ? 6 : 4), "基础版需要 3–6 人，航海家需要 3–4 人 / Base game needs 3–6 players; Seafarers needs 3–4");
   const map = Maps.get(mapId);
+  const extended = mapId === "base" && names.length > 4;
+  requireRule(!preparedBoard || mapId !== "base" || preparedBoard.tiles.length === (extended ? 30 : 19), "地图与人数不匹配 / Board does not match player count");
   requireRule(!map || (map.minPlayers ? names.length >= map.minPlayers && names.length <= (map.maxPlayers || map.players) : names.length === map.players), "人数不符合地图 / Wrong player count for this map");
   const g = {
-    board: preparedBoard ? structuredClone(preparedBoard) : makeBoard(rng, mapId, layout), mapId, layout, target: map?.target || 10,
+    board: preparedBoard ? structuredClone(preparedBoard) : makeBoard(rng, mapId, layout, names.length), mapId, layout, target: map?.target || 10,
+    pairedTurn: extended ? { primary: 0, secondary: 3, part: 1, round: 1 } : null,
+    resourceSupply: extended ? 24 : 19,
     fogTerrain: map?.family === "fog" ? shuffle([-2,-2,5,5,3,3,1,1,4,4,2,0], rng) : [],
     fogNumbers: map?.fogNumbers ? shuffle(map.fogNumbers, rng) : [],
     players: names.map((name, id) => ({ id, name, resources: zeros(), development: [], knights: 0, homeIslands: [], discovered: [] })),
-    bank: [19, 19, 19, 19, 19], deck: shuffle([...Array(14).fill("knight"), ...Array(5).fill("vp"), "roads", "roads", "plenty", "plenty", "monopoly", "monopoly"], rng),
+    bank: Array(5).fill(extended ? 24 : 19), deck: shuffle([...Array(extended ? 20 : 14).fill("knight"), ...Array(5).fill("vp"), ...["roads", "plenty", "monopoly"].flatMap(type => Array(extended ? 3 : 2).fill(type))], rng),
     usedDevelopment: [], phase: "setupSettlement", current: 0, setupStep: 0, setupVertex: -1,
     turn: 0, dice: [], rolled: false, developmentPlayed: false, pendingDevelopment: null, freeRoads: 0,
     discard: {}, victims: [], resumePhase: "main", longest: -1, largest: -1, roadLengths: names.map(() => 0),
@@ -287,8 +294,19 @@ function finishRoll(g, number) {
   } else produce(g, number);
 }
 function endTurn(g) {
-  g.trade = null; g.current = (g.current + 1) % g.players.length; g.turn++; g.phase = "roll"; g.dice = []; g.rolled = false; g.developmentPlayed = false; g.shipMoved = false;
-  log(g, `${g.players[g.current].name} 的回合 / turn`);
+  const pair = g.pairedTurn;
+  if (pair?.part === 1) {
+    pair.part = 2; g.current = pair.secondary; g.phase = "main"; g.rolled = true;
+  } else {
+    if (pair) {
+      pair.primary = (pair.primary + 1) % g.players.length; pair.secondary = (pair.primary + 3) % g.players.length;
+      pair.part = 1; pair.round++; g.current = pair.primary;
+    } else g.current = (g.current + 1) % g.players.length;
+    g.phase = "roll"; g.dice = []; g.rolled = false;
+  }
+  // Each part is a personal turn: old development cards age across either role.
+  g.trade = null; g.turn++; g.developmentPlayed = false; g.pendingDevelopment = null; g.shipMoved = false; g.resumePhase = "main";
+  log(g, pair?.part === 2 ? `${g.players[g.current].name} 补充建造：不掷骰，仅与银行交易 / paired build: no dice or player trading` : `${g.players[g.current].name} 的回合 / turn`);
 }
 function tradeRate(g, id, r) {
   let rate = 4;
@@ -297,7 +315,7 @@ function tradeRate(g, id, r) {
 }
 function legal(g, id) {
   const ownTurn = id === g.current && g.phase !== "over", p = g.players[id];
-  const out = { roads: [], ships: [], moveShips: [], shipDestinations: {}, settlements: [], cities: [], robber: [], pirate: [], victims: [], development: [], cancelDevelopment: false, roll: false, end: false, buy: false, trade: false, discard: g.discard[id] || 0, gold: g.phase === "gold" && g.goldQueue[0]?.id === id ? Math.min(g.goldQueue[0].count, sum(g.bank)) : 0 };
+  const out = { roads: [], ships: [], moveShips: [], shipDestinations: {}, settlements: [], cities: [], robber: [], pirate: [], victims: [], development: [], cancelDevelopment: false, roll: false, end: false, buy: false, trade: false, playerTrade: false, discard: g.discard[id] || 0, gold: g.phase === "gold" && g.goldQueue[0]?.id === id ? Math.min(g.goldQueue[0].count, sum(g.bank)) : 0 };
   out.buildBlocked = {};
   out.scenario = Scenarios.legal(g, id, scenarioHelpers);
   if (p) {
@@ -343,7 +361,7 @@ function legal(g, id) {
     out.settlements = affordable(p, COST.settlement) ? settlementSites(g, id) : [];
     out.cities = affordable(p, COST.city) ? citySites(g, id) : [];
     out.buy = affordable(p, COST.development) && g.deck.length > 0;
-    out.end = true; out.trade = true;
+    out.end = true; out.trade = true; out.playerTrade = g.pairedTurn?.part !== 2;
   }
   Scenarios.filterLegal(g, id, out);
   return out;
@@ -369,7 +387,7 @@ function steal(g, id, victim, rng, loot = "resource") {
 
 function canRespondToTrade(g, id) {
   const t = g.trade;
-  return Boolean(g.phase === "main" && t && t.from === g.current && g.players[id] && id !== t.from
+  return Boolean(g.phase === "main" && g.pairedTurn?.part !== 2 && t && t.from === g.current && g.players[id] && id !== t.from
     && (t.to == null || t.to === id) && !t.rejected.includes(id));
 }
 
@@ -481,6 +499,7 @@ function act(g, id, a, rng = random) {
       const cost = zeros(); cost[a.give] = rate; pay(g, p, cost); take(g, p, a.get);
       log(g, `${p.name} ${rate}:1 交易 / maritime trade · ${LABEL[RES[a.give]]} → ${LABEL[RES[a.get]]}`);
     } else if (type === "offerTrade") {
+      requireRule(l.playerTrade, "补充建造阶段只能与银行或港口交易，不能与玩家交易。 / During paired building, trade only with the bank or harbors, not other players.");
       requireRule(l.trade && resourceArray(a.give) && resourceArray(a.want) && sum(a.give) > 0 && sum(a.want) > 0 && a.give.every((n, i) => !n || !a.want[i]) && affordable(p, a.give), "请提供有效的资源交换 / Choose a valid exchange");
       const to = a.to ?? null;
       requireRule(to === null || (Number.isInteger(to) && g.players[to] && to !== id), "请选择其他玩家或所有玩家 / Choose another player or all players");
@@ -542,6 +561,7 @@ function act(g, id, a, rng = random) {
 
 function publicGame(g, id) {
   return {
+    pairedTurn: g.pairedTurn || null, resourceSupply: g.resourceSupply || 19,
     board: g.board, scenario: g.scenario || null, mapId: g.mapId, layout: g.layout, target: g.target, thief: g.thief, goldQueue: g.goldQueue, bank: g.bank, deckCount: g.deck.length, phase: g.phase, current: g.current, turn: g.turn,
     dice: g.dice, longest: g.longest, largest: g.largest, roadLengths: g.roadLengths, winner: g.winner, winners: g.winners || (g.winner >= 0 ? [g.winner] : []),
     log: g.log, revision: g.revision, effect: g.effect || null, trade: g.trade, discard: g.discard, freeRoads: g.freeRoads,
@@ -678,7 +698,7 @@ function chooseBotAction(g, id, rng = random) {
     for (let n = 0; n < Math.min(2, sum(g.bank)); n++) { const r = best([0, 1, 2, 3, 4].filter((r) => g.bank[r] > resources[r]), (r) => [1.1, 1, .9, 1.4, 1.3][r] / (p.resources[r] + resources[r] + 1)); resources[r]++; }
     return { type: "plenty", resources };
   }
-  if (g.phase === "monopoly") { const rates = production(g, id); return { type: "monopoly", resource: best([0, 1, 2, 3, 4], (r) => (19 - g.bank[r] - p.resources[r]) * (1 + 1 / (rates[r] + 1))) }; }
+  if (g.phase === "monopoly") { const rates = production(g, id); return { type: "monopoly", resource: best([0, 1, 2, 3, 4], (r) => ((g.resourceSupply || 19) - g.bank[r] - p.resources[r]) * (1 + 1 / (rates[r] + 1))) }; }
   if (l.roll) {
     if (l.development.includes("knight") && g.board.tiles[g.board.robber]?.vertices.some((v) => g.board.vertices[v].owner === id)) return { type: "playDevelopment", card: "knight" };
     return { type: "roll" };

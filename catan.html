@@ -63,14 +63,14 @@
     <aside id="goldChoiceAlert" class="incoming-trade-alert gold-choice-alert" role="status" aria-live="polite" hidden><svg class="art" viewBox="0 0 48 48" aria-hidden="true"><use href="#catan-art-gold"></use></svg><div><strong id="goldChoiceTitle"></strong><small id="goldChoiceHint"></small></div><button id="chooseGold" type="button">选择<small>Choose</small></button></aside>
     <div id="notice" role="alert" hidden></div>
     <section id="setup" class="setup-layout">
-      <div class="setup-island"><div class="setup-title"><span class="eyebrow">BOARD GAME 02</span><h1 id="editionTitle">卡坦岛 <small>CATAN</small></h1><p id="mapSummary">3–4 玩家 / Players <span>10 分 / Victory Points</span></p></div><div id="previewBoard"></div></div>
+      <div class="setup-island"><div class="setup-title"><span class="eyebrow">BOARD GAME 02</span><h1 id="editionTitle">卡坦岛 <small>CATAN</small></h1><p id="mapSummary">3–6 玩家 / Players <span>10 分 / Victory Points</span></p></div><div id="previewBoard"></div></div>
       <div class="setup-form">
         <div class="setup-heading"><h2>一起登岛 <small>Join the island</small></h2><div id="baseSetup"><button class="quiet" id="baseRules" title="基础版规则 / Base Game Rules">基础规则 / Rules</button></div></div>
         <div class="segments" id="editionChoice"><button class="selected" data-edition="base">基础版 / Base</button><button data-edition="seafarers">航海家 / Seafarers</button></div>
         <div id="seafarerSetup" hidden><label>地图 / Map<select id="mapChoice"></select></label><div class="segments map-layout" id="layoutChoice" role="group" aria-label="地图布局 / Map layout"><button type="button" data-layout="default" class="selected" aria-pressed="true">默认地图<small>Default</small></button><button type="button" data-layout="random" aria-pressed="false">随机地图<small>Random</small></button></div><div class="map-rule-links"><button class="quiet" id="seafarerRules">航海规则 / Sailing Rules</button><button class="quiet" id="mapRules">本图规则 / Map Rules</button></div></div>
         <fieldset id="scenarioSetup" hidden><legend>棋子规则 / Playing Pieces</legend><div class="segments scenario-thieves" id="thiefChoice" role="group" aria-label="强盗与海盗 / Robber and pirate"><button type="button" data-thieves="both" class="selected" aria-pressed="true">两者<small>Both</small></button><button type="button" data-thieves="robber" aria-pressed="false">强盗<small>Robber</small></button><button type="button" data-thieves="pirate" aria-pressed="false">海盗<small>Pirate</small></button></div></fieldset>
         <div class="player-profile-fields"><label>你的名字 / Your name<input id="name" maxlength="18" autocomplete="nickname" placeholder="Player" required></label><div id="catanAvatarPicker"></div></div>
-        <fieldset id="playerCountChoice"><legend>玩家人数 / Players</legend><div class="segments" id="seatChoice"><button data-seats="3">3 人 / Players</button><button class="selected" data-seats="4">4 人 / Players</button></div></fieldset>
+        <fieldset id="playerCountChoice"><legend>玩家人数 / Players</legend><div class="segments" id="seatChoice"><button data-seats="3">3 人 / Players</button><button class="selected" data-seats="4">4 人 / Players</button><button data-seats="5">5 人 / Players</button><button data-seats="6">6 人 / Players</button></div></fieldset>
         <details class="piece-skin-settings"><summary>棋子外观 / Piece skins</summary><div id="pieceSkins" class="piece-skins"></div></details>
         <button class="primary wide" id="create">创建房间 / Create Room <span>→</span></button>
         <div class="form-divider"><span>加入好友 / Join friends</span></div>
@@ -101,6 +101,7 @@
         <section class="board-section">
           <div class="board-toolbar"><span id="phaseLabel"></span><div id="victoryTarget" class="victory-target" title="在自己的回合达到目标分数即可获胜 / Reach the target on your own turn to win"><span class="victory-target-heading"><i data-lucide="trophy" aria-hidden="true"></i><span id="victoryTargetLabel">胜利目标 / Target</span></span><strong id="victoryTargetScore"><b id="victoryTargetValue">10</b><small> 分 / VP</small></strong><div id="scenarioVictoryConditions" class="scenario-victory-conditions" hidden></div></div></div>
           <aside id="harborSetupBanner" class="harbor-setup-banner" role="status" aria-live="polite" hidden><svg viewBox="0 0 48 48" aria-hidden="true"><use href="#catan-art-settlement"></use></svg><div><strong id="harborSetupPhase"></strong><small>港口已全部放置 / All harbors placed</small></div></aside>
+          <aside id="pairedTurnBanner" class="paired-turn-banner" role="status" aria-live="polite" hidden></aside>
           <details id="pirateBattle" class="pirate-battle" aria-label="海盗战报 / Pirate battle report" open hidden></details>
           <div class="board-viewport" id="boardViewport" tabindex="0" role="region" aria-label="卡坦岛棋盘，双指缩放；键盘加减号缩放，0 复位 / Catan board: pinch to zoom; keyboard plus/minus to zoom, 0 to reset"><div id="board"></div></div>
           <div class="turn-banner"><div class="numbered-avatar" id="turnAvatar"></div><div id="turnPrompt" aria-live="polite"></div><div id="dice" class="dice-pair"></div></div>
@@ -202,6 +203,7 @@
         <h3>组件清单 <small>Component Inventory</small></h3>
         <p id="rulesPieceSupply">每位玩家：5 座村庄、4 座城市、15 条道路；仅航海家额外配有 15 艘船，基础版不使用船。<small>Each player: 5 settlements, 4 cities and 15 roads. Seafarers only adds 15 ships per player; ships are not used in the base game.</small></p>
         <p id="rulesShipSupply" hidden>船和道路分别计算上限，不能互相替代库存。<small>Ships and roads have separate supply limits; neither can replace the other's supply.</small></p>
+        <p id="rulesResourceSupply"></p>
         <p id="rulesDevelopmentSupply">全体玩家共用 25 张发展卡：14 张骑士、5 张胜利点、2 张道路建设、2 张垄断、2 张丰收。<small>One shared deck of 25 development cards: 14 Knights, 5 Victory Points, 2 Road Building, 2 Monopoly and 2 Year of Plenty.</small></p>
       </section>
       <section class="rule-section">
@@ -211,7 +213,14 @@
       </section>
       <section class="rule-section">
         <h3>回合与资源 <small>Turns &amp; Resources</small></h3>
-        <p>每回合掷两颗骰子。对应数字的地块给所有相邻村庄一张资源、城市两张；之后可交替交易、建造，最后结束回合。沙漠和强盗所在的地块不生产资源。<small>Roll two dice each turn. Matching hexes produce one resource for each adjacent settlement and two for each city, for all players. Then trade and build in any order before ending your turn. The desert and the robber's hex produce nothing.</small></p>
+        <p id="rulesTurn">每回合掷两颗骰子。对应数字的地块给所有相邻村庄一张资源、城市两张；之后可交替交易、建造，最后结束回合。沙漠和强盗所在的地块不生产资源。<small>Roll two dice each turn. Matching hexes produce one resource for each adjacent settlement and two for each city, for all players. Then trade and build in any order before ending your turn. The desert and the robber's hex produce nothing.</small></p>
+      </section>
+      <section id="rulesPairedTurn" class="rule-section" hidden>
+        <h3>5–6 人配对回合 <small>Paired Turns</small></h3>
+        <p>每轮由两人依次行动。主回合玩家先掷骰，所有人照常收资源或处理七点，再交易、建造；也可按正常规则用一张旧发展卡，包括掷骰前使用。<small>Two players act in order. The primary player rolls for everyone, resolves production or seven, then trades and builds. One old development card may be played as usual, including before rolling.</small></p>
+        <p>主回合结束后，顺时针第三位玩家补充建造（中间隔两人）。这位玩家不掷骰，可以与银行或港口交易、建造、买发展卡、用一张旧发展卡，但不能与其他玩家交易。两人都完成后，主回合顺时针移到下一位。<small>The third player clockwise then takes a paired building turn (two players sit between them). No dice roll or player trading; bank/harbor trades, building, buying cards and playing one old development card are allowed. After both finish, the next player clockwise takes the primary turn.</small></p>
+        <p>自己下一次行动时，上次购买的发展卡就能使用，不论这次是主回合还是补充建造。每次行动最多使用一张，刚买的不能立刻用；胜利点卡除外。任一阶段到自己行动并达到 10 分即可获胜，主回合玩家先结算。<small>Cards bought on your previous personal turn can be used on your next turn in either role. One action card per personal turn, never one bought in that same turn; VP cards are the exception. Reach 10 VP during either of your turns to win; the primary player resolves first.</small></p>
+        <a class="rules-link" href="https://www.catan.com/sites/default/files/2025-03/CN3082%20CATAN%20%E2%80%93%205-6%20Rulebook%202025%20reduced.pdf" target="_blank" rel="noopener noreferrer">官方 5–6 人规则 / Official 5–6 Player Rules</a>
       </section>
       <section class="rule-section">
         <h3>建造费用与上限 <small>Building Costs &amp; Limits</small></h3>

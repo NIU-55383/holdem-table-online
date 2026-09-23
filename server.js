@@ -1409,7 +1409,8 @@ const server = http.createServer((request, response) => {
   const pathname = decodeURIComponent(new URL(request.url, `http://${request.headers.host}`).pathname);
   if (pathname === "/api/catan-preview") {
     const params = new URL(request.url, `http://${request.headers.host}`).searchParams;
-    const mapId = (params.get("map") || "base") + (params.get("layout") === "random" && params.get("map") !== "base" ? ":random" : "");
+    const baseId = params.get("map") || "base";
+    const mapId = baseId === "base" ? (Number(params.get("players")) > 4 ? "base:5-6" : "base") : baseId + (params.get("layout") === "random" ? ":random" : "");
     if (!catan.previews.has(mapId)) { response.writeHead(404); response.end("Unknown map"); return; }
     response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=300" });
     const board = structuredClone(catan.previews.get(mapId));

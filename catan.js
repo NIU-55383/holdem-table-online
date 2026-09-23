@@ -75,6 +75,8 @@
   };
   const layoutName = (layout, mapId = state.room?.mapId || state.mapId) => layout === "random" ? Maps.get(mapId)?.randomPolicy?.portsOnly ? "固定地形 · 随机港口 / Fixed terrain · Random harbors" : "随机地图 / Random" : "默认地图 / Default";
   let previewRequest = 0, supplyRoomKey = "";
+  const standardTurnRules = $("rulesTurn").innerHTML;
+  const standardDevelopmentSupply = $("rulesDevelopmentSupply").innerHTML;
   function showSailingRules(mapId, general = false) {
     const map = Maps.get(mapId);
     if (!map && !general) return;
@@ -115,7 +117,17 @@
   }
   function showBaseRules() {
     const map = Maps.get(state.room?.mapId || state.mapId), target = state.room?.game?.target || map?.target || 10;
-    $("helpTitle").innerHTML = map ? "通用规则与费用<small>Core Rules &amp; Costs</small>" : "基础版规则<small>Base Game Rules</small>";
+    const players = state.room?.game?.players.length || state.room?.maxPlayers || state.seats;
+    const extended = !map && players > 4;
+    $("helpTitle").innerHTML = map ? "通用规则与费用<small>Core Rules &amp; Costs</small>" : extended ? "基础版 5–6 人规则<small>Base Game · 5–6 Players</small>" : "基础版规则<small>Base Game Rules</small>";
+    $("rulesPairedTurn").hidden = !extended;
+    $("rulesResourceSupply").innerHTML = extended
+      ? "30 块地形：森林、牧场、麦田各 6 块，丘陵、山地各 5 块，沙漠 2 块；11 个港口（5 个 3:1，羊毛 2 个 2:1，其余资源各 1 个 2:1）。每种资源 24 张。地形随机，数字按扩展版字母顺序逆时针摆放，跳过沙漠。<small>30 hexes: 6 forests, pastures and fields each, 5 hills and mountains each, 2 deserts. 11 harbors: five 3:1, two wool 2:1 and one 2:1 for each other resource. 24 cards per resource. Random terrain; extension number discs follow a counterclockwise alphabetical spiral, skipping deserts.</small>"
+      : "每种资源 19 张，所有玩家共用银行库存。<small>19 cards per resource, shared by all players.</small>";
+    $("rulesDevelopmentSupply").innerHTML = extended
+      ? "全体玩家共用 34 张发展卡：20 张骑士、5 张胜利点，道路建设、垄断、丰收各 3 张。<small>One shared deck of 34 cards: 20 Knights, 5 Victory Points, and 3 each of Road Building, Monopoly and Year of Plenty.</small>" : standardDevelopmentSupply;
+    $("rulesTurn").innerHTML = extended
+      ? "每轮只有主回合玩家掷两颗骰子，所有玩家一起收资源。对应数字的地块给每座相邻村庄 1 张、城市 2 张；沙漠和强盗所在的地块不生产。主回合结束后还有一位玩家补充建造，详见下方。<small>Only the primary player rolls each round; all players collect resources. Matching hexes produce 1 per adjacent settlement or 2 per city. Deserts and the robber's hex produce nothing. A second player then takes a building turn, as described below.</small>" : standardTurnRules;
     $("rulesVictory").innerHTML = `在自己的回合达到 ${target} 分即获胜。村庄 1 分，城市 2 分，最长${map ? "商路" : "道路"}与最大骑士团各 2 分，胜利点发展卡各 1 分。<small>Win immediately with ${target} victory points on your own turn. Settlement 1; city 2; longest ${map ? "route" : "road"} and largest army 2 each; victory point card 1.</small>`;
     $("rulesVictoryCard").innerHTML = `胜利点卡例外：新买的卡也立即计分，不占每回合使用一张发展卡的额度。在自己的回合达到 ${target} 分即可获胜。<small>Victory point cards are the exception: they count immediately, including newly purchased cards, and do not use your one-development-card allowance. Reach ${target} points on your own turn to win.</small>`;
     $("rulesShipSupply").hidden = !map; $("rulesScenarioNote").hidden = !map;
@@ -131,8 +143,8 @@
       ["monopoly", "dev-monopoly", "指定一种资源，其他玩家须交出该种资源的所有手牌。", "Choose a resource. All opponents give you every card of that resource."],
       ["vp", "dev-vp", "秘密增加一分，达到获胜条件时计入总分。", "One hidden victory point, counted when checking for victory."]
     ];
-    const pirate = map?.family === "pirates", players = state.room?.game?.players.length || state.room?.maxPlayers || state.seats;
-    const deckCounts = { knight: pirate && players === 4 ? 19 : 14, vp: pirate ? 0 : 5, roads: 2, plenty: 2, monopoly: 2 };
+    const pirate = map?.family === "pirates";
+    const deckCounts = { knight: extended ? 20 : pirate && players === 4 ? 19 : 14, vp: pirate ? 0 : 5, roads: extended ? 3 : 2, plenty: extended ? 3 : 2, monopoly: extended ? 3 : 2 };
     $("rulesDevelopment").innerHTML = effects.filter(([type]) => deckCounts[type]).map(([type, art, zh, en]) => {
       const name = S.devName(type, pirate) || devNames[type];
       return `<div><dt>${art === "warship" ? S.art("warship") : icon(art)}<span>${name[0]} × ${deckCounts[type]}<small>${name[1]} × ${deckCounts[type]}</small></span></dt><dd>${zh}<small>${en}</small></dd></div>`;
@@ -164,9 +176,14 @@
     $("layoutChoice").querySelector('[data-layout="random"]').innerHTML = map?.randomPolicy?.portsOnly ? "随机港口<small>Random harbors · Fixed terrain</small>" : "随机地图<small>Random</small>";
     document.querySelectorAll("[data-edition]").forEach((b) => b.classList.toggle("selected", b.dataset.edition === (map ? "seafarers" : "base")));
     $("editionTitle").innerHTML = map ? '卡坦：航海家<small>CATAN Seafarers</small>' : '卡坦岛 <small>CATAN</small>';
-    $("mapSummary").textContent = map ? `${map.name} / ${map.english} · ${S.playerRange(map)} 玩家 / Players · ${S.target(map)[0]} / ${S.target(map)[1]}` : "3–4 玩家 / Players · 10 VP";
     if (map) { state.seats = map.minPlayers < map.players ? Math.max(map.minPlayers, Math.min(map.players, Number($("seatChoice").querySelector(".selected")?.dataset.seats) || map.players)) : map.players; $("mapChoice").value = id; }
     else { state.seats = Number($("seatChoice").querySelector(".selected")?.dataset.seats) || 4; }
+    $("seatChoice").querySelectorAll("[data-seats]").forEach(button => {
+      button.hidden = Boolean(map && Number(button.dataset.seats) > 4);
+      button.classList.toggle("selected", Number(button.dataset.seats) === state.seats);
+      button.setAttribute("aria-pressed", String(Number(button.dataset.seats) === state.seats));
+    });
+    $("mapSummary").textContent = map ? `${map.name} / ${map.english} · ${S.playerRange(map)} 玩家 / Players · ${S.target(map)[0]} / ${S.target(map)[1]}` : `${state.seats} 玩家 / Players · 10 VP${state.seats > 4 ? " · 配对回合 / Paired turns" : ""}`;
     const request = ++previewRequest;
     fetch(`/api/catan-preview?map=${encodeURIComponent(state.mapId)}&layout=${state.layout}&players=${state.seats}&thieves=${state.thieves}`).then((r) => { if (!r.ok) throw new Error("preview"); return r.json(); }).then((board) => { if (request === previewRequest) { $("previewBoard").innerHTML = B.render({ ...board, skins: state.skins }, { preview: true }); $("previewBoard").dataset.layout = board.layout || "default"; $("previewBoard").dataset.map = state.mapId; } }).catch(() => { if (request === previewRequest) $("previewBoard").innerHTML = `<div class="offline-island">${icon("ship")}<p>请使用新版服务器 / Updated server required</p></div>`; });
   }
@@ -457,12 +474,13 @@
     if (!room) { supplyRoomKey = ""; $("incomingTradeAlert").hidden = true; $("goldChoiceAlert").hidden = true; alertTradeKey = ""; return; }
     const map = Maps.get(room.mapId);
     if (g && supplyRoomKey !== room.code) { $("supplyDetails").open = true; supplyRoomKey = room.code; }
-    $("lobbyMapName").textContent = map ? `${map.name} / ${map.english} · ${S.target(map)[0]} / ${S.target(map)[1]} · ${layoutName(room.layout)}` : "基础版 / Base Game · 10 VP";
+    $("lobbyMapName").textContent = map ? `${map.name} / ${map.english} · ${S.target(map)[0]} / ${S.target(map)[1]} · ${layoutName(room.layout)}` : `基础版 / Base Game · ${room.maxPlayers} 人 / Players · 10 VP${room.maxPlayers > 4 ? " · 配对回合 / Paired turns" : ""}`;
     $("lobbyMapRules").hidden = false; $("gameMapRules").hidden = !map; $("gameSailingRules").hidden = !map;
     $("lobbyMapRules").textContent = map ? "本图规则 / Map Rules" : "基础规则 / Base Rules";
     if (!g) {
       $("incomingTradeAlert").hidden = true; $("goldChoiceAlert").hidden = true; viewedTradeKey = ""; alertTradeKey = "";
       $("copyCode").textContent = room.code; $("lobbyCount").textContent = `${room.seats.length} / ${room.maxPlayers} 玩家 / Players`;
+      $("lobbySeats").classList.toggle("extended-seats", room.maxPlayers > 4);
       $("lobbySeats").innerHTML = Array.from({ length: room.maxPlayers }, (_, id) => {
         const index = room.seats.findIndex((p, i) => (p.position ?? i) === id), p = room.seats[index], own = index === room.you;
         const label = own ? "我的座位 / My seat" : !p ? "坐这里 / Sit here" : p.bot ? "换座 / Swap seats" : "申请换座 / Request swap";
@@ -492,7 +510,7 @@
     if (state.harbor !== null && !harbors.some(h => h.harbor === state.harbor)) { state.harbor = null; if (state.mode === "placeHarbor") state.mode = ""; }
     if (g.phase === "scenarioChoice" && g.scenario?.pending?.kind === "placeHarbor" && harbors.length && state.harbor === null) { state.harbor = harbors[0].harbor; state.mode = "placeHarbor"; }
     $("roomLabel").textContent = `房间 / Room ${room.code}`;
-    $("turnLabel").textContent = `回合 / Turn ${g.turn || "—"}`;
+    $("turnLabel").textContent = `回合 / Turn ${g.turn ? g.pairedTurn?.round || g.turn : "—"}`;
     const specialTarget = ["wonders", "pirates", "cloth"].includes(map?.family);
     $("victoryTarget").classList.toggle("scenario-target", specialTarget);
     $("victoryTarget").parentElement.classList.toggle("has-scenario-target", specialTarget);
@@ -746,7 +764,10 @@
   function renderPrompt() {
     const { game: g, you } = state.room, winner = g.phase === "over" ? g.players[g.winner] : null;
     const actor = g.phase === "scenarioChoice" ? g.scenario?.pending?.actor ?? g.scenario?.actor ?? g.current : g.phase === "gold" ? g.goldQueue[0]?.id ?? g.current : g.current;
-    const current = winner || g.players[actor], phase = g.board.islands && g.phase === "setupRoad" ? ["初始道路或船", "Initial road or ship"] : g.board.islands && g.phase === "freeRoads" ? ["免费道路或船", "Free roads or ships"] : phases[g.phase] || ["等待操作", "Waiting for action"];
+    const current = winner || g.players[actor], phase = g.pairedTurn?.part === 2 && g.phase === "main" ? ["补充建造", "Paired building"] : g.board.islands && g.phase === "setupRoad" ? ["初始道路或船", "Initial road or ship"] : g.board.islands && g.phase === "freeRoads" ? ["免费道路或船", "Free roads or ships"] : phases[g.phase] || ["等待操作", "Waiting for action"];
+    const pair = g.pairedTurn;
+    $("pairedTurnBanner").hidden = !pair || g.phase.startsWith("setup") || Boolean(winner);
+    if (pair) $("pairedTurnBanner").innerHTML = `<div><span class="${pair.part === 1 ? "active" : ""}">主回合 / Main: <b>${B.escape(g.players[pair.primary].name)}</b></span><span aria-hidden="true"> → </span><span class="${pair.part === 2 ? "active" : ""}">补充建造 / Paired build: <b>${B.escape(g.players[pair.secondary].name)}</b></span></div><small>${pair.part === 2 ? "现在不掷骰；可建造、用旧发展卡，只能与银行或港口交易。 / No roll; build, play an old card, and trade with the bank or harbors only." : "主回合结束后，箭头右侧玩家补充建造。 / The paired player builds after the main turn."}</small>`;
     $("phaseLabel").textContent = g.scenario?.harborDraft ? "初始海港 / Initial harbors" : `${phase[0]} / ${phase[1]}`;
     $("turnAvatar").innerHTML = window.BoardGameUI.avatar(state.room.seats[current.id], seatConnected(current.id), "turn-avatar", current.id === state.room.you) + seatNumber(current.id); $("turnAvatar").style.setProperty("--player", B.COLORS[current.id]);
     const own = current.id === you, waiting = g.phase === "discard" && !g.legal.discard;
@@ -773,7 +794,7 @@
     if (own && g.phase === "steal" && g.scenario?.kind === "cloth") { zh = "选择玩家及资源或布匹"; en = "Choose a player, then resource or cloth"; }
     $("turnPrompt").innerHTML = `${B.escape(zh)}<small>${B.escape(en)}</small>`;
     $("dice").innerHTML = diceMarkup(g.dice[0]) + diceMarkup(g.dice[1]);
-    const key = `${g.turn}:${g.dice.join()}`;
+    const key = `${g.pairedTurn?.round || g.turn}:${g.dice.join()}`;
     if (state.diceKey !== key && g.dice.length) { $("dice").classList.remove("rolling"); requestAnimationFrame(() => $("dice").classList.add("rolling")); }
     state.diceKey = key;
   }
@@ -837,7 +858,7 @@
       ["settlement", "settlement", "建村庄", "Settlement", l.settlements.length, "木砖羊麦 / 4 resources"],
       ["city", "city", "升城市", "City", l.cities.length, "2 麦 + 3 矿 / Grain + Ore"],
       ["buyDevelopment", "development", "买发展卡", "Dev card", l.buy, g.deckCount === 0 ? "已售罄 / Sold out" : "羊麦矿 / Wool Grain Ore"],
-      ["trade", "trade", "交易", "Trade", l.trade, "银行 / 玩家 · Bank / Player"],
+      ["trade", "trade", "交易", "Trade", l.trade, g.pairedTurn?.part === 2 ? "仅银行 / Bank only" : "银行 / 玩家 · Bank / Player"],
       ["help", "dice", "建造费用", "Build costs", true, g.board.islands ? "航海家 / Seafarers" : "基础版 / Base game"],
     ];
     if (g.board.islands) items.splice(1, 0,
@@ -850,7 +871,7 @@
       const reason = l.buildBlocked?.[type];
       return `<button data-action="${type}" title="${B.escape(reason || `${zh} / ${en} · ${cost}`)}" class="${reason ? "build-unavailable" : state.mode === type ? "selected" : ""}" ${(enabled || reason) && !state.pending && (type === "help" || !state.room.control?.paused) ? "" : "disabled"}>${icon(image)}<span>${zh}<small>${en}</small><small class="action-cost">${cost}</small></span></button>`;
     }).join("")
-      + `<button class="turn-action" data-action="${l.roll ? "roll" : "end"}" ${!state.pending && !state.room.control?.paused && (l.roll || l.end) ? "" : "disabled"}><span>${l.roll ? "掷骰子" : "结束回合"}<small>${l.roll ? "Roll Dice" : "End Turn"}</small></span><span aria-hidden="true">→</span></button>`;
+      + `<button class="turn-action" data-action="${l.roll ? "roll" : "end"}" ${!state.pending && !state.room.control?.paused && (l.roll || l.end) ? "" : "disabled"}><span>${l.roll ? "掷骰子" : g.pairedTurn?.part === 2 ? "结束补充建造" : "结束回合"}<small>${l.roll ? "Roll Dice" : g.pairedTurn?.part === 2 ? "End Paired Build" : "End Turn"}</small></span><span aria-hidden="true">→</span></button>`;
   }
   $("actions").onclick = (e) => {
     const button = e.target.closest("[data-action]"); if (!button || button.disabled) return;
@@ -1005,7 +1026,7 @@
     const button = e.target.closest("[data-add-trade],[data-remove-trade]"); if (!button || button.disabled) return;
     const side = button.dataset.addTrade || button.dataset.removeTrade, r = Number(button.dataset.resource);
     const adding = Boolean(button.dataset.addTrade), other = side === "give" ? "want" : "give";
-    if (adding && (tradeDraft[other][r] || tradeDraft[side][r] >= (side === "give" ? me().resources[r] : 19))) return;
+    if (adding && (tradeDraft[other][r] || tradeDraft[side][r] >= (side === "give" ? me().resources[r] : state.room.game.resourceSupply || 19))) return;
     tradeDraft[side][r] = Math.max(0, tradeDraft[side][r] + (adding ? 1 : -1));
     $("tradeError").textContent = ""; renderTradeDraft();
     if (!adding) {
@@ -1018,7 +1039,7 @@
       const other = side === "give" ? "want" : "give";
       $(id).innerHTML = tradeCards(tradeDraft[side], side, true);
       document.querySelectorAll(`[data-add-trade="${side}"]`).forEach((button) => {
-        const r = Number(button.dataset.resource), limit = side === "give" ? me().resources[r] : 19;
+        const r = Number(button.dataset.resource), limit = side === "give" ? me().resources[r] : state.room.game.resourceSupply || 19;
         button.disabled = Boolean(tradeDraft[other][r]) || tradeDraft[side][r] >= limit;
         const reason = tradeDraft[other][r] ? "已在另一侧选择 / Selected on the other side" : tradeDraft[side][r] >= limit ? "没有更多可选卡牌 / No more cards available" : "添加一张 / Add one card";
         button.title = `${labels[r]} / ${english[r]} · ${reason}`;
@@ -1031,6 +1052,13 @@
   $("tradeGive").innerHTML = options; $("tradeGet").innerHTML = options; $("tradeGet").value = "1";
   document.querySelectorAll("[data-trade-mode]").forEach((button) => { button.onclick = () => { state.tradeMode = button.dataset.tradeMode; document.querySelectorAll("[data-trade-mode]").forEach((b) => b.classList.toggle("selected", b === button)); updateTrade(); }; });
   function updateTrade() {
+    const bankOnly = state.room?.game.pairedTurn?.part === 2;
+    if (bankOnly) state.tradeMode = "bank";
+    document.querySelectorAll("[data-trade-mode]").forEach(button => {
+      button.disabled = bankOnly && button.dataset.tradeMode === "players";
+      button.classList.toggle("selected", button.dataset.tradeMode === state.tradeMode);
+      button.title = button.disabled ? "补充建造时不能与玩家交易 / No player trading during paired building" : "";
+    });
     const bank = state.tradeMode === "bank"; $("bankTradeFields").hidden = !bank; $("playerTradeFields").hidden = bank; $("tradeRate").hidden = !bank;
     const selected = $("tradeTarget").value, players = state.room?.game.players || [];
     $("tradeTarget").innerHTML = '<option value="all">所有玩家 / All players</option>' + players.filter((p) => p.id !== state.room.you).map((p) => `<option value="${p.id}">${B.escape(p.name)}</option>`).join("");

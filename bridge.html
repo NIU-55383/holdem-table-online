@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>桥牌 Bridge / 桌游小馆</title>
+  <link rel="stylesheet" href="bridge.css"><link rel="stylesheet" href="game-ui.css">
+</head>
+<body>
+  <header class="bridge-header">
+    <a class="icon-button" href="index.html" title="返回大厅 / Back to club" aria-label="返回大厅 / Back to club"><i data-lucide="arrow-left"></i></a>
+    <div class="brand"><strong>桥牌</strong><span>BRIDGE</span></div><span id="connection" role="status">连接中 / Connecting</span>
+    <button id="soundBtn" class="icon-button" title="音效 / Sound" aria-label="音效 / Sound"><i data-lucide="volume-2"></i></button>
+    <button id="settingsBtn" class="icon-button" title="设置 / Settings" aria-label="设置 / Settings"><i data-lucide="sliders-horizontal"></i></button>
+    <button id="rulesBtn" class="icon-button" title="规则 / Rules" aria-label="规则 / Rules"><i data-lucide="book-open"></i></button>
+  </header>
+  <main class="bridge-layout">
+    <section class="table-workspace">
+      <div id="boardMeta" class="board-meta"><span>四人定约桥牌 / Contract Bridge</span><span>南北 × 东西 / NS × EW</span></div>
+      <div id="table" class="bridge-table"><img class="table-intro" src="bridge-art.svg" alt="桥牌牌桌 / Bridge table"></div>
+      <div id="turnStatus" class="turn-status" role="status">等待入座 / Waiting for players</div>
+      <section id="dummyPanel" class="hand-section" hidden></section>
+      <section id="handPanel" class="hand-section" hidden></section>
+      <div id="reviewPanel" hidden></div>
+    </section>
+    <aside class="bridge-sidebar">
+      <section id="setup">
+        <h1>入座 <small>Take a seat</small></h1>
+        <div class="identity"><div id="avatarPicker"></div><label>名字 / Name<input id="playerName" maxlength="18" autocomplete="nickname"></label></div>
+        <label class="field">每场副数 / Boards<select id="boardCount"><option value="4">4 副 / 4 boards</option><option value="8">8 副 / 8 boards</option><option value="16">16 副 / 16 boards</option></select></label>
+        <button id="createBtn" class="primary wide"><i data-lucide="plus"></i>创建房间 / Create room</button>
+        <form id="joinForm" class="join-form"><label>加入房间 / Join room<input id="roomInput" maxlength="6" placeholder="B12345" autocomplete="off" autocapitalize="characters"></label><button type="submit" title="加入 / Join" aria-label="加入 / Join"><i data-lucide="log-in"></i></button></form>
+      </section>
+      <section id="roomPanel" hidden>
+        <div class="room-heading"><div><small>房间 / Room</small><strong id="roomCode"></strong></div><button id="copyBtn" class="icon-button" title="复制邀请链接 / Copy invite" aria-label="复制邀请链接 / Copy invite"><i data-lucide="copy"></i></button><button id="leaveBtn" class="icon-button" title="离开 / Leave" aria-label="离开 / Leave"><i data-lucide="log-out"></i></button></div>
+        <div id="roomTools"></div>
+        <div id="lobby"><h2>搭档座位 <small>Partnerships</small></h2><div id="lobbySeats"></div><div id="swapRequest"></div><div class="lobby-actions"><button id="fillBtn"><i data-lucide="bot"></i>补齐机器人 / Fill bots</button><button id="startBtn" class="primary"><i data-lucide="play"></i>开始 / Start</button></div></div>
+        <section id="biddingPanel" hidden><h2>叫牌 <small>Auction</small></h2><div id="bidControls"></div><div id="auction"></div></section>
+        <section id="contractPanel" hidden></section>
+        <section id="resultPanel" hidden></section>
+        <details id="scoreSection" open><summary>计分 <small>Scores</small><strong id="totalScore"></strong></summary><div id="scores"></div></details>
+        <details class="chat-section" open><summary>聊天 <small>Chat</small></summary><div id="messages" class="messages" aria-live="polite"></div><form id="chatForm"><input id="chatText" maxlength="160" aria-label="消息 / Message" placeholder="消息 / Message" autocomplete="off"><button title="发送 / Send" aria-label="发送 / Send"><i data-lucide="send"></i></button></form></details>
+      </section>
+      <div id="error" class="error" role="alert"></div>
+    </aside>
+  </main>
+  <dialog id="rulesDialog" class="rules-dialog">
+    <div class="dialog-heading"><h2>桥牌规则 <small>Bridge Rules</small></h2><button class="icon-button" data-close="rulesDialog" aria-label="关闭 / Close"><i data-lucide="x"></i></button></div>
+    <div class="dialog-body rules">
+      <section><h3>搭档与目标 / Partners & goal</h3><p>四人使用一副无大小王的 52 张牌，每人 13 张。南北一队，东西一队。A 最大，依次为 K、Q、J、10 至 2。先叫牌决定本副的将牌和目标墩数，再打完 13 墩。</p><p lang="en">Four players, 52 cards, 13 each. North–South and East–West are partners. Cards rank A, K, Q, J, 10 down to 2. The auction sets the trump suit and target; then all 13 tricks are played.</p></section>
+      <section><h3>叫牌 / The auction</h3><p>发牌人先叫，顺时针轮流。可以不叫（Pass），或报 1–7 阶及花色。同阶顺序为 ♣ &lt; ♦ &lt; ♥ &lt; ♠ &lt; 无将 NT；新叫牌必须更高。1 阶要赢 7 墩，4 阶要赢 10 墩，即「阶数 + 6」。无将表示没有将牌。</p><p lang="en">The dealer calls first, clockwise. Pass or bid a level (1–7) and denomination. Within a level: ♣ &lt; ♦ &lt; ♥ &lt; ♠ &lt; NT. Each bid must be higher. The target is level + 6 tricks: 1-level = 7; 4-level = 10. NT means no trumps.</p><p>对手最后叫出的定约可以加倍（X）；己方被加倍后可再加倍（XX）。双方之间的不叫不影响资格，新的更高叫牌会取消加倍。有人叫牌后连续三人不叫，定约成立；开头四人都不叫，本副零分结束。最后叫牌一方中，最早叫过最终花色的人为庄家，不一定是最后叫牌的人。</p><p lang="en">Double (X) an opponent's current bid; redouble (XX) your side's doubled bid. Intervening passes do not prevent either. A new bid cancels doubles. Three passes after a bid end the auction; four opening passes pass out the board for zero. Declarer is the first player on the winning side who bid the final denomination.</p></section>
+      <section><h3>首攻、明手与出牌 / Lead, dummy & play</h3><p>庄家左手的防家首攻。第一张牌出完，庄家的搭档摊开全部手牌，成为明手，由庄家替明手选牌。庄家与明手仍按原座位顺序出牌。明手玩家不能自行出牌。</p><p lang="en">The defender to declarer's left makes the opening lead. Dummy, declarer's partner, then exposes their hand. Declarer chooses cards for both hands, each at its usual turn. The dummy player does not play independently.</p><p>每墩四人各出一张，必须跟首张牌的花色。没有该花色时可出任意牌，也可出将牌「将吃」，但不强制。若有将牌，最大的将牌赢；否则首引花色中最大的牌赢。赢墩者领出下一墩。庄家与明手的墩数相加，防守方同理。</p><p lang="en">Each trick contains one card per seat, clockwise. Follow the led suit if you can. If void, play any card, including a trump; trumping is optional. Highest trump wins, otherwise highest card of the led suit. The winner leads next. Partners' tricks count together.</p></section>
+      <section><h3>本桌计分与局况 / Scoring & vulnerability</h3><p>本桌每副独立计分，采用定约桥牌的复式计分表；不累计橡皮桥局分，也不换算 IMP 或比赛分。每场 4、8 或 16 副，累计分高的一队获胜。发牌人每副顺移，局况按标准 16 副循环。红色标出的「有局」会提高成局、满贯奖励和宕约罚分，与本场领先与否无关。</p><p lang="en">Each board uses duplicate contract scoring, with no rubber carryover, IMPs or matchpoints. Play 4, 8 or 16 boards; the partnership with the higher total wins. Dealer rotates and vulnerability follows the standard 16-board cycle. Vulnerable (red) means larger game/slam bonuses and penalties, unrelated to the match lead.</p><p>完成定约：只算六墩以上、定约要求的墩。♣/♦ 每墩 20 分；♥/♠ 每墩 30 分；NT 第一墩 40 分，此后每墩 30 分。加倍乘 2，再加倍乘 4。定约墩分不到 100，另奖 50；达到 100 即成局，另奖无局 300 / 有局 500。超墩不影响是否成局。</p><p lang="en">Made contract: count contracted tricks above six. ♣/♦ = 20 each; ♥/♠ = 30 each; NT = 40 for the first, then 30. Double these points for X, quadruple for XX. Below 100 contract points: +50 partscore bonus. At least 100: +300 non-vulnerable / +500 vulnerable game bonus. Overtricks do not qualify a contract for game.</p><p>完成 6 阶小满贯，额外奖无局 500 / 有局 750；完成 7 阶大满贯，额外奖 1000 / 1500。完成加倍定约另奖 50，再加倍另奖 100。未加倍的超墩按本花色每墩分值算（NT 为 30）；加倍超墩每墩无局 100 / 有局 200，再加倍再乘 2。</p><p lang="en">Made small slam (6-level): add 500 non-vulnerable / 750 vulnerable; grand slam (7-level): add 1000 / 1500. Making a doubled contract adds 50; redoubled adds 100. Undoubled overtricks score the suit's normal value (NT = 30). Doubled overtricks: 100 non-vulnerable / 200 vulnerable each; twice that if redoubled.</p><p>未完成定约叫「宕约」，只有防守方得分。未加倍：每少一墩，无局罚 50 / 有局罚 100。加倍无局：第一墩 100，第二、三墩各 200，以后各 300；加倍有局：第一墩 200，以后各 300。再加倍罚分再乘 2。</p><p lang="en">If declarer goes down, only the defenders score. Undoubled: 50 per undertrick non-vulnerable, 100 vulnerable. Doubled non-vulnerable: 100 for the first, 200 each for the second and third, 300 each thereafter. Doubled vulnerable: 200 for the first, 300 each thereafter. Redoubled penalties are twice the doubled amounts.</p></section>
+      <section><h3>机器人与房间 / Bots & room</h3><p>机器人使用简化自然叫牌：通常 12 点开叫、五张高花、均型 15–17 点开 1NT、20–22 点开 2NT。A/K/Q/J 分别算 4/3/2/1 点。不是完整约定体系，也不保证专家水平。房主可以补机器人；有人被移出时保留其手牌并暂停，补位后继续。两分钟自动托管默认关闭，由房主统一设置。</p><p lang="en">Bots use simple natural bidding: usually 12+ HCP to open, five-card majors, balanced 15–17 for 1NT and 20–22 for 2NT. A/K/Q/J count 4/3/2/1 HCP. This is not a full convention system or an expert engine. Hosts can add bots. Removing a seat preserves its hand and pauses play until replaced. Two-minute idle auto-play is off by default and controlled by the host.</p></section>
+      <p class="rule-source">规则参考 / Reference: <a href="https://www.acbl.org/learn/" target="_blank" rel="noopener">American Contract Bridge League</a></p>
+    </div>
+  </dialog>
+  <dialog id="settingsDialog"><div class="dialog-heading"><h2>设置 <small>Settings</small></h2><button class="icon-button" data-close="settingsDialog" aria-label="关闭 / Close"><i data-lucide="x"></i></button></div><div class="dialog-body"><label class="volume-label">音效音量 / Sound volume <output id="volumeValue"></output><input id="volume" type="range" min="0" max="100" step="1"></label><label class="check-label"><input type="checkbox" id="mute">静音 / Mute</label></div></dialog>
+  <dialog id="confirmDialog"><div class="dialog-body"><h2>离开房间？ <small>Leave room?</small></h2><p>开局后座位会保留，其他人需等你回来或由房主补位。<small>Your seat remains after the start. Play waits for you or a host-managed replacement.</small></p><div class="dialog-actions"><button data-close="confirmDialog">取消 / Cancel</button><button id="confirmLeave" class="primary">离开 / Leave</button></div></div></dialog>
+  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-audio.js"></script><script src="game-ui.js"></script><script src="bridge-audio.js"></script><script src="bridge.js"></script>
+</body>
+</html>

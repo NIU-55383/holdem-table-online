@@ -39,3 +39,4 @@
   .game-meta {display: grid; gap: 2px; font-size: 10px;}
   .club-game-art .mini-table {position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(.42) rotate(-12deg); width: 350px;}
 }
+.bridge-art{background:#245c47}.bridge-art img{width:100%;height:100%;object-fit:contain}.bridge-game .club-play{background:#226249;color:#fff}

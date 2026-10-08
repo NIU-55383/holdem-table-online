@@ -72,3 +72,18 @@ These files are included locally so the game does not depend on a browser CDN.
 
 The board illustrations in `duel-art.svg` and `duel-board.js` are original
 code-rendered artwork for this website. No external game UI was copied.
+
+## Bridge Tools Core
+
+- Package: `@bridge-tools/core@0.3.1`, MIT, copyright 2022-2023 bridge-tools.
+- Source: https://github.com/bridge-tools/core (package metadata points to
+  https://github.com/aaron-hutton/bridge-tools/tree/main/packages/core).
+- Unmodified CommonJS bundle: `vendor/bridge-core.js`; full license:
+  `vendor/bridge-core-LICENSE.txt`.
+- Download: https://registry.npmjs.org/@bridge-tools/core/-/core-0.3.1.tgz
+- Archive SHA-1: `d7473bfe0e4dd7aea41ecbf25d6c2209c9dd8b3e`.
+- Used server-side for auction validation, contract/declarer resolution,
+  legal following, trick winners, board vulnerability and duplicate scoring.
+- Bridge table artwork and sound recipes are original to this website.
+- Bilingual rules are paraphrased from ACBL's bridge introduction and scoring
+  references: https://www.acbl.org/learn/ . No third-party game media is used.

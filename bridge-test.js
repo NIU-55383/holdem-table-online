@@ -57,12 +57,16 @@ test("official contract scores, bonuses and penalties", () => {
   ];
   for (const [declarer, level, strain, doubled, redoubled, vul, tricks, score] of cases) assert.equal(E.Core.Score.calculate({ declarer, level, strain, doubled, redoubled }, vul, tricks).score, score);
 });
-test("120 complete bot boards obey the core's full play validator", () => {
+test("120 complete mixed-style bot boards obey the core's full play validator", () => {
   let played = 0;
   for (let seed = 1; seed <= 120; seed++) {
     const g = E.createGame(names, seed, rng(seed)); let actions = 0;
     while (g.phase !== "over" && actions++ < 200) {
-      if (g.phase === "trick") E.advanceTrick(g); else E.act(g, E.controller(g), E.chooseBotAction(g, E.controller(g)));
+      if (g.phase === "trick") E.advanceTrick(g);
+      else {
+        const actor = E.controller(g);
+        E.act(g, actor, E.chooseBotAction(g, actor, (seed + actor) % 4));
+      }
     }
     assert.equal(g.phase, "over");
     if (g.contract !== "Passout") {

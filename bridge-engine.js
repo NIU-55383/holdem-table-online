@@ -2,7 +2,8 @@
 
 const crypto = require("node:crypto");
 const Core = require("./vendor/bridge-core");
-const { Auction, Board, Card, Hand, Score, StringParser, Trick } = Core;
+const { Auction, Board, Card, Score, StringParser, Trick } = Core;
+const Bot = require("./bridge-bot");
 const DIRECTIONS = ["N", "E", "S", "W"];
 const STRAINS = ["C", "D", "H", "S", "NT"];
 const CALLS = ["P", "X", "XX", ...Array.from({ length: 7 }, (_, i) => STRAINS.map((s) => `${i + 1}${s}`)).flat()];
@@ -89,53 +90,9 @@ function publicGame(g, you) {
     legalCalls: you === controller(g) ? legalCalls(g) : [], legalCards: you === controller(g) ? legalCards(g) : [] };
 }
 
-// Natural, deliberately conservative bidding. It reads only this seat's hand and public calls.
-function chooseBid(g, actor) {
-  const hand = g.hands[actor].map(cardObject), hcp = Hand.countMiltonHCP(hand);
-  const lengths = Object.fromEntries(STRAINS.filter((s) => s !== "NT").map((s) => [s, hand.filter((c) => c.suit === s).length]));
-  const balanced = Object.values(lengths).every((n) => n >= 2 && n <= 5);
-  const legal = legalCalls(g), bids = g.auction.map((a, i) => ({ call: a.call, seat: (g.dealer + i) % 4 })).filter((a) => Auction.isBid(a.call));
-  const own = bids.filter((a) => a.seat === actor), partner = bids.filter((a) => a.seat === (actor + 2) % 4).at(-1);
-  const latest = bids.at(-1);
-  const longest = ["S", "H", "D", "C"].sort((a, b) => lengths[b] - lengths[a])[0];
-  const pick = (...choices) => choices.find((c) => legal.includes(c)) || "P";
-  if (own.length >= 2 || hcp < 6) return "P";
-  if (!latest) {
-    if (balanced && hcp >= 20 && hcp <= 22) return pick("2NT");
-    if (balanced && hcp >= 15 && hcp <= 17) return pick("1NT");
-    if (hcp < 12) return "P";
-    const suit = lengths.S >= 5 ? "S" : lengths.H >= 5 ? "H" : lengths.D > lengths.C ? "D" : "C";
-    return pick(`1${suit}`);
-  }
-  if (partner && (!latest || latest.seat % 2 === actor % 2)) {
-    const s = partner.call.suit;
-    if (s === "NT" && !own.length) return pick(hcp >= 10 ? "3NT" : hcp >= 8 ? "2NT" : "P");
-    if (s !== "NT" && lengths[s] >= (s === "S" || s === "H" ? 3 : 4)) {
-      const level = hcp >= 13 ? (s === "H" || s === "S" ? 4 : 3) : hcp >= 10 ? 3 : 2;
-      return pick(`${level}${s}`);
-    }
-    if (!own.length && hcp >= 6) return pick(...[1, 2].filter((l) => l === 1 || hcp >= 10).map((l) => `${l}${longest}`), hcp >= 13 ? "3NT" : "1NT");
-    if (own.length === 1 && hcp >= 18) return pick(balanced ? "3NT" : `3${own[0].call.suit}`);
-  }
-  if (!own.length && !partner && hcp >= 12 && lengths[longest] >= 5) return pick(`1${longest}`, hcp >= 15 ? `2${longest}` : "P");
-  return "P";
-}
-function chooseBotAction(g, actor) {
+function chooseBotAction(g, actor, style = 0) {
   if (actor !== controller(g)) return null;
-  if (g.phase === "auction") return { type: "call", call: chooseBid(g, actor) };
-  const legal = legalCards(g), cards = g.trick.map((p) => cardObject(p.card)), trump = g.contract.strain;
-  const value = (id) => 14 - id % 13;
-  const cheapest = (list) => [...list].sort((a, b) => value(a) - value(b) || a - b)[0];
-  let best = 0;
-  for (let i = 1; i < cards.length; i++) if (Card.compare(cards[best], cards[i], trump) < 0) best = i;
-  let chosen;
-  if (!cards.length) {
-    const h = g.hands[g.current], lengths = [0, 0, 0, 0]; h.forEach((c) => lengths[Math.floor(c / 13)]++);
-    const longest = lengths.indexOf(Math.max(...lengths));
-    const suit = h.filter((c) => Math.floor(c / 13) === longest);
-    chosen = suit.some((c) => c % 13 === 0) ? suit.find((c) => c % 13 === 0) : cheapest(suit);
-  } else if (g.trick[best].seat % 2 === g.current % 2) chosen = cheapest(legal);
-  else { const winning = legal.filter((id) => Card.compare(cards[best], cardObject(id), trump) < 0); chosen = cheapest(winning.length ? winning : legal); }
-  return { type: "play", card: chosen };
+  // The AI receives exactly the acting player's view, never the full deal.
+  return Bot.chooseAction(publicGame(g, actor), actor, style);
 }
 module.exports = { createGame, act, advanceTrick, controller, requiredActors, legalCalls, legalCards, publicGame, chooseBotAction, DIRECTIONS, Core };

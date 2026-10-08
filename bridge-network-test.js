@@ -93,3 +93,35 @@ test("Bridge adapter: four-board match records each result once and rematches fr
   await a.request({ type: "rematch" }); assert.equal(a.state.game, null); assert.deepEqual(a.state.scores, []);
   await a.request({ type: "start" }); assert.equal(a.state.game.board, 1); assert.deepEqual(a.state.seats.map((p) => p.socialId), ids);
 });
+
+test("bot styles stay server-private, distinct and person-bound across swaps, reconnects and replacement", { timeout: 10000 }, async (t) => {
+  const { api, client } = await fixture(t), a = await client(), seen = new Map(), original = E.chooseBotAction;
+  t.after(() => { E.chooseBotAction = original; });
+  E.chooseBotAction = (g, actor, style) => {
+    const room = [...api.rooms.values()][0], token = room.seats[actor].token;
+    if (seen.has(token)) assert.equal(style, seen.get(token));
+    assert(Number.isInteger(style)); seen.set(token, style);
+    return { type: "call", call: "P" };
+  };
+  await a.request({ type: "create", name: "Host", boards: 4 }); await a.request({ type: "fillBots" });
+  const r = api.rooms.get(a.state.code), botTokens = r.seats.filter((p) => p.bot).map((p) => p.token);
+  assert.doesNotMatch(JSON.stringify(a.state), /personality|botStyle|risk|margin|profile/);
+  async function botTurn(token) {
+    clearTimeout(r.timer); r.timer = null; r.timerKey = null;
+    r.game = E.createGame(r.seats.map((p) => p.name)); r.game.current = r.seats.findIndex((p) => p.token === token);
+    const rev = r.game.revision;
+    const previous = process.env.BRIDGE_BOT_DELAY; process.env.BRIDGE_BOT_DELAY = "15"; api.broadcast(r); process.env.BRIDGE_BOT_DELAY = previous;
+    await until(() => r.game.revision > rev); clearTimeout(r.timer); r.timer = null; r.timerKey = null;
+  }
+  for (const token of botTokens) await botTurn(token);
+  assert.equal(new Set(seen.values()).size, 3);
+  r.game = null; api.broadcast(r); await a.request({ type: "chooseSeat", position: 1 }); await a.request({ type: "start" });
+  for (const token of botTokens) await botTurn(token);
+  const back = await client(a.token); await until(() => back.state); for (const token of botTokens) await botTurn(token);
+  const target = back.state.seats.find((p) => p.bot).socialId;
+  await back.request({ type: "roomControl", action: "kick", target });
+  await back.request({ type: "roomControl", action: "fillBot", target: back.state.seats.find((p) => p.vacant).socialId });
+  const replacement = r.seats.find((p) => p.bot && !botTokens.includes(p.token)); await botTurn(replacement.token);
+  const currentStyles = r.seats.filter((p) => p.bot).map((p) => seen.get(p.token)); assert.equal(new Set(currentStyles).size, 3);
+  assert.doesNotMatch(JSON.stringify(back.state), /personality|botStyle|risk|margin|profile/);
+});

@@ -7,6 +7,7 @@
   <title>卡坦岛 CATAN · 桌游小馆</title>
   <link rel="stylesheet" href="catan.css">
   <link rel="stylesheet" href="game-ui.css">
+  <link rel="stylesheet" href="game-rules.css">
 </head>
 <body>
   <!-- Embedded from catan-art.svg: keep in sync; no extra request for game pieces. -->
@@ -55,7 +56,7 @@
     <span id="connection" class="connection" role="status">连接中 / Connecting</span>
     <button class="icon-button" id="soundToggle" type="button" title="关闭音效 / Mute sounds" aria-label="关闭音效 / Mute sounds" aria-pressed="true"><i data-lucide="volume-2" aria-hidden="true"></i></button>
     <button class="icon-button" id="audioSettings" type="button" title="声音设置 / Audio settings" aria-label="声音设置 / Audio settings"><i data-lucide="settings" aria-hidden="true"></i></button>
-    <button class="icon-button" id="helpButton" title="规则 / Rules" aria-label="规则 / Rules">?</button>
+    <button class="icon-button bg-rules-trigger" id="helpButton" title="规则 / Rules" aria-label="规则 / Rules"><i data-lucide="book-open"></i></button>
   </header>
   <aside id="incomingTradeAlert" class="incoming-trade-alert" role="status" aria-live="polite" hidden><i data-lucide="handshake" aria-hidden="true"></i><div><strong id="incomingTradeName"></strong><small>向你发起交易 / Trade offer</small></div><button id="viewIncomingTrade" type="button" class="primary">查看<small>View</small></button></aside>
   <aside id="supplyAlert" class="supply-alert" role="status" aria-live="polite" hidden><div class="supply-alert-heading"><strong>银行库存不足 / Bank shortage</strong><button id="dismissSupplyAlert" class="icon-button" type="button" title="关闭 / Close" aria-label="关闭库存提示 / Dismiss supply notice"><i data-lucide="x" aria-hidden="true"></i></button></div><div id="supplyAlertDetails"></div></aside>
@@ -141,9 +142,9 @@
     </div>
     <button class="primary wide" data-close="audioSettingsDialog">完成 / Done</button>
   </dialog>
-  <dialog id="scenarioInfoDialog" aria-labelledby="scenarioInfoTitle">
+  <dialog id="scenarioInfoDialog" aria-labelledby="scenarioInfoTitle" data-rules-dialog>
     <div class="dialog-heading"><h2 id="scenarioInfoTitle"></h2><button class="icon-button" data-close="scenarioInfoDialog" aria-label="关闭 / Close">×</button></div>
-    <div id="scenarioInfoContent" class="rules-content" tabindex="0" role="region" aria-label="外岛与礼物说明 / Foreign island and gift details"></div>
+    <div id="scenarioInfoContent" class="rules-content" data-rules-body tabindex="0" role="region" aria-label="外岛与礼物说明 / Foreign island and gift details"></div>
     <button class="primary wide" data-close="scenarioInfoDialog">知道了 / Got it</button>
   </dialog>
   <dialog id="islandRoadDialog" aria-labelledby="islandRoadTitle" aria-describedby="islandRoadDescription">
@@ -192,9 +193,9 @@
     <p id="resourceHint" aria-live="polite"></p><p id="resourceError" class="dialog-error" role="alert"></p><button class="primary wide" id="confirmResources">确认 / Confirm</button>
     <button class="secondary wide cancel-development" id="cancelDevelopment" hidden><span aria-hidden="true">↶</span> 撤回丰收卡 / Cancel card</button>
   </dialog>
-  <dialog id="helpDialog" aria-labelledby="helpTitle">
+  <dialog id="helpDialog" aria-labelledby="helpTitle" data-rules-dialog>
     <div class="dialog-heading"><h2 id="helpTitle">基础版规则 <small>Base Game Rules</small></h2><button class="icon-button" data-close="helpDialog" aria-label="关闭 / Close">×</button></div>
-    <div id="helpContent" class="rules-content" tabindex="0" role="region" aria-label="游戏规则 / Game rules">
+    <div id="helpContent" class="rules-content" data-rules-body tabindex="0" role="region" aria-label="游戏规则 / Game rules">
       <section class="rule-section">
         <h3>获胜目标 <small>Victory</small></h3>
         <p id="rulesVictory"></p>
@@ -252,7 +253,7 @@
     <button class="primary wide" id="helpAcknowledge">已阅读 / Got it</button>
   </dialog>
   <dialog id="leaveDialog"><div class="dialog-heading"><h2>离开岛屿？<small>Leave the island?</small></h2><button class="icon-button" data-close="leaveDialog" aria-label="关闭 / Close">×</button></div><p>进行中的对局会保留你的座位，等待你返回或由房主管理替换，不会自动开启托管。<small>Your seat remains in the current game until you return or the host arranges a replacement. Leaving does not enable automatic play.</small></p><button id="confirmLeave" class="primary wide">离开房间 / Leave Room</button></dialog>
-  <dialog id="sailingDialog" aria-labelledby="sailingTitle"><div class="dialog-heading"><h2 id="sailingTitle"></h2><button class="icon-button" data-close="sailingDialog" aria-label="关闭 / Close">×</button></div><div id="sailingContent" class="rules-content" tabindex="0" role="region" aria-label="航海规则与地图规则 / Seafarers and map rules"></div><button class="primary wide" id="sailingAcknowledge">已阅读 / Got it</button></dialog>
-  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-audio.js"></script><script src="game-ui.js"></script><script src="catan-scenario-maps.js"></script><script src="catan-maps.js"></script><script src="catan-board.js"></script><script src="catan-audio.js"></script><script src="catan-music.js"></script><script src="catan-scenario-ui.js"></script><script src="catan.js"></script>
+  <dialog id="sailingDialog" aria-labelledby="sailingTitle" data-rules-dialog><div class="dialog-heading"><h2 id="sailingTitle"></h2><button class="icon-button" data-close="sailingDialog" aria-label="关闭 / Close">×</button></div><div id="sailingContent" class="rules-content" data-rules-body tabindex="0" role="region" aria-label="航海规则与地图规则 / Seafarers and map rules"></div><button class="primary wide" id="sailingAcknowledge">已阅读 / Got it</button></dialog>
+  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-audio.js"></script><script src="game-ui.js"></script><script src="game-rules.js"></script><script src="catan-scenario-maps.js"></script><script src="catan-maps.js"></script><script src="catan-board.js"></script><script src="catan-audio.js"></script><script src="catan-music.js"></script><script src="catan-scenario-ui.js"></script><script src="catan.js"></script>
 </body>
 </html>

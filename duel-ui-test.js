@@ -21,7 +21,7 @@ const duel=attachDuel(server);server.on("upgrade",duel.upgrade);
       ctx.on("request",request=>{if(request.url().includes("/vendor/engines/"))engineRequests.push(request.url());});
       assert.equal(await page.locator("#roomInput").getAttribute("placeholder"),"房间号 / Room code");
       for(const width of [320,390,1440]){await page.setViewportSize({width,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:`test-results/${kind}-setup-${width}.png`,fullPage:true});}
-      await page.setViewportSize({width:390,height:844});await page.locator("#rulesBtn").click();await page.locator("#rulesDialog[open]").waitFor();await page.locator('[data-close="rulesDialog"]').click();
+      await page.setViewportSize({width:390,height:844});await page.locator("#rulesBtn").click();await page.locator("#gameRulesDialog[open]").waitFor();await page.locator('#gameRulesDialog .dialog-heading button').click();
       await page.locator("#difficulty").selectOption("hard");await page.locator("#createBtn").click();await page.waitForFunction(()=>window.testState?.game);
       if(kind==="gomoku")await page.locator('[data-cell="112"]').click();
       else{await page.locator('[data-cell="64"]').click();assert.ok(await page.locator(".move-target").count()>0);await page.locator('[data-cell="67"]').click();}
@@ -53,7 +53,7 @@ const duel=attachDuel(server);server.on("upgrade",duel.upgrade);
     assert.equal(await xGuest.page.locator("#roomCode").textContent(),xCode,"The displayed Xiangqi code can be entered as-is, without another prefix");
     assert.equal(await xGuest.page.evaluate(()=>window.testState.kind),"xiangqi");
     await xGuest.ctx.close();await xHost.ctx.close();
-    const hub=await browser.newPage({viewport:{width:390,height:844}});await hub.goto(`${base}/index.html`);assert.equal(await hub.locator(".club-game").count(),4);await hub.screenshot({path:"test-results/club-four-games-mobile.png",fullPage:true});assert.equal(await hub.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    const hub=await browser.newPage({viewport:{width:390,height:844}});await hub.goto(`${base}/index.html`);assert.equal(await hub.locator(".club-game").count(),5);await hub.screenshot({path:"test-results/club-five-games-mobile.png",fullPage:true});assert.equal(await hub.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     assert.deepEqual(engineRequests,[],"Native models must never be downloaded by browsers");
     assert.deepEqual(errors,[]);console.log("PASS: two games, direct room-code joining, all mobile/desktop layouts, native AI, server-only models, moves, undo, rematch, live chat/avatar/presence, reconnect and club links");
   } finally {await browser?.close();server.close();server.emit("close");}

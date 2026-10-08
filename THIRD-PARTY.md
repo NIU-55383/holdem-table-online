@@ -87,3 +87,8 @@ code-rendered artwork for this website. No external game UI was copied.
 - Bridge table artwork and sound recipes are original to this website.
 - Bilingual rules are paraphrased from ACBL's bridge introduction and scoring
   references: https://www.acbl.org/learn/ . No third-party game media is used.
+- The local bot's natural-bidding ranges reference ACBL's SAYC booklet:
+  https://web2.acbl.org/documentlibrary/play/SP3%20%28bk%29%20single%20pages.pdf .
+  The bot is not a full SAYC implementation: NT suit responses are natural,
+  without Stayman or Jacoby transfers. Card sampling and bounded search are
+  local application code using Bridge Tools Core for card legality and scoring.

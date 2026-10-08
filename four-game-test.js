@@ -4,7 +4,9 @@ const retired=require("./retired-files.json");
 
 test("release keeps five game entries and no retired game implementation",()=>{
   const html=fs.readFileSync(path.join(__dirname,"index.html"),"utf8"),cards=[...html.matchAll(/<a class="club-game [^"]+" href="([^"]+)"/g)].map(m=>m[1]);
-  assert.deepEqual(cards,["catan.html","duel.html?game=gomoku","duel.html?game=xiangqi","bridge.html"]);assert.equal([...html.matchAll(/class="club-game /g)].length,5);assert.match(html,/<button class="club-game poker-game"[^>]+data-open-view="online"/);
+  assert.deepEqual(cards,["catan.html","bridge.html","duel.html?game=gomoku","duel.html?game=xiangqi"]);assert.equal([...html.matchAll(/class="club-game /g)].length,5);assert.match(html,/<button class="club-game poker-game"[^>]+data-open-view="online"/);
+  const nav = html.match(/<nav class="view-tabs"[\s\S]*?<\/nav>/)[0];
+  assert.deepEqual([...nav.matchAll(/<a href="([^"]+)"/g)].map(m=>m[1]), cards);
   for(const file of retired)assert.equal(fs.existsSync(path.join(__dirname,file)),false,`${file} has been removed`);
   const source=fs.readFileSync(path.join(__dirname,"server.js"),"utf8");assert.doesNotMatch(source,/attachRichman|richman-ws/);
   for(const file of ["catan-scenarios.js","game-ui.js","room-control.js","duel-bot.js","audio/CREDITS.md","vendor/engines/manifest.json"])assert.ok(fs.existsSync(path.join(__dirname,file)),`${file} is retained`);

@@ -10,6 +10,7 @@ const { createRoomControl } = require("./room-control");
 function attachBridge(server) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 32768 });
   const rooms = new Map(), sessions = new Map();
+  const personalities = new WeakMap(), styleCount = require("./bridge-bot").profileCount;
   const send = (ws, data) => { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); };
   const fail = (ok, message) => { if (!ok) throw new Error(message); };
   const clean = (v, n = 18) => String(v || "").trim().replace(/\s+/g, " ").slice(0, n);
@@ -32,6 +33,12 @@ function attachBridge(server) {
     }
   }
   function broadcast(r) {
+    const used = new Set(r.seats.filter((p) => p.bot && personalities.has(p)).map((p) => personalities.get(p)));
+    for (const p of r.seats) if (p.bot && !personalities.has(p)) {
+      const available = Array.from({ length: styleCount }, (_, i) => i).filter((s) => !used.has(s));
+      const style = available.length ? available[crypto.randomInt(available.length)] : crypto.randomInt(styleCount);
+      personalities.set(p, style); used.add(style);
+    }
     record(r); control.sync(r); r.updated = Date.now();
     r.seats.forEach((p) => { if (!p.bot) send(p.ws, snapshot(r, p)); });
     schedule(r);
@@ -48,7 +55,7 @@ function attachBridge(server) {
       if (r.game !== g || `${g.board}:${g.revision}:${E.controller(g)}` !== key || control.paused(r)) return schedule(r);
       try {
         if (g.phase === "trick") E.advanceTrick(g);
-        else { if (!(r.seats[actor].bot || r.seats[actor].auto)) return; E.act(g, actor, E.chooseBotAction(g, actor)); }
+        else { if (!(r.seats[actor].bot || r.seats[actor].auto)) return; E.act(g, actor, E.chooseBotAction(g, actor, personalities.get(r.seats[actor]) ?? 0)); }
         broadcast(r);
       } catch (err) { console.error("Bridge automatic action:", err); r.seats.forEach((p) => send(p.ws, { type: "error", message: "自动行动失败，请重新连接 / Automatic action failed; reconnect" })); }
     }, Number(process.env.BRIDGE_BOT_DELAY) || (g.phase === "trick" ? 1500 : 850));

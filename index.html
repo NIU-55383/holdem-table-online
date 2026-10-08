@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="club.css">
   <link rel="stylesheet" href="game-ui.css">
+  <link rel="stylesheet" href="game-rules.css">
 </head>
 <body>
   <div class="app-shell">
@@ -23,9 +24,9 @@
         <button type="button" data-view-target="home" class="active" data-i18n="home">主页</button>
         <button type="button" data-view-target="online">德扑 / Hold'em</button>
         <a href="catan.html">卡坦岛 / CATAN</a>
+        <a href="bridge.html">桥牌 / Bridge</a>
         <a href="duel.html?game=gomoku">五子棋 / Gomoku</a>
         <a href="duel.html?game=xiangqi">象棋 / Xiangqi</a>
-        <a href="bridge.html">桥牌 / Bridge</a>
       </nav>
 
       <div class="language-toggle" role="group" aria-label="Language">
@@ -40,6 +41,7 @@
         <div>
           <button type="button" data-open-view="online">开始游戏 / Play</button>
           <button type="button" data-open-view="calculator">概率计算 / Poker Odds</button>
+          <button type="button" class="bg-rules-trigger" data-rules-game="poker" title="德州规则 / Hold'em Rules"><i data-lucide="book-open"></i>规则 / Rules</button>
         </div>
       </nav>
       <section id="homeView" class="view home-view active">
@@ -50,9 +52,9 @@
             <div class="club-game-info"><span class="game-index">01 / CARDS</span><h2>德州扑克 <small>Texas Hold'em</small></h2><div class="game-meta"><span>2–8 人 / Players</span><span>真人 + 机器人 / Friends + Bots</span></div><span class="club-play">开桌 / Play <b>→</b></span></div>
           </button>
           <a class="club-game catan-game" href="catan.html"><div class="club-game-art catan-art" id="clubIsland" aria-hidden="true"></div><div class="club-game-info"><span class="game-index">02 / STRATEGY</span><h2>卡坦岛 <small>CATAN</small></h2><div class="game-meta"><span>基础版 3–6 人 / Base: 3–6</span><span>航海家 3–4 人 / Seafarers: 3–4</span></div><span class="club-play">登岛 / Play <b>→</b></span></div></a>
-          <a class="club-game gomoku-game" href="duel.html?game=gomoku"><div class="club-game-art gomoku-art" aria-hidden="true"><img src="duel-art.svg#gomoku" alt=""></div><div class="club-game-info"><span class="game-index">03 / FIVE IN A ROW</span><h2>五子棋 <small>Gomoku</small></h2><div class="game-meta"><span>2 人 / Players</span><span>三级 AI + 好友联机 / AI + Online</span></div><span class="club-play">落子 / Play <b>→</b></span></div></a>
-          <a class="club-game xiangqi-game" href="duel.html?game=xiangqi"><div class="club-game-art xiangqi-art" aria-hidden="true"><img src="duel-art.svg#xiangqi" alt=""></div><div class="club-game-info"><span class="game-index">04 / CHINESE CHESS</span><h2>中国象棋 <small>Xiangqi</small></h2><div class="game-meta"><span>2 人 / Players</span><span>三级 AI + 好友联机 / AI + Online</span></div><span class="club-play">对弈 / Play <b>→</b></span></div></a>
-          <a class="club-game bridge-game" href="bridge.html"><div class="club-game-art bridge-art" aria-hidden="true"><img src="bridge-art.svg" alt=""></div><div class="club-game-info"><span class="game-index">05 / PARTNERSHIPS</span><h2>桥牌 <small>Bridge</small></h2><div class="game-meta"><span>4 人 / Players</span><span>搭档对战 · 真人 + 机器人 / Teams + Bots</span></div><span class="club-play">入座 / Play <b>→</b></span></div></a>
+          <a class="club-game bridge-game" href="bridge.html"><div class="club-game-art bridge-art" aria-hidden="true"><img src="bridge-art.svg" alt=""></div><div class="club-game-info"><span class="game-index">03 / PARTNERSHIPS</span><h2>桥牌 <small>Bridge</small></h2><div class="game-meta"><span>4 人 / Players</span><span>搭档对战 · 真人 + 机器人 / Teams + Bots</span></div><span class="club-play">入座 / Play <b>→</b></span></div></a>
+          <a class="club-game gomoku-game" href="duel.html?game=gomoku"><div class="club-game-art gomoku-art" aria-hidden="true"><img src="duel-art.svg#gomoku" alt=""></div><div class="club-game-info"><span class="game-index">04 / FIVE IN A ROW</span><h2>五子棋 <small>Gomoku</small></h2><div class="game-meta"><span>2 人 / Players</span><span>三级 AI + 好友联机 / AI + Online</span></div><span class="club-play">落子 / Play <b>→</b></span></div></a>
+          <a class="club-game xiangqi-game" href="duel.html?game=xiangqi"><div class="club-game-art xiangqi-art" aria-hidden="true"><img src="duel-art.svg#xiangqi" alt=""></div><div class="club-game-info"><span class="game-index">05 / CHINESE CHESS</span><h2>中国象棋 <small>Xiangqi</small></h2><div class="game-meta"><span>2 人 / Players</span><span>三级 AI + 好友联机 / AI + Online</span></div><span class="club-play">对弈 / Play <b>→</b></span></div></a>
         </div>
         <div class="club-footer"><span>好友、机器人，一起入座。<small>Friends and bots, at the same table.</small></span></div>
       </section>
@@ -471,30 +473,11 @@
     </main>
   </div>
 
-  <div id="handRankModal" class="rank-modal" hidden>
-    <div class="rank-panel" role="dialog" aria-modal="true" aria-labelledby="handRankTitle">
-      <button id="handRankCloseBtn" class="rank-close-button" type="button" aria-label="关闭 / Close">×</button>
-      <p class="eyebrow">POKER HANDS</p>
-      <h2 id="handRankTitle">牌型大小顺序 / Hand Rankings</h2>
-      <div class="rank-list">
-        <div><strong>1. 皇家同花顺 / Royal Flush</strong><span>A K Q J 10 同花 / same suit</span></div>
-        <div><strong>2. 同花顺 / Straight Flush</strong><span>连续五张同花 / five consecutive suited cards</span></div>
-        <div><strong>3. 四条 / Four of a Kind</strong><span>四张同点数 / four cards of one rank</span></div>
-        <div><strong>4. 葫芦 / Full House</strong><span>三条加一对 / three of a kind plus a pair</span></div>
-        <div><strong>5. 同花 / Flush</strong><span>五张同花色 / five cards of one suit</span></div>
-        <div><strong>6. 顺子 / Straight</strong><span>连续五张 / five consecutive cards</span></div>
-        <div><strong>7. 三条 / Three of a Kind</strong><span>三张同点数 / three cards of one rank</span></div>
-        <div><strong>8. 两对 / Two Pair</strong><span>两组对子 / two different pairs</span></div>
-        <div><strong>9. 一对 / One Pair</strong><span>一组对子 / one pair</span></div>
-        <div><strong>10. 高牌 / High Card</strong><span>未成牌时比最大牌 / highest card wins</span></div>
-      </div>
-    </div>
-  </div>
-
   <script src="avatar-data.js"></script>
   <script src="social-data.js"></script>
   <script src="vendor/lucide.min.js"></script>
   <script src="game-audio.js"></script><script src="game-ui.js"></script>
+  <script src="game-rules-data.js"></script><script src="game-rules.js"></script>
   <script src="app.js"></script>
   <script src="online.js"></script>
   <script src="catan-board.js"></script>

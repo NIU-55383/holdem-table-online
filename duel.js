@@ -25,18 +25,7 @@
   }
   function confirm(text, action) { $("confirmTitle").textContent = text; confirmAction = action; $("confirmDialog").showModal(); }
   function showRules() {
-    const items = kind === "gomoku" ? [
-      ["15×15 棋盘，黑棋先行，双方轮流在交叉点落一子。","Black moves first on a 15×15 board; place one stone per turn."],
-      ["横、竖或斜线连成五子或更多即胜。本馆采用自由五子棋，无三三、四四或长连禁手。","Five or more in a row wins. Freestyle rules: no forbidden moves or overline restrictions."],
-      ["棋盘填满仍无人获胜则和棋。联机悔棋、求和和换边再来需要对手同意。","A full board without a winner is a draw. Online undo, draw and rematch requests need consent."]
-    ] : [
-      ["红方先行。点击自己的棋子，再点击标出的合法落点。","Red moves first. Select a piece, then a highlighted legal destination."],
-      ["车走直线；炮吃子要隔一子；马走日且不能蹩腿；象走田、不能塞眼或过河。","Chariots move orthogonally; cannons capture over one screen. Horses can be blocked; elephants cannot cross the river or jump a blocked eye."],
-      ["将帅与士不能出九宫；兵卒只能向前，过河后也可横走，不能后退。将帅不可直接照面。","Generals and advisors stay in the palace. Soldiers move forward, and sideways after crossing the river. Generals cannot face each other."],
-      ["被将军必须应将。将死或无合法着法（困毙）均判负。","You must escape check. Checkmate and stalemate both lose."],
-      ["本馆休闲规则：单方连续长将导致三次重复，该方判负；其他三次重复、双方无进攻子力或连续 120 半回合无吃子判和。不做复杂长捉的竞赛仲裁。","Club rules: unilateral perpetual check loses on threefold repetition; other threefold repetition, insufficient attacking material or 120 non-capturing plies draw. Tournament chase adjudication is not included."]
-    ];
-    $("rulesContent").innerHTML = `<ul>${items.map(([zh,en])=>`<li>${zh}<small>${en}</small></li>`).join("")}</ul>`; $("rulesDialog").showModal();
+    window.BoardGameRules.open(kind);
   }
   function playerStrip(id) {
     const p = state?.seats[id]; if (!p || p.vacant) return `<div class="player-name">等待入座 <small>Waiting for a player</small></div><div class="player-side">${dot(id)}${sideLabel(id)}</div>`;

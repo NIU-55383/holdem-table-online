@@ -1,5 +1,15 @@
 # Shared Game UI
 
+## Shared Rules Reader
+
+- Every existing and future game must provide complete Chinese and English rules, accessible before joining and throughout play. Use the same book-open Rules entry, `game-rules.css` and `game-rules.js`; do not create another visual style for rule pages.
+- For data-driven rules, add bilingual titles and sections to `game-rules-data.js` and use `BoardGameRules.open(game, optionalSectionId)` or a `data-rules-game` button. Existing dynamic rules use a native `dialog` marked `data-rules-dialog`, a `.dialog-heading`, and a `data-rules-body` scroll region. Preserve game-specific rule content, diagrams and behavior when adopting the shared reader.
+- Explain the goal, setup, turn sequence, legal actions, scoring/win/draw conditions, special cases and actual club variants. Keep both languages equivalent. Verify against the implemented engine and primary rule sources; do not claim tournament rules where the implementation differs.
+- Keep the heading and close button visible while the body scrolls. Support Escape, keyboard focus, mobile portrait/landscape, and long bilingual text without horizontal clipping. Reading or closing rules must not change the game state.
+- Update `game-rules-test.js`, `game-rules-ui-test.js` and the deployment checklist when adding a game or changing the shared reader.
+
+## Avatars And Presence
+
 - Every game must load `avatar-data.js`, `social-data.js` and `game-audio.js` before `game-ui.js`, plus `game-ui.css`, and use the shared `BoardGameUI` avatar picker, renderer, presence indicators and avatar interactions.
 - Human avatars default to the first grapheme of the player's name. Offer upload, user-triggered camera capture, one emoji, and reset-to-initial; never assign the old fixed illustrated human faces (`avatar-0` through `avatar-3`).
 - Store the avatar preference locally as `boardclub-avatar`. Photos must be center-cropped and re-encoded to small JPEGs in the browser before transmission; never send original photos. Normalize all incoming avatar data with `avatar-data.js` on both client and server. Allowlisted illustrated symbols are for server-assigned bots only.

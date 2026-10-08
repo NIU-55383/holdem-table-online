@@ -1,0 +1,46 @@
+/* Shared reader, with explicit adapters for CATAN's existing rule dialogs. */
+dialog.bg-rules-dialog,
+#helpDialog.bg-rules-dialog[open], #sailingDialog.bg-rules-dialog[open], #scenarioInfoDialog.bg-rules-dialog[open] {
+  box-sizing: border-box; width: 800px; max-width: calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+  max-height: min(900px, calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
+  margin: auto; padding: 0; gap: 0; overflow: hidden; border: 1px solid #b8cec3; border-radius: 8px;
+  background: #fff; color: #203e39; box-shadow: 0 20px 70px #11271e60;
+  font: 14px/1.75 "Segoe UI", "Microsoft YaHei", sans-serif; letter-spacing: 0; color-scheme: light;
+}
+dialog.bg-rules-dialog[open] {display: flex; flex-direction: column;}
+dialog.bg-rules-dialog::backdrop {background: #11251fb8; backdrop-filter: blur(3px);}
+dialog.bg-rules-dialog > .dialog-heading {display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto; gap: 12px; margin: 0; padding: 16px 22px; border-bottom: 1px solid #d5e2da; background: #fff;}
+dialog.bg-rules-dialog .dialog-heading h2,
+#helpDialog.bg-rules-dialog .dialog-heading h2, #sailingDialog.bg-rules-dialog .dialog-heading h2, #scenarioInfoDialog.bg-rules-dialog .dialog-heading h2 {font-size: 21px; line-height: 1.4; font-weight: 750; color: #203e39; margin: 0; min-width: 0; overflow-wrap: anywhere;}
+dialog.bg-rules-dialog .dialog-heading h2 small {display: block; font-size: 13px; font-weight: 450; line-height: 1.5; color: #607a70; margin: 3px 0 0; opacity: 1;}
+dialog.bg-rules-dialog .dialog-heading .icon-button {display: inline-grid; place-items: center; width: 44px; height: 44px; min-height: 44px; flex: 0 0 44px; padding: 10px; margin: 0; background: #fff; color: #315b4e; border: 1px solid #c4d7cd; border-radius: 6px; box-shadow: none; font: 24px/1 sans-serif; cursor: pointer;}
+dialog.bg-rules-dialog .icon-button svg {width: 20px; height: 20px;}
+dialog.bg-rules-dialog .icon-button:hover {background: #edf4ef;}
+dialog.bg-rules-dialog :focus-visible {outline: 3px solid #c69430; outline-offset: 2px;}
+dialog.bg-rules-dialog .bg-rules-body,
+#helpContent.bg-rules-body, #sailingContent.bg-rules-body, #scenarioInfoContent.bg-rules-body, #rulesContent.bg-rules-body {
+  position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; max-height: none; margin: 0; padding: 20px 22px 24px;
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; overflow-wrap: anywhere;
+  font-size: 14px; line-height: 1.75; color: #203e39; background: #fff; text-align: left;
+}
+dialog.bg-rules-dialog .bg-rules-body section {padding: 0 0 18px; margin: 0 0 18px; border: 0; border-bottom: 1px solid #d5e2da;}
+dialog.bg-rules-dialog .bg-rules-body h3 {margin: 0 0 10px; font-size: 16px; font-weight: 700; line-height: 1.5; color: #236858;}
+dialog.bg-rules-dialog .bg-rules-body h3 small {display: inline; margin-left: 7px;}
+dialog.bg-rules-dialog .bg-rules-body p {margin: 0 0 12px; font-size: 14px; line-height: 1.75;}
+dialog.bg-rules-dialog .bg-rules-body small,
+dialog.bg-rules-dialog .bg-rules-body p[lang=en] {display: block; margin: 4px 0 0; font-size: 13px; font-weight: 400; line-height: 1.65; color: #607a70;}
+dialog.bg-rules-dialog .bg-rules-body p[lang=en] {margin: -8px 0 14px;}
+dialog.bg-rules-dialog .bg-rules-body h3 small {display: inline; margin-left: 7px;}
+dialog.bg-rules-dialog .bg-rules-body p:last-child {margin-bottom: 0;}
+dialog.bg-rules-dialog .bg-rules-body ul, dialog.bg-rules-dialog .bg-rules-body ol {padding-left: 23px; margin: 0;}
+dialog.bg-rules-dialog .bg-rules-body li {padding-left: 3px; margin-bottom: 12px; font-size: 14px; line-height: 1.75;}
+dialog.bg-rules-dialog .bg-rules-body a {color: #236858; text-decoration: underline; text-underline-offset: 3px;}
+dialog.bg-rules-dialog .bg-rules-sources a {display: block; font-size: 12px; margin: 5px 0;}
+dialog.bg-rules-dialog > .primary {flex: 0 0 auto; width: auto; margin: 12px 22px 18px; padding: 10px 18px; min-height: 44px; background: #236858; color: #fff; border: 1px solid #236858; border-radius: 6px; box-shadow: none; font-size: 14px; font-weight: 650;}
+.bg-rules-trigger {display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 44px; min-height: 44px; cursor: pointer;}
+.bg-rules-trigger svg {width: 19px; height: 19px; flex: none;}
+@media (max-width: 520px) {
+  dialog.bg-rules-dialog > .dialog-heading {padding: 12px 16px;}
+  dialog.bg-rules-dialog .bg-rules-body, #helpContent.bg-rules-body, #sailingContent.bg-rules-body, #scenarioInfoContent.bg-rules-body, #rulesContent.bg-rules-body {padding: 16px;}
+  dialog.bg-rules-dialog > .primary {margin: 10px 16px 14px;}
+}

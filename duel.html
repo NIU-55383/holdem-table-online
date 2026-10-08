@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>棋局 / Board Game Club</title>
-  <link rel="stylesheet" href="duel.css"><link rel="stylesheet" href="game-ui.css">
+  <link rel="stylesheet" href="duel.css"><link rel="stylesheet" href="game-ui.css"><link rel="stylesheet" href="game-rules.css">
 </head>
 <body>
-  <header class="duel-header"><a class="icon-button" href="index.html" title="返回桌游小馆 / Back to club" aria-label="返回桌游小馆 / Back to club"><i data-lucide="arrow-left"></i></a><div class="game-title"><strong id="gameTitle">五子棋</strong><small id="gameEnglish">Gomoku</small></div><span id="connection" role="status">连接中 / Connecting</span><button id="rulesBtn" class="icon-button" title="规则 / Rules" aria-label="规则 / Rules"><i data-lucide="circle-help"></i></button></header>
+  <header class="duel-header"><a class="icon-button" href="index.html" title="返回桌游小馆 / Back to club" aria-label="返回桌游小馆 / Back to club"><i data-lucide="arrow-left"></i></a><div class="game-title"><strong id="gameTitle">五子棋</strong><small id="gameEnglish">Gomoku</small></div><span id="connection" role="status">连接中 / Connecting</span><button id="rulesBtn" class="icon-button bg-rules-trigger" title="规则 / Rules" aria-label="规则 / Rules"><i data-lucide="book-open"></i></button></header>
   <main class="duel-layout">
     <section class="board-workspace">
       <div id="opponent" class="player-strip"></div>
@@ -42,8 +42,7 @@
       <div id="error" class="error" role="alert"></div>
     </aside>
   </main>
-  <dialog id="rulesDialog"><div class="dialog-heading"><h2>规则 <small>Rules</small></h2><button class="icon-button" data-close="rulesDialog" aria-label="关闭 / Close"><i data-lucide="x"></i></button></div><div id="rulesContent"></div></dialog>
   <dialog id="confirmDialog"><h2 id="confirmTitle"></h2><div class="dialog-actions"><button data-close="confirmDialog">取消 / Cancel</button><button id="confirmYes" class="primary">确认 / Confirm</button></div></dialog>
-  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-audio.js"></script><script src="game-ui.js"></script><script src="duel-board.js"></script><script src="duel.js"></script>
+  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-audio.js"></script><script src="game-ui.js"></script><script src="game-rules-data.js"></script><script src="game-rules.js"></script><script src="duel-board.js"></script><script src="duel.js"></script>
 </body>
 </html>

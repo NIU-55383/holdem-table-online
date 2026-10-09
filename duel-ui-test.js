@@ -53,7 +53,21 @@ const duel=attachDuel(server);server.on("upgrade",duel.upgrade);
     assert.equal(await xGuest.page.locator("#roomCode").textContent(),xCode,"The displayed Xiangqi code can be entered as-is, without another prefix");
     assert.equal(await xGuest.page.evaluate(()=>window.testState.kind),"xiangqi");
     await xGuest.ctx.close();await xHost.ctx.close();
-    const hub=await browser.newPage({viewport:{width:390,height:844}});await hub.goto(`${base}/index.html`);assert.equal(await hub.locator(".club-game").count(),5);await hub.screenshot({path:"test-results/club-five-games-mobile.png",fullPage:true});assert.equal(await hub.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    const hub=await browser.newPage({viewport:{width:390,height:844}});await hub.goto(`${base}/index.html`);assert.equal(await hub.locator(".club-game").count(),5);
+    for(const width of [320,390,1440]){
+      await hub.setViewportSize({width,height:900});
+      for(const interaction of ["default","hover","focus"]){
+        if(interaction==="hover")await hub.locator(".bridge-game").hover();
+        if(interaction==="focus")await hub.locator(".bridge-game").focus();
+        const styles=await hub.locator(".club-play").evaluateAll(nodes=>nodes.map(node=>{const s=getComputedStyle(node);return{background:s.backgroundColor,color:s.color,border:s.borderTop,padding:s.paddingTop,margin:s.marginTop,font:s.fontSize};}));
+        assert(styles.every(s=>s.background==="rgba(0, 0, 0, 0)"),`Club play links must have no filled background (${width}, ${interaction})`);
+        assert.equal(styles[2].color,styles[0].color,"Bridge uses the shared play-link text color");
+        for(const key of ["border","padding","margin","font"])assert.equal(styles[2][key],styles[3][key],`Bridge matches Gomoku ${key}`);
+      }
+      assert.equal(await hub.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+      await hub.screenshot({path:`test-results/club-play-links-${width}.png`,fullPage:true});
+    }
+    assert.equal(await hub.locator(".bridge-game").getAttribute("href"),"bridge.html");
     assert.deepEqual(engineRequests,[],"Native models must never be downloaded by browsers");
     assert.deepEqual(errors,[]);console.log("PASS: two games, direct room-code joining, all mobile/desktop layouts, native AI, server-only models, moves, undo, rematch, live chat/avatar/presence, reconnect and club links");
   } finally {await browser?.close();server.close();server.emit("close");}

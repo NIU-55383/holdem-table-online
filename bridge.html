@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>桥牌 Bridge / 桌游小馆</title>
-  <link rel="stylesheet" href="bridge.css"><link rel="stylesheet" href="game-ui.css"><link rel="stylesheet" href="game-rules.css">
+  <link rel="stylesheet" href="bridge.css"><link rel="stylesheet" href="game-ui.css"><link rel="stylesheet" href="game-rules.css"><link rel="stylesheet" href="bridge-lesson.css">
 </head>
 <body>
   <header class="bridge-header">
@@ -18,6 +18,7 @@
       <div id="boardMeta" class="board-meta"><span>四人定约桥牌 / Contract Bridge</span><span>南北 × 东西 / NS × EW</span></div>
       <div id="table" class="bridge-table"><img class="table-intro" src="bridge-art.svg" alt="桥牌牌桌 / Bridge table"></div>
       <div id="turnStatus" class="turn-status" role="status">等待入座 / Waiting for players</div>
+      <section id="lessonCoach" aria-label="教学指导 / Lesson coach" hidden></section>
       <section id="dummyPanel" class="hand-section" hidden></section>
       <section id="handPanel" class="hand-section" hidden></section>
       <div id="reviewPanel" hidden></div>
@@ -28,6 +29,7 @@
         <div class="identity"><div id="avatarPicker"></div><label>名字 / Name<input id="playerName" maxlength="18" autocomplete="nickname"></label></div>
         <label class="field">每场副数 / Boards<select id="boardCount"><option value="4">4 副 / 4 boards</option><option value="8">8 副 / 8 boards</option><option value="16">16 副 / 16 boards</option></select></label>
         <button id="createBtn" class="primary wide"><i data-lucide="plus"></i>创建房间 / Create room</button>
+        <button id="tutorialBtn" class="wide"><i data-lucide="graduation-cap"></i>新手教学 / Guided lesson</button>
         <form id="joinForm" class="join-form"><label>加入房间 / Join room<input id="roomInput" maxlength="6" placeholder="B12345" autocomplete="off" autocapitalize="characters"></label><button type="submit" title="加入 / Join" aria-label="加入 / Join"><i data-lucide="log-in"></i></button></form>
       </section>
       <section id="roomPanel" hidden>
@@ -36,6 +38,7 @@
         <div id="lobby"><h2>搭档座位 <small>Partnerships</small></h2><div id="lobbySeats"></div><div id="swapRequest"></div><div class="lobby-actions"><button id="fillBtn"><i data-lucide="bot"></i>补齐机器人 / Fill bots</button><button id="startBtn" class="primary"><i data-lucide="play"></i>开始 / Start</button></div></div>
         <section id="biddingPanel" hidden><h2>叫牌 <small>Auction</small></h2><div id="bidControls"></div><div id="auction"></div></section>
         <section id="contractPanel" hidden></section>
+        <section id="lessonNotebook" hidden></section>
         <section id="resultPanel" hidden></section>
         <details id="scoreSection" open><summary>计分 <small>Scores</small><strong id="totalScore"></strong></summary><div id="scores"></div></details>
         <details class="chat-section" open><summary>聊天 <small>Chat</small></summary><div id="messages" class="messages" aria-live="polite"></div><form id="chatForm"><input id="chatText" maxlength="160" aria-label="消息 / Message" placeholder="消息 / Message" autocomplete="off"><button title="发送 / Send" aria-label="发送 / Send"><i data-lucide="send"></i></button></form></details>
@@ -56,6 +59,12 @@
   </dialog>
   <dialog id="settingsDialog"><div class="dialog-heading"><h2>设置 <small>Settings</small></h2><button class="icon-button" data-close="settingsDialog" aria-label="关闭 / Close"><i data-lucide="x"></i></button></div><div class="dialog-body"><label class="volume-label">音效音量 / Sound volume <output id="volumeValue"></output><input id="volume" type="range" min="0" max="100" step="1"></label><label class="check-label"><input type="checkbox" id="mute">静音 / Mute</label></div></dialog>
   <dialog id="confirmDialog"><div class="dialog-body"><h2>离开房间？ <small>Leave room?</small></h2><p>开局后座位会保留，其他人需等你回来或由房主补位。<small>Your seat remains after the start. Play waits for you or a host-managed replacement.</small></p><div class="dialog-actions"><button data-close="confirmDialog">取消 / Cancel</button><button id="confirmLeave" class="primary">离开 / Leave</button></div></div></dialog>
-  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-audio.js"></script><script src="game-ui.js"></script><script src="game-rules.js"></script><script src="bridge-audio.js"></script><script src="bridge.js"></script>
+  <dialog id="lessonIntro" data-rules-dialog aria-labelledby="lessonIntroTitle">
+    <div class="dialog-heading"><h2 id="lessonIntroTitle"></h2><button class="icon-button" data-close="lessonIntro" aria-label="关闭 / Close"><i data-lucide="x"></i></button></div>
+    <div id="lessonIntroBody" data-rules-body></div>
+    <div class="lesson-intro-footer"><button id="lessonBack"><i data-lucide="arrow-left"></i>上一步 / Back</button><button id="lessonForward" class="primary"></button></div>
+  </dialog>
+  <dialog id="lessonRestartDialog"><div class="dialog-body"><h2>重新练习？ <small>Restart lesson?</small></h2><p>本次进度会清除，重新从叫牌开始。<br><small>This attempt will be cleared, starting again with the auction.</small></p><div class="dialog-actions"><button data-close="lessonRestartDialog">取消 / Cancel</button><button class="primary" data-lesson-command="confirmRestart">重新开始 / Restart</button></div></div></dialog>
+  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-audio.js"></script><script src="game-ui.js"></script><script src="game-rules.js"></script><script src="bridge-audio.js"></script><script src="bridge-lesson-ui.js"></script><script src="bridge.js"></script>
 </body>
 </html>

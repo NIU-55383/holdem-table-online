@@ -11,6 +11,21 @@
   const send = (data) => { if (ws?.readyState !== WebSocket.OPEN) { error("连接已断开，正在重连 / Disconnected; reconnecting"); return false; } ws.send(JSON.stringify(data)); return true; };
   const social = BoardGameUI.mountInteractions(() => ({ code: state?.code, players: state?.seats || [], you: state?.seats[state.you]?.socialId, connected: ws?.readyState === WebSocket.OPEN }), send, { audio, onSoundChange: renderSound });
   const management = BoardGameUI.mountRoomControl(() => state?.control, send, () => $("#roomTools"));
+  const lessonUI = BridgeLessonUI.create({ cardHTML, send, getState: () => state,
+    start: () => {
+      if (state) return;
+      if (!$("#playerName").value.trim()) $("#playerName").value = "新手";
+      const who = identity(); if (who) send({ type: "createTutorial", ...who });
+    },
+    focusAction: (recommendation) => {
+      if (!recommendation) return;
+      if (recommendation.type === "call") { if (recommendation.call !== "P") level = Number(recommendation.call[0]); }
+      else selected = recommendation.card;
+      render();
+      const target = recommendation.type === "call" ? $(`[data-call="${recommendation.call}"]`) : $(".playing-card.selected:not(:disabled)");
+      target?.scrollIntoView({ block: "center", behavior: "instant" }); target?.focus({ preventScroll: true });
+    }
+  });
   function icons() { window.lucide?.createIcons(); }
   function error(message) { $("#error").textContent = message || ""; }
   function renderSound() {
@@ -113,9 +128,9 @@
       $("#table").innerHTML = '<img class="table-intro" src="bridge-art.svg" alt="桥牌牌桌 / Bridge table">';
       $("#boardMeta").innerHTML = '<span>四人定约桥牌 / Contract Bridge</span><span>南北 × 东西 / NS × EW</span>';
       $("#turnStatus").textContent = "等待入座 / Waiting for players"; $("#turnStatus").classList.remove("your-turn");
-      ["#handPanel", "#dummyPanel", "#reviewPanel"].forEach((s) => $(s).hidden = true); social.sync(); management.sync(); return;
+      ["#handPanel", "#dummyPanel", "#reviewPanel"].forEach((s) => $(s).hidden = true); lessonUI.render(null, null, false); social.sync(); management.sync(); return;
     }
-    $("#roomCode").textContent = state.code;
+    $("#roomCode").textContent = state.lesson ? "教学练习 / Guided practice" : state.code;
     renderTable(); renderLobby(); renderAuction(); renderContract(); renderResult(); renderReview();
     const g = state.game;
     $("#handPanel").hidden = !g; $("#dummyPanel").hidden = true;
@@ -127,7 +142,7 @@
     $("#totalScore").textContent = `NS ${totals[0]} : ${totals[1]} EW`;
     $("#scores").innerHTML = `<table class="score-table"><thead><tr><th>副 / Board</th><th>定约 / Contract</th><th>NS</th><th>EW</th></tr></thead><tbody>${state.scores.map((s) => `<tr><td>${s.board}</td><td>${contractHTML(s.contract)}</td><td>${Math.max(s.score, 0)}</td><td>${Math.max(-s.score, 0)}</td></tr>`).join("")}</tbody></table>`;
     $("#messages").innerHTML = state.chat.map((m) => `<p><b>${esc(m.name)}</b>${esc(m.text)}</p>`).join(""); $("#messages").scrollTop = $("#messages").scrollHeight;
-    social.sync(); management.sync(); icons();
+    social.sync(); management.sync(); lessonUI.render(state, selected, busy); icons();
   }
   function receive(next) {
     const old = state, g = next.game, key = g ? `${next.code}:${g.board}:${g.revision}` : "";
@@ -170,9 +185,14 @@
   }
   function act(action) { if (busy || !state?.game || state.control.paused) return; busy = true; if (!send({ type: "action", action: { ...action, revision: state.game.revision } })) busy = false; render(); }
   $("#createBtn").addEventListener("click", () => { const who = identity(); if (who) send({ type: "create", ...who, boards: Number($("#boardCount").value) }); });
+  $("#tutorialBtn").addEventListener("click", () => lessonUI.open());
   $("#joinForm").addEventListener("submit", (e) => { e.preventDefault(); const who = identity(); if (who) send({ type: "join", ...who, code: $("#roomInput").value }); });
   $("#fillBtn").addEventListener("click", () => send({ type: "fillBots" })); $("#startBtn").addEventListener("click", () => send({ type: "start" }));
-  $("#leaveBtn").addEventListener("click", () => $("#confirmDialog").showModal());
+  $("#leaveBtn").addEventListener("click", () => {
+    if (state?.lesson) $("#confirmDialog p").innerHTML = '离开将结束这次教学练习。<small>Leaving ends this practice attempt.</small>';
+    else $("#confirmDialog p").innerHTML = '开局后座位会保留，其他人需等你回来或由房主补位。<small>Your seat remains after the start. Play waits for you or a host-managed replacement.</small>';
+    $("#confirmDialog").showModal();
+  });
   $("#confirmLeave").addEventListener("click", () => { $("#confirmDialog").close(); send({ type: "leave" }); });
   $("#copyBtn").addEventListener("click", async () => { try { await navigator.clipboard.writeText(`${location.origin}${location.pathname}?room=${state.code}`); $("#copyBtn").title = "已复制 / Copied"; } catch { error(`房间号 / Room code: ${state.code}`); } });
   $("#chatForm").addEventListener("submit", (e) => { e.preventDefault(); if (send({ type: "chat", text: $("#chatText").value })) $("#chatText").value = ""; });

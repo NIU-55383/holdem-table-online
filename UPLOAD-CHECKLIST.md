@@ -19,6 +19,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Remove-RetiredFiles.ps1
 
 统一规则页需要同时保留 `game-rules.js`、`game-rules.css`、`game-rules-data.js` 和四个页面 `index.html`、`duel.html`、`bridge.html`、`catan.html`。检查德州、桥牌、五子棋、象棋及卡坦岛的规则入口，手机能滚动至末尾。桥牌服务器还需要 `bridge-bot.js`，不要漏掉新增文件。
 
+桥牌教学需要新增的 `bridge-lesson.js`（服务器）、`bridge-lesson-ui.js`、`bridge-lesson.css`，以及修改后的 `bridge-server.js`、`bridge.js`、`bridge.html` 一起部署。检查“新手教学”能从图文介绍进入叫牌，逐步出完 13 墩；机器人应等待“继续”，普通房间仍自动行动。此更新需要重启服务器，原有房间会清空。
+
 若用 GitHub 网页上传，同样需要按清单删除旧文件。即使遗漏删除，新版服务器也会拒绝访问清单中的旧文件，且不再注册其联机接口。
 
 ## 部署设置

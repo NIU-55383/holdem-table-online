@@ -83,7 +83,7 @@
 .summary-person {min-width: 0;}
 .summary-identity strong {display: block; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
 .summary-meta {display: flex; align-items: center; gap: 3px; font-size: 9px; font-weight: 500; color: #315c6a;}
-.summary-meta b {font-size: 13px; color: #195b46;}
+.summary-meta b {font-size: 13px; color: #195b46; white-space: nowrap;}
 .player-color {width: 7px; height: 7px; border-radius: 50%; background: var(--player);}
 .summary-identity small {display: block; font-size: 9px; font-weight: 500; color: #577682;}
 .summary-player td > span {display: inline-flex; align-items: center; justify-content: center; gap: 3px;}

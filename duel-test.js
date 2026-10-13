@@ -69,9 +69,9 @@ test("Online: ready, host on second side, legal synchronized moves, undo consent
   a.send({type:"move",revision:1,...one.game.legal[0]});await b.next(m=>m.game?.revision===2);
   b.send({type:"request",action:"undo"});const ask=await a.next(m=>m.pending?.action==="undo");assert.equal(ask.game.moves.length,2);a.send({type:"respond",id:ask.pending.id,accept:true});const undone=await b.next(m=>m.game?.revision===3);assert.equal(undone.game.moves.length,0);assert.equal(undone.game.current,0);
   a.ws.close();await once(a.ws,"close");await b.next(m=>m.seats?.[1]?.connected===false);
-  const restored=await client(a.token);const back=await restored.next(m=>m.game?.revision===3);assert.equal(back.you,1);assert.equal(back.seats[1].connected,true);
+  const restored=await client(a.token);const back=await restored.next(m=>m.game?.revision===3);assert.equal(back.you,1);assert.equal(back.seats[1].connected,true);assert.equal(back.host,1,"A quick reconnect preserves the host");
   b.send({type:"request",action:"draw"});const draw=await restored.next(m=>m.pending?.action==="draw");restored.send({type:"respond",id:draw.pending.id,accept:true});await b.next(m=>m.game?.phase==="over");
-  b.send({type:"request",action:"rematch"});const again=await restored.next(m=>m.pending?.action==="rematch");restored.send({type:"respond",id:again.pending.id,accept:true});const fresh=await b.next(m=>m.game?.phase==="playing"&&m.you===1);assert.equal(fresh.game.moves.length,0);assert.equal(fresh.host,1);
+  b.send({type:"request",action:"rematch"});const again=await restored.next(m=>m.pending?.action==="rematch");restored.send({type:"respond",id:again.pending.id,accept:true});const fresh=await b.next(m=>m.game?.phase==="playing"&&m.you===1);assert.equal(fresh.game.moves.length,0);assert.equal(fresh.host,0,"Host rights follow Connie when sides swap");
   b.send({type:"resign"});const end=await restored.next(m=>m.game?.reason?.includes("Resignation"));assert.equal(end.game.winner,0);assert.equal(end.seats[0].name,"Connie");
 }));
 test("AI rooms isolate games, cancel obsolete searches on undo, and keep avatars stable",{timeout:20000},()=>live(async(client,duel)=>{

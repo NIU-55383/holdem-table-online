@@ -55,8 +55,10 @@ test("Bridge adapter: private hands, seat consent, host consent, vacancies, reco
   await b.request({ type: "roomControl", action: "kick", target: aliceId }); await until(() => a.events.some((d) => d.type === "left"));
   await a.request({ type: "chat", text: "not a member" }, (v) => v.type === "error");
   await a.request({ type: "join", name: "Alice again", code }); assert.equal(a.state.you, 1); assert.deepEqual(a.state.game.hands[1], aliceHand);
-  b.ws.close(); await until(() => a.state.host === 1); assert.equal(room.game.revision, revision);
-  const back = await client(b.token); await until(() => back.state); assert.equal(back.state.host, 1); assert.equal(back.state.you, 0);
+  b.ws.close(); await until(() => !a.state.seats[0].connected); assert.equal(a.state.host, 0); assert.equal(room.game.revision, revision);
+  const back = await client(b.token); await until(() => back.state); assert.equal(back.state.host, 0); assert.equal(back.state.you, 0);
+  await back.request({ type: "roomControl", action: "transfer", target: a.state.control.you });
+  await a.request({ type: "roomControl", action: "respond", id: back.state.control.pending.id, accept: true });
   await a.request({ type: "roomControl", action: "kick", target: a.state.seats[3].socialId });
   await a.request({ type: "roomControl", action: "fillBot", target: a.state.seats[3].socialId }); assert.equal(a.state.seats[3].bot, true); assert.equal(a.state.control.paused, false);
   await a.request({ type: "roomControl", action: "idleAuto", enabled: false }); await until(() => back.state.control.idleAuto === false); assert.equal(back.state.control.warning, null);

@@ -8,21 +8,28 @@ function createRoomControl(options) {
   const host = options.host || ((r) => r.host), setHost = options.setHost || ((r, key) => { r.host = key; });
   const idleMs = Math.max(200, Number(process.env.ROOM_IDLE_MS) || 120000);
   const warningMs = Math.min(idleMs / 2, Math.max(100, Number(process.env.ROOM_WARNING_MS) || 20000));
-  const meta = (room) => room.roomControl ||= { pending: null, idle: new Map(), idleAuto: false, timeoutAuto: new Set() };
+  const hostGraceMs = Math.max(200, Number(process.env.ROOM_HOST_GRACE_MS) || 300000);
+  const meta = (room) => room.roomControl ||= { pending: null, idle: new Map(), idleAuto: false, timeoutAuto: new Set(), hostOffline: null };
   const human = (p) => p && !p.vacant && !p.departed && !bot(p);
   const paused = (room) => seats(room).some((p) => p?.vacant);
-  function elect(room) {
+  function elect(room, { now = Date.now(), immediate = false } = {}) {
+    const m = meta(room), owner = host(room);
     const list = seats(room).map((p, index) => ({p, position:p?.position ?? index})).sort((a,b) => a.position-b.position).map(({p}) => p);
-    const index = list.findIndex((p) => identity(p) === host(room));
-    if (human(list[index]) && connected(list[index])) return false;
+    const index = list.findIndex((p) => identity(p) === owner);
+    if (human(list[index]) && connected(list[index])) { m.hostOffline = null; return false; }
+    if (human(list[index])) {
+      // Keep the original deadline through broadcasts and other players reconnecting.
+      if (immediate || m.hostOffline?.host !== owner) m.hostOffline = { host: owner, since: now - (immediate ? hostGraceMs : 0) };
+      if (now - m.hostOffline.since < hostGraceMs) return false;
+    } else m.hostOffline = null;
     for (let offset = 1; offset <= list.length; offset++) {
       const p = list[(index + offset + list.length) % list.length];
-      if (human(p) && connected(p)) { setHost(room, identity(p)); return true; }
+      if (human(p) && connected(p)) { setHost(room, identity(p)); m.hostOffline = null; return true; }
     }
     return false;
   }
   function sync(room, now = Date.now()) {
-    const m = meta(room), list = seats(room); let changed = elect(room);
+    const m = meta(room), list = seats(room); let changed = elect(room, { now });
     if (m.pending && (m.pending.host !== host(room) || ![m.pending.from, m.pending.to].every((id) => list.some((p) => human(p) && connected(p) && Social.publicId(p) === id)))) { m.pending = null; changed = true; }
     const actors = !paused(room) && options.active(room) ? options.actors(room) : [];
     const key = options.turnKey(room);

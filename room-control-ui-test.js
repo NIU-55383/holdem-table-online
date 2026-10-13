@@ -41,6 +41,15 @@ let playwright; try { playwright = require("playwright"); } catch { playwright =
       const code = await a.evaluate(() => testState.code);
       await send(b, { type: "join", code, name: "Bob" }); await b.waitForFunction(() => window.testState?.control);
       await a.waitForFunction(() => testState.control.seats.some(s => s?.name === "Bob"));
+      const hostId = await a.evaluate(() => testState.control.you);
+      if (kind === "poker") {
+        await a.evaluate(() => localStorage.setItem("holdem-online-name", "Alice"));
+        await b.evaluate(() => localStorage.setItem("holdem-online-name", "Bob"));
+      }
+      await a.reload(); await a.waitForFunction(() => window.testState?.control);
+      assert.equal(await a.evaluate(() => testState.control.host), hostId, "Refreshing the host keeps ownership and the same seat");
+      await b.reload(); await b.waitForFunction(() => window.testState?.control);
+      assert.equal(await b.evaluate(() => testState.control.host), hostId, "A guest reconnect cannot take the host role");
       await close(a); await close(b);
       await a.locator("[data-room-manage]").click();
       assert.equal(await a.locator('[data-room-idle-auto]').isChecked(),false,"Idle auto-play defaults off in every lobby");

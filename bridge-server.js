@@ -75,7 +75,7 @@ function attachBridge(server) {
     const i = r.seats.findIndex((p) => p.token === s.token); if (i < 0) return;
     r.seats[i].ws = null;
     if (r.seatSwap && [r.seatSwap.from, r.seatSwap.to].includes(s.token)) r.seatSwap = null;
-    control.elect(r);
+    control.elect(r, { immediate: explicit && r.host === s.token });
     if (explicit && !r.game) { const before = [...r.seats]; r.seats.splice(i, 1); remapChat(r, before); }
     if (explicit) s.room = "";
     if (explicit && r.tutorial) { stop(r); rooms.delete(r.code); return; }

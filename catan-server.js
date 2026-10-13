@@ -102,7 +102,7 @@ function attachCatan(server) {
     if (index < 0) return;
     const seat = room.seats[index];
     seat.ws = null; seat.disconnectedAt = explicit ? 0 : Date.now();
-    control.elect(room);
+    control.elect(room, { immediate: explicit && room.host === seat.token });
     clearSeatSwap(room, seat.token);
     if (!room.game && explicit) { const before = [...room.seats]; room.seats.splice(index, 1); remapChat(room, before); }
     if (explicit) session.room = "";
@@ -136,7 +136,7 @@ function attachCatan(server) {
           const room = rooms.get(session.room);
           if (room) {
             const seat = room.seats.find((p) => p.token === session.token);
-            if (seat) { seat.ws = ws; seat.auto = false; if (avatar !== undefined) seat.avatar = avatar; if (!room.seats.some((p) => p.token === room.host && p.ws)) room.host = seat.token; broadcast(room); }
+            if (seat) { seat.ws = ws; seat.auto = false; if (avatar !== undefined) seat.avatar = avatar; broadcast(room); }
           }
           return;
         }
@@ -175,7 +175,6 @@ function attachCatan(server) {
             if (control.vacancy(room) >= 0) control.fill(room, control.vacancy(room), player); else room.seats.push(player);
           }
           session.room = room.code;
-          if (!room.seats.some((p) => p.token === room.host && p.ws)) room.host = session.token;
           broadcast(room); return;
         }
         const room = rooms.get(session.room);

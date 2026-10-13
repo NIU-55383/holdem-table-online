@@ -17,6 +17,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Remove-RetiredFiles.ps1
 
 完整上传 `audio` 和 `vendor` 子目录，保留 `.gitattributes`。五子棋和象棋模型、拆分文件、源码与许可证都已包含；不要只上传根目录的网页文件。
 
+房主五分钟断线保护需一并部署 `room-control.js`、`server.js`、`catan-server.js`、`bridge-server.js`、`duel-server.js`，不能只更新前端。部署环境不要设置用于加速测试的 `ROOM_HOST_GRACE_MS`。重启前先结束正在进行的房间；部署后检查房主刷新不换人、连续离线五分钟后才接任、主动退出立即交接。卡坦岛分数显示同时更新 `catan.js` 和 `catan.css`，检查无加分时只显示单个分数、世外部落标记与加分卡合计在加号右侧，对手未公开的加分卡仍隐藏。
+
 统一规则页需要同时保留 `game-rules.js`、`game-rules.css`、`game-rules-data.js` 和四个页面 `index.html`、`duel.html`、`bridge.html`、`catan.html`。检查德州、桥牌、五子棋、象棋及卡坦岛的规则入口，手机能滚动至末尾。桥牌服务器还需要 `bridge-bot.js`，不要漏掉新增文件。
 
 桥牌教学需要新增的 `bridge-lesson.js`（服务器）、`bridge-lesson-ui.js`、`bridge-lesson.css`，以及修改后的 `bridge-server.js`、`bridge.js`、`bridge.html` 一起部署。检查“新手教学”的八课双语图文、17 点开叫题、6 点红桃支持题和术语表，确认手牌在讲解上方，两道题的答案和解析互不影响；随后切换到北家 16 点练习牌，逐步出完 13 墩。机器人应等待“继续”，普通房间仍自动行动。首次部署教学后端需要重启服务器，原有房间会清空；仅更新教学图文与样式时刷新页面即可。

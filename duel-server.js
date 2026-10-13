@@ -81,7 +81,7 @@ function attachDuel(server) {
     const room = rooms.get(session.room); if (!room) return;
     const id = room.seats.findIndex((p) => p?.token === session.token), seat = room.seats[id]; if (!seat) return;
     seat.ws = null; room.pending = null;
-    control.elect(room);
+    control.elect(room, { immediate: explicit && room.host === seat.token });
     if (explicit) {
       if (room.game?.phase === "playing" && !control.paused(room)) { stop(room); E.resign(room.game, id); }
       if (!room.game) room.seats[id] = null; else seat.departed = true;
@@ -133,7 +133,6 @@ function attachDuel(server) {
           if (former) { former.ws = ws; former.auto = false; if (avatar !== undefined) former.avatar = avatar; }
           else if (control.vacancy(room) >= 0) control.fill(room, control.vacancy(room), player); else room.seats[room.seats.indexOf(null)] = player;
           session.room = room.code;
-          if (!room.seats.some((p) => p?.token === room.host && connected(p))) room.host = session.token;
           broadcast(room); schedule(room); return;
         }
         const room = rooms.get(session.room); ensure(room, "请先加入房间 / Join a room");

@@ -73,7 +73,7 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
     assert.equal(await score(host, 0), "8+2");
     await guest.waitForFunction(() => testState.game.players[0].developmentCount === 3);
     assert.equal(await score(guest, 0), "8");
-    assert.match(await host.locator('#players [data-player-id="0"] .summary-meta').getAttribute("title"), /非加分卡得分 8 \+ 加分卡 2 = 总分 10.*Other points 8 \+ VP cards 2 = 10 VP/);
+    assert.match(await host.locator('#players [data-player-id="0"] .summary-meta').getAttribute("title"), /其他得分 8 \+ 加分卡 2 = 总分 10.*Other points 8 \+ VP cards 2 = 10 VP/);
     for (const [width, height] of [[1440, 1000], [390, 844], [320, 568]]) {
       await host.setViewportSize({ width, height });
       await host.locator("#players").scrollIntoViewIfNeeded();
@@ -90,10 +90,33 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
     for (const page of pages) {
       assert.equal(await score(page, 0), "8+2");
       assert.equal(await score(page, 1), "2+1");
-      assert.equal(await score(page, 2), "0+0", "A revealed hand without VP cards shows +0");
+      assert.equal(await score(page, 2), "0", "Zero bonuses never add +0");
     }
+    const revision = g.revision;
+    Object.assign(g, E.createGame(room.seats.map(p => p.name), undefined, "tribes"));
+    room.mapId = "tribes"; g.revision = revision; g.phase = "main"; g.turn = 1; g.current = 0; g.target = 99;
+    g.board.vertices.forEach(v => { v.owner = -1; v.level = 0; });
+    g.board.vertices.slice(0, 3).forEach(v => { v.owner = 0; v.level = 2; });
+    g.board.vertices.slice(3, 5).forEach(v => { v.owner = 1; v.level = 2; });
+    giveCard(0, "vp"); g.players[0].scenarioPoints = 2; g.players[1].scenarioPoints = 1;
+    await sync();
+    assert.equal(await score(host, 0), "6+3", "Hidden VP cards and tribe tokens share the bonus subtotal");
+    assert.equal(await score(guest, 0), "6+2", "Public tribe tokens remain visible without leaking VP cards");
+    assert.equal(await score(host, 1), "4+1"); assert.equal(await score(guest, 1), "4+1");
+    assert.match(await guest.locator('#players [data-player-id="0"] .summary-meta').getAttribute("title"), /Tribe tokens 2.*Hidden VP cards excluded/);
+    assert.equal(await guest.evaluate(() => testState.game.players[0].development), null);
+    for (const page of pages) await page.evaluate(() => document.querySelectorAll("dialog[open]").forEach(d => d.close()));
+    for (const width of [390, 1440]) {
+      await host.setViewportSize({ width, height: 1000 }); await host.locator("#players").scrollIntoViewIfNeeded();
+      assert.equal(await host.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      await host.screenshot({ path: `test-results/catan-tribe-score-${width}.png`, animations: "disabled" });
+    }
+    g.players[0].development = []; g.players[0].scenarioPoints = 0; await sync();
+    assert.equal(await score(host, 0), "6", "No cards or tribe tokens means one plain score");
+    g.phase = "over"; g.winner = 1; await sync();
+    for (const page of pages) assert.equal(await score(page, 1), "4+1", "Revealing hands never double-counts tribe tokens");
     assert.deepEqual(errors, []);
-    console.log("Catan score UI: own/public/revealed scores, purchase, reconnect and desktop/mobile layouts passed.");
+    console.log("Catan score UI: own/public/revealed scores, tribe tokens, zero bonuses, purchase, reconnect and desktop/mobile layouts passed.");
   } finally {
     await browser?.close();
     for (const room of catan.rooms.values()) clearTimeout(room.timer);

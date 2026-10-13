@@ -1189,7 +1189,7 @@ function broadcast(room) {
   });
 }
 
-function leaveClient(client) {
+function leaveClient(client, explicit = false) {
   if (!client.roomCode) return;
   const room = rooms.get(client.roomCode);
   if (!room) return;
@@ -1200,8 +1200,8 @@ function leaveClient(client) {
   if (player.socket !== client) return;
   player.connected = false;
   player.socket = null;
-  roomControl.elect(room);
-  if (room.status === "lobby") {
+  roomControl.elect(room, { immediate: explicit && room.hostId === player.clientId });
+  if (room.status === "lobby" && explicit) {
     room.players.splice(index, 1);
     if (!room.players.length) {
       rooms.delete(room.code);
@@ -1224,7 +1224,7 @@ function handleMessage(client, message) {
   if (!client.clientId) throw new Error("连接尚未初始化 / Connection not initialized");
 
   if (data.type === "create") {
-    leaveClient(client);
+    leaveClient(client, true);
     const room = makeRoom(client, data);
     addPlayer(room, client, data.name, avatar);
     client.roomCode = room.code;
@@ -1236,7 +1236,7 @@ function handleMessage(client, message) {
     const code = String(data.code || "").trim().toUpperCase();
     const room = rooms.get(code);
     if (!room) throw new Error("找不到房间 / Room not found");
-    if (client.roomCode !== code) leaveClient(client);
+    if (client.roomCode !== code) leaveClient(client, true);
     addPlayer(room, client, data.name, avatar);
     client.roomCode = room.code;
     resumeRoom(room);
@@ -1280,12 +1280,8 @@ function handleMessage(client, message) {
     while (room.players.length < room.maxPlayers) addBot(room);
     broadcast(room);
   } else if (data.type === "takeHost") {
-    const host = room.players.find((player) => player.clientId === room.hostId);
-    if (host && host.connected && room.hostId !== client.clientId) {
-      throw new Error("房主仍在线 / Host is still online");
-    }
-    room.hostId = client.clientId;
-    addLog(room, `${room.players[playerIndex].name} 接管房主 / takes host`);
+    roomControl.sync(room);
+    if (!canManageRoom(room, client.clientId)) throw new Error("房主连续离线五分钟后按座次自动交接 / The host role passes in seat order after 5 minutes offline");
     broadcast(room);
   } else if (data.type === "toggleAutoNext") {
     if (!canManageRoom(room, client.clientId)) throw new Error("Host only / 只有房主可以设置");
@@ -1320,7 +1316,7 @@ function handleMessage(client, message) {
     if (room.status !== "handComplete") throw new Error("本手尚未结束 / Hand is not complete");
     beginHand(room);
   } else if (data.type === "leave") {
-    leaveClient(client);
+    leaveClient(client, true);
     client.roomCode = "";
     send(client, { type: "left" });
   }

@@ -75,8 +75,8 @@ test("election follows chosen seat order and all vacancies must be filled before
   const room={code:"ORDER",host:"a",seats:[a,b,c,d],game:{players:[a,b,c,d].map(p=>({name:p.name,resources:[4,3,2,1,0]}))}}, rooms=new Map([[room.code,room]]);
   const control=createRoomControl({rooms,active:()=>true,started:()=>true,turnKey:()=>"one",actors:()=>[0],stop:()=>{},remove:()=>{},changed:()=>{}});
   try {
-    a.ws=null; control.elect(room); assert.equal(room.host,"c","Use negotiated position, not insertion order");
-    c.ws=null; control.elect(room); assert.equal(room.host,"b","Skip bots and offline humans");
+    a.ws=null; control.elect(room, {now:0}); control.elect(room, {now:300000}); assert.equal(room.host,"c","Use negotiated position, not insertion order");
+    c.ws=null; control.elect(room, {now:300000}); control.elect(room, {now:600000}); assert.equal(room.host,"b","Skip bots and offline humans");
     control.handle(room,b,{type:"roomControl",action:"kick",target:Social.publicId(a)});
     control.handle(room,b,{type:"roomControl",action:"kick",target:Social.publicId(c)});
     control.fill(room,0,human("new-a",0)); assert.equal(room.seats[0].position,2); assert.equal(control.paused(room),true);
@@ -87,11 +87,28 @@ test("election follows chosen seat order and all vacancies must be filled before
   } finally { control.close(); }
 });
 
-test("all four games: consent, closest online human, kick/pause, human and bot replacement", {timeout:30000}, async () => {
-  const port=18942, server=spawn(process.execPath,[require.resolve("./server")],{env:{...process.env,PORT:String(port),AUTO_OPEN:"0"},stdio:["ignore","pipe","pipe"]}), sockets=[];
+test("host rights survive five minutes of reconnect attempts, reset on return, and pass immediately only on leave", () => {
+  const a={token:"a",ws:{readyState:1}}, b={token:"b",ws:{readyState:1}}, c={token:"c",ws:null};
+  const room={code:"GRACE",host:"a",seats:[a,b,c]}, rooms=new Map([[room.code,room]]);
+  const control=createRoomControl({rooms,active:()=>false,started:()=>false,turnKey:()=>"",actors:()=>[],stop:()=>{},remove:()=>{},changed:()=>{}});
+  try {
+    a.ws=null; control.sync(room,1000);
+    for(const now of [2000,120000,300999]) { c.ws={readyState:1}; control.sync(room,now); assert.equal(room.host,"a"); }
+    a.ws={readyState:1}; control.sync(room,300999); assert.equal(room.roomControl.hostOffline,null);
+    a.ws=null; control.sync(room,400000); control.sync(room,699999); assert.equal(room.host,"a","A fresh disconnection gets a full five minutes");
+    control.sync(room,700000); assert.equal(room.host,"b");
+    a.ws={readyState:1}; control.sync(room,700001); assert.equal(room.host,"b","Late return cannot reclaim another host's rights");
+    b.ws=null; control.elect(room,{now:700002,immediate:true}); assert.equal(room.host,"c","Explicit leave skips the grace period");
+    a.ws=null; c.ws=null; control.elect(room,{now:800000,immediate:true});
+    b.ws={readyState:1}; control.sync(room,800001); assert.equal(room.host,"b","The next arrival can inherit an explicitly abandoned room");
+  } finally {control.close();}
+});
+
+test("all five games: host grace, consent, closest online human, kick/pause, human and bot replacement", {timeout:45000}, async () => {
+  const port=18942, server=spawn(process.execPath,[require.resolve("./server")],{windowsHide:true,env:{...process.env,PORT:String(port),AUTO_OPEN:"0",ROOM_HOST_GRACE_MS:"800"},stdio:["ignore","pipe","pipe"]}), sockets=[];
   let errors="";server.stderr.on("data",chunk=>{errors+=chunk;});
   async function client(kind,name,token) {
-    const poker=kind==="poker", endpoint=poker?"ws":kind==="catan"?"catan-ws":"duel-ws";
+    const poker=kind==="poker", endpoint=poker?"ws":kind==="catan"?"catan-ws":kind==="bridge"?"bridge-ws":"duel-ws";
     const ws=new WebSocket(`ws://127.0.0.1:${port}/${endpoint}`), messages=[];sockets.push(ws);
     ws.on("message",raw=>messages.push(JSON.parse(raw)));
     await once(ws,"open"); token ||= crypto.randomUUID();
@@ -105,7 +122,7 @@ test("all four games: consent, closest online human, kick/pause, human and bot r
   }
   try {
     await once(server.stdout,"data");
-    for(const kind of ["catan","poker","gomoku","xiangqi"]) {
+    for(const kind of ["catan","poker","gomoku","xiangqi","bridge"]) {
       const duel=["gomoku","xiangqi"].includes(kind), a=await client(kind,"Alice"), b=await client(kind,"Bob"), c=duel?null:await client(kind,"Carol");
       const created=await a.request({type:"create",name:a.name,seats:4,maxPlayers:4,players:4,startingStack:150,funds:50000,days:30,kind,difficulty:"easy",side:0,ai:false});
       const code=created.code, join=(p)=>p.request({type:"join",code,name:p.name});
@@ -144,9 +161,19 @@ test("all four games: consent, closest online human, kick/pause, human and bot r
       assert.equal(latest(c||b).control.idleAuto,true,"Room policy survives host transfer");
       assert.match((await a.request({type:"roomControl",action:"idleAuto",enabled:false},"error")).message,/Host only/);
       await (c||b).request({type:"roomControl",action:"idleAuto",enabled:false});
-      const departing=c||b, disconnectCursor=a.messages.length;
+      let departing=c||b;
+      const previousHost=ownId(departing), firstDisconnect=a.messages.length;
+      departing.ws.close();await once(departing.ws,"close");
+      const offline=a.state(await a.next(m=>m.type==="state"&&a.state(m).control.seats.some(s=>s?.id===previousHost&&!s.connected),firstDisconnect));
+      assert.equal(offline.control.host,previousHost,"A broken connection does not immediately transfer host");
+      if(kind==="poker") assert.match((await a.request({type:"takeHost"},"error")).message,/5 minutes offline/);
+      departing=await client(kind,departing.name,departing.token);
+      if(kind==="poker")await join(departing);else await departing.next(m=>m.type==="state");
+      assert.equal(latest(departing).control.host,previousHost,"Quick reconnect keeps host rights");
+      const disconnectCursor=a.messages.length, disconnectedAt=Date.now();
       departing.ws.close();await once(departing.ws,"close");
       await a.next(m=>m.type==="state"&&a.state(m).control.host===ownId(a),disconnectCursor);
+      assert.ok(Date.now()-disconnectedAt>=800,"Automatic succession waits for the full configured grace");
       const reconnected=await client(kind,departing.name,departing.token);
       if(kind==="poker")await join(reconnected);else await reconnected.next(m=>m.type==="state");
       assert.equal(latest(reconnected).control.host,ownId(a),"Rejoining never reclaims host rights");

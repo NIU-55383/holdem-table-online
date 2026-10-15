@@ -6,6 +6,7 @@ const Maps = require("./catan-maps");
 const randomizeMap = require("./catan-random");
 const Scenarios = require("./catan-scenarios");
 const BaseExtension = require("./catan-base-extension");
+const Statistics = require("./catan-stats");
 const RES = ["wood", "brick", "wool", "grain", "ore"];
 const COST = { road: [1, 1, 0, 0, 0], ship: [1, 0, 1, 0, 0], settlement: [1, 1, 1, 1, 0], city: [0, 0, 0, 2, 3], development: [0, 0, 1, 1, 1] };
 const LABEL = { wood: "木材 / Lumber", brick: "砖块 / Brick", wool: "羊毛 / Wool", grain: "麦子 / Grain", ore: "矿石 / Ore" };
@@ -134,6 +135,7 @@ function createGame(names, rng = random, mapId = "base", layout = "default", pre
     winner: -1, log: [], revision: 0, trade: null, shipMoved: false, goldQueue: [], goldResume: "main", thief: "robber",
   };
   Scenarios.initialize(g, map, options, rng);
+  g.statistics = Statistics.create(g, score);
   log(g, "选择初始村庄 / Choose an initial settlement");
   return g;
 }
@@ -234,8 +236,9 @@ function supplyShortage(g, player, resource, wanted, received, reason = "resourc
   const choosing = ["gold", "plenty"].includes(reason) && received > 0;
   log(g, `${g.players[player].name} · ${resource >= 0 ? LABEL[RES[resource]] : "资源 / Resources"} · 银行库存不足，应领 ${wanted}，${choosing ? "本次可领" : "实领"} ${received} / Bank shortage: ${received} of ${wanted} ${choosing ? "available to choose" : "received"}`);
 }
-function take(g, p, r, amount = 1) {
+function take(g, p, r, amount = 1, source = null) {
   const n = Math.min(g.bank[r], amount); g.bank[r] -= n; p.resources[r] += n;
+  Statistics.received(g, p.id, r, n, source);
   supplyShortage(g, p.id, r, amount, n);
 }
 function limitGoldSupply(g) {
@@ -274,7 +277,7 @@ function produce(g, number) {
   });
   RES.forEach((_, r) => {
     const total = demand.reduce((n, x) => n + x[r], 0), recipients = demand.filter((x) => x[r] > 0).length;
-    if (total <= g.bank[r] || recipients === 1) demand.forEach((d, id) => take(g, g.players[id], r, d[r]));
+    if (total <= g.bank[r] || recipients === 1) demand.forEach((d, id) => take(g, g.players[id], r, d[r], "production"));
     else if (total) demand.forEach((d, id) => supplyShortage(g, id, r, d[r], 0, "shared"));
   });
   const gold = g.players.map(() => 0);
@@ -393,6 +396,7 @@ function canRespondToTrade(g, id) {
 
 function act(g, id, a, rng = random) {
   requireRule(g.players[id] && g.phase !== "over", "游戏未进行 / Game not active");
+  const before = { turn: g.turn, current: g.current, part: g.pairedTurn?.part || null };
   const p = g.players[id], l = legal(g, id), type = a.type;
   requireRule(typeof type === "string", "无效行动 / Invalid action");
   if (Object.hasOwn(l.buildBlocked, type)) requireRule(false, l.buildBlocked[type]);
@@ -400,7 +404,7 @@ function act(g, id, a, rng = random) {
     // Scenario choices can belong to a player other than the current turn owner.
   } else if (type === "gold") {
     requireRule(l.gold > 0 && resourceArray(a.resources) && sum(a.resources) === l.gold && a.resources.every((n, r) => n <= g.bank[r]), "请选择金矿资源 / Choose available gold-field resources");
-    a.resources.forEach((n, r) => take(g, p, r, n)); g.goldQueue.shift();
+    a.resources.forEach((n, r) => take(g, p, r, n, "gold")); g.goldQueue.shift();
     log(g, `${p.name} 领取 ${l.gold} 张金矿资源 / collects gold-field resources`);
     limitGoldSupply(g);
     if (!g.goldQueue.length || !sum(g.bank)) { g.goldQueue = []; g.phase = g.goldResume; }
@@ -553,6 +557,7 @@ function act(g, id, a, rng = random) {
   }
   Scenarios.afterAction(g, id, a, scenarioHelpers);
   g.revision++; checkWin(g);
+  Statistics.record(g, before, id, a, score);
   const sound = g.winner >= 0 ? "victory" : type === "playDevelopment" ? a.card
     : ({ road: "road", ship: "ship", moveShip: "ship", settlement: "settlement", city: "city", robber: "robber", pirate: "pirate", roll: "dice", acceptTrade: "exchange", bankTrade: "exchange", cancelDevelopment: "cancel" })[type];
   g.effect = sound ? { id: g.revision, sound } : null;
@@ -561,6 +566,7 @@ function act(g, id, a, rng = random) {
 
 function publicGame(g, id) {
   return {
+    statistics: Statistics.publicStatistics(g),
     pairedTurn: g.pairedTurn || null, resourceSupply: g.resourceSupply || 19,
     board: g.board, scenario: g.scenario || null, mapId: g.mapId, layout: g.layout, target: g.target, thief: g.thief, goldQueue: g.goldQueue, bank: g.bank, deckCount: g.deck.length, phase: g.phase, current: g.current, turn: g.turn,
     dice: g.dice, longest: g.longest, largest: g.largest, roadLengths: g.roadLengths, winner: g.winner, winners: g.winners || (g.winner >= 0 ? [g.winner] : []),

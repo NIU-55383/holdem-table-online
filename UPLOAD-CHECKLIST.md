@@ -27,6 +27,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Remove-RetiredFiles.ps1
 
 ## 部署设置
 
+卡坦岛赛后统计需要一起提交新增的 `catan-stats.js`、`catan-stats-ui.js`、`catan-stats.css` 和修改后的 `catan-engine.js`、`catan.js`、`catan.html`。后端更新后需重启，从新对局开始记录，不能补回旧局数据。部署后玩完一局，检查自动弹出的分数走势、骰子分布、资源产出和建设统计；结束前不应收到任何统计数据，重连保留本局统计，再来一局清零。房间仍只存在内存中，重启前请先结束正在进行的对局。
+
 - Build Command：`npm install`
 - Start Command：`npm start`
 - 沿用已有 GitHub 仓库和 Render 服务，不必新建。

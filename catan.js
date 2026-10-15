@@ -9,6 +9,7 @@
   const CARD_CHANGE_DURATION = 3500;
   const audio = window.CatanAudio.create(), soundEvents = window.CatanAudio.tracker(kind => audio.play(kind));
   const music = window.CatanMusic.create();
+  const statistics = window.CatanStatistics.mount();
   let viewedTradeKey = "", alertTradeKey = "";
   let harborSetupKey = "", harborSetupAcknowledged = false;
   let islandRoadIntent = null;
@@ -471,6 +472,7 @@
     renderHarborSetup();
     renderPirateBattle();
     management.sync();
+    if (!g) statistics.sync(room);
     if (!room) { supplyRoomKey = ""; $("incomingTradeAlert").hidden = true; $("goldChoiceAlert").hidden = true; alertTradeKey = ""; return; }
     const map = Maps.get(room.mapId);
     if (g && supplyRoomKey !== room.code) { $("supplyDetails").open = true; supplyRoomKey = room.code; }
@@ -550,6 +552,7 @@
       if (!g.legal.discard) $("resourceDialog").close();
       else renderDiscard();
     }
+    statistics.sync(room);
   }
   function acknowledgeHarborSetup() {
     harborSetupAcknowledged = true;

@@ -277,6 +277,7 @@ function rollPirate(g, number, h, rng) {
       p.resources[r]--; g.bank[r]++;
     }
     report.lost = count;
+    if (count > 0) h.recordRobbery(g, actor, "raid");
     h.log(g, `${p.name} 防守失败：1 + ${report.cities} 座城市，应弃 ${report.cities + 1} 张，实际随机损失 ${count} 张资源 / Raid lost: 1 + ${report.cities} cities; ${count} resource cards randomly discarded`);
     return false;
   }

@@ -76,12 +76,23 @@ function attachCatan(server) {
   function controlled(p) { return p && !p.vacant && (p.bot || p.auto); }
   function schedule(room) {
     clearTimeout(room.timer);
-    if (control.paused(room) || !room.game || room.game.phase === "over" || !room.seats.some((p) => !p.bot && p.ws)) return;
+    if (control.paused(room) || !room.game || room.game.phase === "over" || !room.seats.some((p) => !p.bot && p.ws)) { room.tradeThinking = null; return; }
     const g = room.game;
     let actor = -1;
     if (g.trade) actor = room.seats.findIndex((p, i) => controlled(p) && E.canRespondToTrade(g, i));
+    const tradeId = actor >= 0 ? g.trade.id : null;
     if (actor < 0) actor = E.requiredActors(g).find((id) => controlled(room.seats[id])) ?? -1;
+    if (tradeId === null) room.tradeThinking = null;
     if (actor < 0) return;
+    let delay = process.env.CATAN_BOT_DELAY ? Number(process.env.CATAN_BOT_DELAY) : tradeId !== null ? 2000 : 1100 + crypto.randomInt(950);
+    if (tradeId !== null) {
+      const pending = room.tradeThinking, token = room.seats[actor].token;
+      // Non-game broadcasts must not restart an offer's thinking time.
+      if (!pending || pending.game !== g || pending.offerId !== tradeId || pending.token !== token) {
+        room.tradeThinking = { game: g, offerId: tradeId, token, deadline: Date.now() + delay };
+      }
+      delay = Math.max(0, room.tradeThinking.deadline - Date.now());
+    }
     const revision = g.revision;
     room.timer = setTimeout(() => {
       if (control.paused(room) || !rooms.has(room.code) || room.game !== g || g.revision !== revision || !controlled(room.seats[actor])) return schedule(room);
@@ -92,7 +103,7 @@ function attachCatan(server) {
         console.error("Catan bot action failed:", error.message);
         room.seats.filter((p) => !p.bot).forEach((p) => send(p.ws, { type: "error", message: "机器人行动异常，请重新连接 / Bot action failed; reconnect" }));
       }
-    }, process.env.CATAN_BOT_DELAY ? Number(process.env.CATAN_BOT_DELAY) : 1100 + crypto.randomInt(950));
+    }, delay);
     room.timer.unref?.();
   }
   function detach(session, explicit = false) {

@@ -374,6 +374,7 @@ function steal(g, id, victim, rng, loot = "resource") {
   requireRule(loot === "resource" || loot === "cloth" && Scenarios.is(g, "cloth") && g.thief === "pirate" && g.players[victim].cloth > 0, "请选择可用战利品 / Choose available loot");
   if (loot === "cloth") {
     g.players[victim].cloth--; g.players[id].cloth++;
+    Statistics.robbed(g, victim, "theft");
     log(g, `${g.players[id].name} 偷取 1 布匹 / steals 1 cloth`);
     g.phase = g.resumePhase; g.victims = []; return;
   }
@@ -383,6 +384,7 @@ function steal(g, id, victim, rng, loot = "resource") {
     let n = Math.floor(rng() * count), resource = 0;
     while (n >= p.resources[resource]) n -= p.resources[resource++];
     p.resources[resource]--; g.players[id].resources[resource]++;
+    Statistics.robbed(g, victim, "theft");
     log(g, `${g.players[id].name} 从 ${p.name} 偷取 1 张资源 / steals 1 resource`);
   }
   g.phase = g.resumePhase; g.victims = [];
@@ -734,5 +736,5 @@ function chooseBotAction(g, id, rng = random) {
   return { type: "end" };
 }
 
-const scenarioHelpers = { affordable, resourceArray, pay, take, supplyShortage, pieceCount, longestRoad, score, updateAwards, checkWin, finishRoll, endTurn, log };
+const scenarioHelpers = { affordable, resourceArray, pay, take, supplyShortage, recordRobbery: Statistics.robbed, pieceCount, longestRoad, score, updateAwards, checkWin, finishRoll, endTurn, log };
 module.exports = { RES, COST, LABEL, makeBoard, createGame, act, legal, publicGame, chooseBotAction, canRespondToTrade, longestRoad, updateAwards, score, produce, tradeRate, settlementSites, roadSites, shipSites, movableShips, citySites, sum, random, requiredActors: Scenarios.requiredActors };

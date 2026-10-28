@@ -6,6 +6,7 @@
     ["dice", "骰子分布", "Dice rolls", "dices"],
     ["resources", "资源产出", "Production", "sprout"],
     ["builds", "建设统计", "Construction", "house"],
+    ["robbed", "被抢次数", "Times robbed", "hand"],
   ];
   const resources = [
     ["木材", "Lumber", "#30885c"], ["砖块", "Brick", "#c66b4b"],
@@ -63,6 +64,7 @@
       body.setAttribute("aria-labelledby", `statsTab-${active}`);
       if (active === "scores") renderScores();
       else if (active === "dice") renderDice();
+      else if (active === "robbed") renderRobbed();
       else renderBars(active === "resources");
       window.lucide?.createIcons();
     }
@@ -138,6 +140,22 @@
         <p class="stats-note stats-footnote">${production
           ? bilingual("不含开局赠送、交易、偷取、发展卡或布匹；银行缺货时只计实领数量。", "Excludes starting cards, trades, theft, development cards and cloth; shortages count only cards received.")
           : bilingual("城市记升级次数；移船、战舰改装、收复要塞不算新建；被拆除或摧毁的不扣回。", "Cities count upgrades. Ship moves, warship conversions and fortress recovery are excluded; removed or destroyed pieces stay counted.")}</p>
+        ${dataTable(["玩家 / Player", ...keys.map(([zh, en]) => `${zh} / ${en}`), "合计 / Total"], values.map((row, id) => [playerName(id), ...row, sum(row)]))}`;
+    }
+
+    function renderRobbed() {
+      if (game.statistics.players.some(p => !p.robbed)) {
+        body.innerHTML = `<p class="stats-note">${bilingual("本局未记录被抢次数；新开一局即可统计。", "Robbery counts were not recorded for this match. They are available in new matches.")}</p>`;
+        return;
+      }
+      const raids = game.scenario?.kind === "pirates";
+      const keys = [["玩家抢夺", "Player theft", "#b97856"], ...(raids ? [["海盗袭击", "Pirate raids", "#6885a7"]] : [])];
+      const values = game.statistics.players.map(p => [p.robbed.theft, ...(raids ? [p.robbed.raid] : [])]);
+      const max = Math.max(1, ...values.map(sum));
+      body.innerHTML = `<p class="stats-note">${bilingual("每位玩家实际被抢的次数", "Successful robberies suffered by each player")}</p>
+        <div class="stats-bar-legend">${keys.map(([zh, en, color]) => `<span><i class="stats-swatch" style="--swatch:${color}"></i>${bilingual(zh, en)}</span>`).join("")}</div>
+        <div class="stats-bars">${values.map((row, id) => `<div class="stats-bar-row"><div class="stats-bar-person">${badge(id)}<strong>${playerName(id)}</strong><b data-robbed-total="${id}">${sum(row)} <small>次 / times</small></b></div><div class="stats-bar-track" role="img" aria-label="${playerName(id)}: ${keys.map(([zh, en], i) => `${zh} / ${en} ${row[i]}`).join(", ")}">${row.map((n, i) => n ? `<span style="width:${n / max * 100}%;--segment:${keys[i][2]}" title="${keys[i][0]} / ${keys[i][1]}: ${n}"></span>` : "").join("")}</div>${raids ? `<p>${keys.map(([zh, en], i) => `<span>${zh} / ${en} <b>${row[i]}</b></span>`).join("")}</p>` : ""}</div>`).join("")}</div>
+        <p class="stats-note stats-footnote">${bilingual("被强盗、海盗或骑士抢走资源或布匹，每次记 1 次。封锁生产、掷七弃牌、垄断和未抢到东西不计。", "Each successful resource or cloth theft by a robber, pirate or knight counts once. Blocked production, discarding on seven, Monopoly and empty-handed attempts do not count.")}${raids ? bilingual("海盗舰队袭击造成资源损失时，另记 1 次；一次损失多张牌仍只计 1 次。", "A fleet raid that removes resources counts once separately, even if several cards are lost.") : ""}</p>
         ${dataTable(["玩家 / Player", ...keys.map(([zh, en]) => `${zh} / ${en}`), "合计 / Total"], values.map((row, id) => [playerName(id), ...row, sum(row)]))}`;
     }
 

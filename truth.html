@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#17141f"><meta name="description" content="把话题交给骰子。真心话、大冒险，与朋友同屏或在线开一场有故事的派对。">
+<title>敢不敢 · 真心话大冒险 / Truth or Dare</title>
+<link rel="stylesheet" href="truth.css"><link rel="stylesheet" href="game-ui.css"><link rel="stylesheet" href="game-rules.css">
+</head>
+<body>
+<header class="topbar"><a class="brand" href="index.html"><span class="brand-mark"><i data-lucide="dices"></i></span><span>桌游小馆<small>BOARD GAME CLUB</small></span></a><nav><span class="edition">PARTY SERIES / 06</span><button id="soundBtn" class="icon-button" aria-label="音效 / Sound"></button><button id="rulesBtn" class="icon-button bg-rules-trigger" data-rules-game="truth" aria-label="规则 / Rules" title="规则 / Rules"><i data-lucide="book-open"></i></button><a href="index.html" class="back-link"><i data-lucide="arrow-up-right"></i><span>返回小馆</span></a></nav></header>
+<main class="party-layout">
+<section class="play-column">
+<div class="eyebrow"><span class="live-dot"></span> GOOD FRIENDS. GREAT STORIES.</div>
+<div class="title-row"><h1>今晚，<em>敢不敢？</em></h1><span class="title-stamp">TRUTH<br>OR DARE ↗</span></div>
+<p class="intro">有些故事，就差一个开口的理由。<span>Let the dice break the ice.</span></p>
+<div class="table-top"><span id="modeLabel"><i data-lucide="users"></i> 同屏聚会 / Pass & play</span><span id="roundLabel">把话题交给骰子</span></div>
+<section class="play-table" aria-label="游戏桌 / Game table">
+<div class="table-grain"></div><span class="table-corner corner-top">LET IT ROLL</span><span class="table-corner corner-bottom">NO BORING QUESTIONS.</span>
+<div class="table-content">
+<div id="turnPill" class="turn-pill">骰子落下，故事开始 / Roll into a story</div>
+<div id="diceScene" class="dice-scene" aria-hidden="true"><div id="die" class="die" data-value="5"><div class="die-face face-1"><b></b></div><div class="die-face face-2"><b></b><b></b></div><div class="die-face face-3"><b></b><b></b><b></b></div><div class="die-face face-4"><b></b><b></b><b></b><b></b></div><div class="die-face face-5"><b></b><b></b><b></b><b></b><b></b></div><div class="die-face face-6"><b></b><b></b><b></b><b></b><b></b><b></b></div></div><div class="dice-shadow"></div></div>
+<div id="diceResults" class="dice-results" aria-label="本轮点数 / Dice results" hidden></div><div id="challenge" class="challenge" aria-live="polite"><div id="kindBadge" class="kind-badge">点数大的出题，点数小的接招</div><h2 id="promptZh">谁来问，骰子说了算。</h2><p id="promptEn">Highest roll asks. Lowest roll answers.</p></div>
+<div id="askForm" class="ask-form" hidden><label for="customPrompt">想自己出题？ / Write your own <small>可留空使用上方题目 / Optional</small></label><textarea id="customPrompt" maxlength="240" rows="2" placeholder="写一个让对方想认真回答或演出来的题目… / Your question or dare…"></textarea><span id="customCount">0 / 240</span></div><div id="playActions" class="play-actions"><button id="rollBtn" class="primary roll-button"><i data-lucide="dices"></i><span>先邀请你的玩家<small>Add your players to begin</small></span><i data-lucide="arrow-right"></i></button></div>
+<div id="turnHint" class="turn-hint">2–12 人 · 五档气氛 · 随时可以跳过</div>
+</div>
+</section>
+<div class="dice-legend"><span><b>01</b> 大家掷骰 <small>ROLL</small></span><span><b>02</b> 大的出题 <small>ASK</small></span><span><b>03</b> 小的接招 <small>ANSWER</small></span></div>
+<section id="historySection" class="history-section" hidden><div class="section-heading"><h2>今晚的高光 <small>THE HIGHLIGHTS</small></h2><span>最近 12 回合</span></div><ol id="history"></ol></section>
+<div class="bottom-note"><i data-lucide="sparkles"></i><span>好玩的前提是每个人都愿意。换题、跳过，永远不用解释。<small>Keep it mutual. Passing is always part of the game.</small></span></div>
+</section>
+<aside class="sidebar">
+<section id="setup" class="panel setup-panel"><div class="panel-heading"><span class="step-label">01 / GET TOGETHER</span><h2>组个局 <small>Make it a night</small></h2></div>
+<div class="mode-switch" role="group" aria-label="游戏模式 / Game mode"><button data-mode="local" aria-pressed="true"><i data-lucide="users"></i>同屏聚会<small>Pass & play</small></button><button data-mode="online" aria-pressed="false"><i data-lucide="globe-2"></i>在线房间<small>Play online</small></button></div>
+<div id="localSetup"><label class="field-label" for="localNames">今晚都有谁？ <small>PLAYERS</small></label><textarea id="localNames" rows="4" maxlength="240" placeholder="每行一个名字，2–12 人 / One name per line">玩家 1
+玩家 2
+玩家 3
+玩家 4</textarea><p class="field-note">每行一位玩家，按顺序轮流玩 / One player per line</p></div>
+<div id="onlineSetup" hidden><div class="identity"><div id="avatarPicker"></div><label class="field-label" for="playerName">你的名字 / Your name<input id="playerName" maxlength="18" autocomplete="nickname" placeholder="朋友怎么称呼你？"></label></div><div class="connection-status" id="connection" role="status">连接中 / Connecting</div></div>
+<label class="field-label">今晚玩什么？ <small>THE GAME</small></label><div class="categories" role="group" aria-label="题目类型 / Prompt category"><button data-category="truth" aria-pressed="false">真心话<small>TRUTH</small></button><button data-category="dare" aria-pressed="false">大冒险<small>DARE</small></button><button data-category="mixed" aria-pressed="true">两种都有<small>BOTH</small></button></div><label class="field-label">气氛开到几档？ <small>THE VIBE</small></label><div class="levels" role="group" aria-label="刺激等级 / Intensity"><button data-level="chill" aria-pressed="false"><span class="level-rank">LV. 1</span><i data-lucide="smile"></i><b>轻松</b><small>CHILL</small></button><button data-level="heat" aria-pressed="true"><span class="level-rank">LV. 2</span><i data-lucide="flame"></i><b>心跳</b><small>HEAT</small></button><button data-level="wild" aria-pressed="false"><span class="level-rank">LV. 3</span><i data-lucide="zap"></i><b>爆场</b><small>WILD</small></button><button data-level="unmasked" aria-pressed="false"><span class="level-rank">LV. 4</span><i data-lucide="eye"></i><b>失守</b><small>UNMASKED</small></button><button data-level="showdown" aria-pressed="false"><span class="level-rank">LV. 5</span><i data-lucide="message-square"></i><b>摊牌</b><small>SHOWDOWN</small></button></div><p id="levelDescription" class="level-description">感情里的小心思，藏不住的反差。<small>Mixed signals, honest stories, unexpected sides.</small><span class="level-count">真心话 30 题 · 大冒险 20 题 / 30 Truth · 20 Dare</span></p>
+<div class="setting-row"><label for="rounds">对决轮数 / Rounds</label><select id="rounds"><option value="3">3 轮 · 热个场</option><option value="5" selected>5 轮 · 聊开了</option><option value="8">8 轮 · 今晚尽兴</option></select></div>
+<button id="createBtn" class="primary wide"><span>开始这一局 / Let's play</span><i data-lucide="arrow-right"></i></button>
+<form id="joinForm" class="join-form" hidden><label for="roomInput">已有房间码？ / Join your friends</label><div><input id="roomInput" placeholder="6 位房间码 / Room code" maxlength="6" autocapitalize="characters" autocomplete="off"><button type="submit" aria-label="加入房间 / Join room"><i data-lucide="arrow-right"></i></button></div></form>
+</section>
+<section id="roomPanel" class="panel" hidden><div class="room-heading"><div><span id="roomType" class="step-label">THE PARTY</span><h2 id="roomCode"></h2></div><button id="copyBtn" class="icon-button" aria-label="复制邀请 / Copy invite"><i data-lucide="link"></i></button><button id="leaveBtn" class="icon-button" aria-label="退出 / Leave"><i data-lucide="log-out"></i></button></div><div id="roomSettings" class="room-settings"></div><div class="section-heading"><h3>在座各位 <small>THE CREW</small></h3><span id="playerCount"></span></div><div id="players" class="players"></div><div id="lobbyActions" class="lobby-actions"><button id="addBotBtn">添加陪玩 / Add bot</button><button id="readyBtn">准备 / Ready</button><button id="startBtn" class="primary wide">人齐，开局 / Start</button></div><button id="restartBtn" class="primary wide" hidden>再来一局 / Play again</button></section>
+<section id="chatPanel" class="panel chat-panel" hidden><details open><summary>聊两句 <small>ROOM CHAT</small><i data-lucide="message-circle"></i></summary><p class="field-note">直接打字回答，或配合你们的语音／视频通话。<br>Answer here, or play alongside your own voice/video call.</p><div id="messages" class="messages" aria-live="polite"></div><form id="chatForm"><input id="chatText" maxlength="160" placeholder="说点什么 / Say something" aria-label="聊天消息 / Chat message" autocomplete="off"><button aria-label="发送 / Send"><i data-lucide="send"></i></button></form></details></section>
+<div id="error" class="notice" role="alert"></div>
+<div class="prompt-preview"><div><i data-lucide="quote"></i><span>今晚可能聊到… <small>A LITTLE PREVIEW</small></span></div><p>你嘴上说「无所谓」，<br>其实最在意的是什么？</p><span>不查户口，只聊真的。<br><small>Less small talk. More real stories.</small></span></div>
+</aside>
+</main>
+<footer><span>桌游小馆 / BOARD GAME CLUB</span><span>GOOD COMPANY IS THE WHOLE POINT.</span></footer>
+<dialog id="leaveDialog" class="leave-dialog"><h2>结束这次聚会？<small>Leave this party?</small></h2><p id="leaveText"></p><div><button id="cancelLeave">留下 / Stay</button><button id="confirmLeave" class="primary">离开 / Leave</button></div></dialog>
+<script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-audio.js"></script><script src="game-ui.js"></script><script src="game-rules-data.js"></script><script src="game-rules.js"></script><script src="truth-data.js"></script><script src="truth-engine.js"></script><script src="truth.js"></script>
+</body></html>

@@ -7,6 +7,150 @@
     ]
   };
   const data = {
+    truth: {
+      "title": [
+        "真心话大冒险规则",
+        "Truth or Dare Rules"
+      ],
+      "sections": [
+        {
+          "id": "goal",
+          "title": [
+            "最高点出题，最低点接招",
+            "Highest asks, lowest answers"
+          ],
+          "paragraphs": [
+            [
+              "这是本馆原创的 2–12 人骰子派对玩法。每轮所有人掷骰子，最高点玩家向最低点玩家出题。最低点玩家回答真心话或完成大冒险后得 1 分；全局指定轮数结束后最高分获胜，同分者共同获胜。",
+              "This original club dice-party variant is for 2–12 players. Everyone rolls each round: the highest roller asks the lowest roller a truth or dare. The lowest roller earns 1 point for answering or completing it. After the selected total rounds, the highest score wins; tied leaders share the win."
+            ]
+          ]
+        },
+        {
+          "id": "setup",
+          "title": [
+            "三种玩法，同机或联机",
+            "Three categories, local or online"
+          ],
+          "paragraphs": [
+            [
+              "同机轮流：输入大家的名字，把同一台设备交给当前玩家操作。好友联机：房主创建房间，朋友用房间码加入，各自操作自己的回合。",
+              "Pass & play: enter everyone’s names and pass one device to the required player. Online: the host creates a room, friends join using its code, and each person controls their own actions."
+            ],
+            [
+              "开局可选「仅真心话」「仅大冒险」或「两种都要」。前两种整局固定题目类型；两种都要时，每轮由最高点玩家选择真心话或大冒险，再向最低点玩家出题。骰点只用来比较大小，不决定题目类别。",
+              "Choose Truth only, Dare only or Both before starting. The first two fix the category for the whole game. In Both mode, each round’s highest roller chooses Truth or Dare before asking the lowest roller. Dice values compare players; they do not determine the category."
+            ],
+            [
+              "同时选择轻松 Chill、心跳 Heat、爆场 Wild、失守 Unmasked、摊牌 Showdown 五档题库强度，每档 30 道真心话、20 道大冒险。再选择全局共 3、5 或 8 轮。这里的轮数是整局轮数，不是每人回合数。强度影响题目，不改变掷骰概率或计分。",
+              "Also choose one of five levels: Chill, Heat, Wild, Unmasked or Showdown. Each level has 30 Truth and 20 Dare prompts. Then select 3, 5 or 8 total rounds for the game. These are whole-game rounds, not turns per person. Intensity changes prompts, not dice odds or scoring."
+            ]
+          ]
+        },
+        {
+          "id": "dice",
+          "title": [
+            "全员掷骰与平点加赛",
+            "Everyone rolls & ties reroll"
+          ],
+          "paragraphs": [
+            [
+              "每轮从名单第一位开始依次掷一颗六面骰，全部掷完才比较最高与最低点；界面保留每位玩家的骰点。只有当前提示的玩家可以掷骰。",
+              "Each round, starting with the first name, everyone rolls one six-sided die in list order. Compare the highest and lowest only after all have rolled; every result remains visible. Only the prompted player may roll."
+            ],
+            [
+              "最高点并列时，只让并列最高的玩家加赛，直到唯一最高点成为出题者；最低点并列时，只让并列最低的玩家加赛，直到唯一最低点成为接招者。两端都并列时先决出最高，再决出最低。",
+              "If the highest value is tied, only those tied highest reroll until one asker remains. If the lowest is tied, only those tied lowest reroll until one target remains. If both ends tie, resolve the highest tie first, then the lowest."
+            ],
+            [
+              "加赛只在对应的并列玩家之间比较，不拿加赛骰点与已经确定角色的玩家重新比较。若第一轮所有人点数相同，则全员重新掷骰，重新比较高低，直到能分出两端。出题者与接招者不会是同一个人。",
+              "A tiebreak compares only its tied candidates, never against players whose roles are already settled. If everyone’s initial value is identical, everyone rerolls and compares again until the two ends differ. The asker and target are always different people."
+            ]
+          ]
+        },
+        {
+          "id": "ask",
+          "title": [
+            "最高点准备题目，最低点回应",
+            "The highest prepares; the lowest responds"
+          ],
+          "paragraphs": [
+            [
+              "确定出题者后，仅该玩家可选类别（两种都要模式）、使用系统抽出的题目或免费换题，也可以输入最多 240 字的自定义题目。自定义内容必须符合本局选定的真心话或大冒险类别。",
+              "Once the asker is known, only that player may choose the category in Both mode, use a drawn prompt, draw another for free, or enter a custom prompt up to 240 characters. Custom prompts must match the selected Truth or Dare category."
+            ],
+            [
+              "出题者点击「就问这题」才把题目交给最低点玩家；留空自定义框则使用当前系统题目。换题不限次数，不扣分、不消耗轮数，题库用完可再次抽到已有题目。",
+              "The asker selects Ask this to send the prompt to the lowest roller. Leave the custom box empty to use the current drawn prompt. New prompt is unlimited and free, with no score or round cost; prompts may repeat after the deck is exhausted."
+            ],
+            [
+              "题目发出后，仅最低点玩家可以点击「完成」得 1 分，或点击「跳过」得 0 分。跳过不扣已有分数。回应后结束本轮，所有人开始下一轮掷骰。出题者不能替对方确认完成。",
+              "After the prompt is sent, only the lowest roller may select Complete for 1 point or Skip for 0. Skipping never deducts existing points. Their response ends the round and everyone rolls again. The asker cannot confirm completion on the target’s behalf."
+            ]
+          ]
+        },
+        {
+          "id": "consent",
+          "title": [
+            "热闹由大家做主",
+            "Everyone sets the boundaries"
+          ],
+          "paragraphs": [
+            [
+              "任何题目都可以拒绝、换题或跳过，不需要解释。涉及另一位玩家时，先得到对方同意；对方拒绝就换题。不要强迫别人回答隐私、接触身体、拍照或公开分享。",
+              "Anyone may decline, change or skip a prompt without explanation. If another player is involved, ask for their consent first and change the prompt if they decline. Never pressure someone to disclose private information, accept physical contact, be photographed or share anything publicly."
+            ],
+            [
+              "游戏不要求喝酒，也没有饮酒惩罚。刺激来自即兴表演和朋友互动；不用危险动作或让人不舒服的要求换取分数。",
+              "The game requires no alcohol and has no drinking penalties. The excitement comes from improvisation and friendly interaction; points never require dangerous actions or uncomfortable requests."
+            ]
+          ]
+        },
+        {
+          "id": "finish",
+          "title": [
+            "全局轮数与结算",
+            "Total rounds & results"
+          ],
+          "paragraphs": [
+            [
+              "每轮以最低点玩家完成或跳过结束；加赛掷骰和换题不增加轮数。全局达到 3、5 或 8 轮后结束，显示所有人的分数和实际获胜者。最高分并列时共同获胜，包括全员 0 分。",
+              "Each round ends when its lowest roller completes or skips. Tiebreak rolls and new prompts do not add rounds. After 3, 5 or 8 total rounds, results show everyone’s score and name the actual winners. Tied high scores share the win, including a tie at 0."
+            ],
+            [
+              "机器人和托管玩家可自动掷骰、选题、使用系统题目出题；轮到接招时只会自动跳过，得 0 分，不会宣称真人完成了现实中的挑战。正常连接的托管玩家仍显示在线。",
+              "Bots and auto-playing players can roll, choose a category and ask a drawn prompt automatically. When targeted, they only skip for 0 points and never claim that a real person performed a challenge. Connected players remain online during auto-play."
+            ]
+          ]
+        },
+        {
+          "id": "room",
+          "title": [
+            "联机房间与中途补位",
+            "Online rooms & replacements"
+          ],
+          "paragraphs": [
+            [
+              "房主管理沿用本馆共享规则：转让或申请房主需对方同意。房主掉线保留身份五分钟，期间回来仍是房主；持续离线到期后按座位顺序交给下一位在线真人，主动离开则立即交接。",
+              "Shared room controls apply: a host transfer or request requires the other person's approval. A disconnected host keeps hosting for five minutes; returning in time cancels succession. On expiry, the next online human in seat order takes over. Explicitly leaving transfers hosting immediately."
+            ],
+            [
+              "开局后房主可通过两次具名确认移除其他真人或机器人，空位保留原座位与分数并暂停行动。新加入的真人填第一个空位，或由房主给指定空位补机器人，全部补齐后继续。移除不是封禁，被移除者可主动输入房间码再次加入；刷新不自动重新入座。",
+              "After starting, the host may remove another human or bot through two confirmations naming the target. The vacant seat keeps its position and score, and play pauses. A new human fills the first vacancy, or the host assigns a bot to a chosen vacancy; play resumes once all vacancies are filled. Removal is not a ban: the person may enter the code to join again, but is not automatically reseated on refresh."
+            ],
+            [
+              "两分钟未操作自动托管默认关闭，仅房主可为全房开启。开启后只对当前需行动的在线真人计时，最后 20 秒提醒；有效行动或「我还在」会重置时间。聊天、头像和表情不重置计时，空位时暂停。关闭房间托管会停止超时接管，但保留个人主动开启的托管。",
+              "Room-wide two-minute idle auto-play is off by default and only the host may enable it. When enabled, only the required connected human actor is timed, with a warning in the final 20 seconds. A valid action or Stay acknowledgement resets the timer; chat, profiles and reactions do not. Vacancies suspend timers. Disabling the room policy stops timeout auto-play while preserving manually enabled auto-play."
+            ],
+            [
+              "每位玩家都可以主动开启或停止自己的托管。掉线不会自动替你跳过，房间等待你回来或由房主管理补位。房间保存在服务器内存中，服务器重启后需要重新开房。",
+              "Each player may start or stop personal auto-play. Disconnecting never automatically skips your turn: the room waits for your return or a host-managed replacement. Rooms live in server memory, so a server restart requires a new room."
+            ]
+          ]
+        }
+      ],
+      "sources": []
+    },
     poker: {
       title: ["德州扑克规则", "Texas Hold'em Rules"], sections: [
         { id: "goal", title: ["如何获胜", "The goal"], paragraphs: [

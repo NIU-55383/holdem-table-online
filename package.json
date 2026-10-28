@@ -2,14 +2,14 @@
   "name": "holdem-table-online",
   "version": "1.0.0",
   "private": true,
-  "description": "Bilingual board game club with Hold'em, Catan, Gomoku, Xiangqi and Bridge.",
+  "description": "Bilingual board game club with Hold'em, Catan, Gomoku, Xiangqi, Bridge and dice Truth or Dare.",
   "main": "server.js",
   "scripts": {
     "postinstall": "node engine-setup.js",
     "test:ai": "node --test duel-bot-test.js duel-test.js",
     "benchmark:ai": "node duel-ai-benchmark.js",
     "start": "node server.js",
-    "test": "node integration-test.js && node --test four-game-test.js game-rules-test.js bridge-test.js bridge-bot-test.js bridge-network-test.js bridge-lesson-test.js catan-test.js catan-stats-test.js catan-extension-test.js catan-audio-test.js catan-music-test.js game-audio-test.js avatar-test.js social-test.js seafarers-test.js seafarers-expansion-test.js catan-scenario-maps-test.js catan-scenario-engine-test.js catan-scenario-network-test.js duel-test.js room-control-test.js && node --test duel-bot-test.js",
+    "test": "node integration-test.js && node --test four-game-test.js game-rules-test.js truth-test.js truth-network-test.js bridge-test.js bridge-bot-test.js bridge-network-test.js bridge-lesson-test.js catan-test.js catan-stats-test.js catan-extension-test.js catan-audio-test.js catan-music-test.js game-audio-test.js avatar-test.js social-test.js seafarers-test.js seafarers-expansion-test.js catan-scenario-maps-test.js catan-scenario-engine-test.js catan-scenario-network-test.js duel-test.js room-control-test.js && node --test duel-bot-test.js",
     "test:catan-stats-ui": "node catan-stats-ui-test.js",
     "test:bridge": "node --test bridge-test.js bridge-bot-test.js bridge-network-test.js bridge-lesson-test.js",
     "benchmark:bridge": "node bridge-ai-benchmark.js",
@@ -17,7 +17,9 @@
     "test:bridge-lesson-ui": "node bridge-lesson-ui-test.js",
     "test:rules": "node --test game-rules-test.js",
     "test:rules-ui": "node game-rules-ui-test.js",
-    "test:music": "node catan-music-test.js --browser"
+    "test:music": "node catan-music-test.js --browser",
+    "test:truth": "node --test truth-test.js truth-network-test.js",
+    "test:truth-ui": "node truth-ui-test.js"
   },
   "engines": {
     "node": ">=20"

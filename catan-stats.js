@@ -8,11 +8,12 @@ function point(g, turn, player, part, score) {
 
 function create(g, score) {
   return {
-    id: randomUUID(), version: 1,
+    id: randomUUID(), version: 2,
     history: [point(g, 0, null, null, score)],
     dice: Array(11).fill(0),
     players: g.players.map(p => ({
       production: Array(5).fill(0), gold: Array(5).fill(0),
+      robbed: { theft: 0, raid: 0 },
       built: {
         settlement: g.board.vertices.filter(v => v.owner === p.id && v.level === 1).length,
         city: g.board.vertices.filter(v => v.owner === p.id && v.level === 2).length,
@@ -28,6 +29,10 @@ function received(g, player, resource, amount, source) {
     const counters = g.statistics?.players[player];
     if (counters) counters[source][resource] += amount;
   }
+}
+function robbed(g, player, source) {
+  const counters = g.statistics?.players[player]?.robbed;
+  if (counters && (source === "theft" || source === "raid")) counters[source]++;
 }
 
 function record(g, before, id, action, score) {
@@ -45,4 +50,4 @@ function publicStatistics(g) {
   return g.phase === "over" && g.statistics ? structuredClone(g.statistics) : null;
 }
 
-module.exports = { create, received, record, publicStatistics };
+module.exports = { create, received, robbed, record, publicStatistics };

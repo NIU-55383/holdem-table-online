@@ -53,7 +53,7 @@ const duel=attachDuel(server);server.on("upgrade",duel.upgrade);
     assert.equal(await xGuest.page.locator("#roomCode").textContent(),xCode,"The displayed Xiangqi code can be entered as-is, without another prefix");
     assert.equal(await xGuest.page.evaluate(()=>window.testState.kind),"xiangqi");
     await xGuest.ctx.close();await xHost.ctx.close();
-    const hub=await browser.newPage({viewport:{width:390,height:844}});await hub.goto(`${base}/index.html`);assert.equal(await hub.locator(".club-game").count(),5);
+    const hub=await browser.newPage({viewport:{width:390,height:844}});await hub.goto(`${base}/index.html`);assert.equal(await hub.locator(".club-game").count(),6);
     for(const width of [320,390,1440]){
       await hub.setViewportSize({width,height:900});
       for(const interaction of ["default","hover","focus"]){

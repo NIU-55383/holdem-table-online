@@ -7,6 +7,7 @@ const { execFile } = require("child_process");
 const { attachCatan } = require("./catan-server");
 const { attachDuel } = require("./duel-server");
 const { attachBridge } = require("./bridge-server");
+const { attachTruth } = require("./truth-server");
 const AvatarData = require("./avatar-data");
 const Social = require("./game-social");
 
@@ -1498,10 +1499,12 @@ const server = http.createServer((request, response) => {
 const catan = attachCatan(server);
 const duel = attachDuel(server);
 const bridge = attachBridge(server);
+const truth = attachTruth(server);
 
 server.on("upgrade", (request, socket, head) => {
   if (request.url === "/duel-ws") { duel.upgrade(request, socket, head); return; }
   if (request.url === "/bridge-ws") { bridge.upgrade(request, socket, head); return; }
+  if (request.url === "/truth-ws") { truth.upgrade(request, socket, head); return; }
   if (request.url === "/catan-ws") {
     catan.upgrade(request, socket, head);
     return;

@@ -2,9 +2,9 @@
 const {test}=require("node:test"),assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path"),{spawn}=require("node:child_process"),{once}=require("node:events"),{WebSocket}=require("ws");
 const retired=require("./retired-files.json");
 
-test("release keeps five game entries and no retired game implementation",()=>{
+test("release keeps six game entries and no retired game implementation",()=>{
   const html=fs.readFileSync(path.join(__dirname,"index.html"),"utf8"),cards=[...html.matchAll(/<a class="club-game [^"]+" href="([^"]+)"/g)].map(m=>m[1]);
-  assert.deepEqual(cards,["catan.html","bridge.html","duel.html?game=gomoku","duel.html?game=xiangqi"]);assert.equal([...html.matchAll(/class="club-game /g)].length,5);assert.match(html,/<button class="club-game poker-game"[^>]+data-open-view="online"/);
+  assert.deepEqual(cards,["catan.html","bridge.html","duel.html?game=gomoku","duel.html?game=xiangqi","truth.html"]);assert.equal([...html.matchAll(/class="club-game /g)].length,6);assert.match(html,/<button class="club-game poker-game"[^>]+data-open-view="online"/);
   const nav = html.match(/<nav class="view-tabs"[\s\S]*?<\/nav>/)[0];
   assert.deepEqual([...nav.matchAll(/<a href="([^"]+)"/g)].map(m=>m[1]), cards);
   for(const file of retired)assert.equal(fs.existsSync(path.join(__dirname,file)),false,`${file} has been removed`);
@@ -16,7 +16,7 @@ test("game server serves current assets and rejects retired URLs and websocket e
   const port=18948,server=spawn(process.execPath,[path.join(__dirname,"server.js")],{cwd:__dirname,windowsHide:true,env:{...process.env,PORT:String(port),LOCAL_ONLY:"1",AUTO_OPEN:"0"},stdio:["ignore","pipe","pipe"]});let errors="";server.stderr.on("data",data=>errors+=data);
   try{
     await once(server.stdout,"data");const base=`http://127.0.0.1:${port}`;
-    for(const file of ["index.html","catan.html","duel.html?game=gomoku","duel.html?game=xiangqi","bridge.html","bridge.js","bridge.css","bridge-art.svg","bridge-audio.js","catan-scenarios.js","avatar-data.js","social-data.js","game-audio.js","game-ui.js","vendor/lucide.min.js"]){const response=await fetch(base+"/"+file);assert.equal(response.status,200,file);await response.arrayBuffer();}
+    for(const file of ["index.html","catan.html","duel.html?game=gomoku","duel.html?game=xiangqi","bridge.html","bridge.js","bridge.css","bridge-art.svg","bridge-audio.js","truth.html","truth.js","truth.css","truth-data.js","truth-engine.js","catan-scenarios.js","avatar-data.js","social-data.js","game-audio.js","game-ui.js","vendor/lucide.min.js"]){const response=await fetch(base+"/"+file);assert.equal(response.status,200,file);await response.arrayBuffer();}
     for(const players of [3,4,5,6]){const response=await fetch(`${base}/api/catan-preview?map=base&players=${players}`);assert.equal(response.status,200);const board=await response.json();assert.equal(board.tiles.length,players>4?30:19);assert.equal(board.ports.length,players>4?11:9);}
     for(const file of retired){const response=await fetch(base+"/"+file,{method:"HEAD"});assert.equal(response.status,404,file);}
     const response=await fetch(base+"/RICHMAN.HTML",{method:"HEAD"});assert.equal(response.status,404);

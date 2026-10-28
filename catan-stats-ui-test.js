@@ -81,14 +81,23 @@ function finish(g, rng = seeded(72)) {
     assert.match(await host.locator(".stats-footnote").textContent(), /Excludes starting cards/);
     await host.locator("#statsTab-builds").click();
     assert.match(await host.locator(".stats-footnote").textContent(), /Cities count upgrades/);
+    await host.locator("#statsTab-robbed").click();
+    assert.deepEqual(await host.locator("[data-robbed-total]").allTextContents(), g.statistics.players.map(p => `${p.robbed.theft} 次 / times`));
+    assert.ok(g.statistics.players.some(p => p.robbed.theft > 0), "The completed game includes actual theft");
+    assert.match(await host.locator(".stats-footnote").textContent(), /discarding on seven, Monopoly/);
+    await host.locator(".stats-data summary").click();
+    assert.equal(await host.locator(".stats-data tbody tr").count(), 6);
+    await host.locator("#statsTab-scores").focus(); await host.keyboard.press("End");
+    assert.equal(await host.locator("#statsTab-robbed").getAttribute("aria-selected"), "true");
     for (const [width, height] of [[1440, 1000], [390, 844], [320, 568], [844, 390]]) {
       await host.setViewportSize({ width, height });
-      for (const tab of ["scores", "dice", "resources", "builds"]) {
+      for (const tab of ["scores", "dice", "resources", "builds", "robbed"]) {
         await host.locator(`#statsTab-${tab}`).click();
         assert.equal(await host.evaluate(() => {
           const d = document.getElementById("statisticsDialog"), b = document.getElementById("statisticsBody");
           const rect = d.getBoundingClientRect(), heading = d.querySelector(".dialog-heading").getBoundingClientRect();
-          return b.scrollWidth <= b.clientWidth + 1 && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight && heading.top >= rect.top;
+          const tabsFit = [...d.querySelectorAll('[role="tab"]')].every(t => t.scrollWidth <= t.clientWidth + 1);
+          return tabsFit && b.scrollWidth <= b.clientWidth + 1 && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight && heading.top >= rect.top;
         }), true, `Statistics fit ${width}x${height}: ${tab}`);
         await host.locator("#statisticsDialog").screenshot({ path: `test-results/catan-stats-${tab}-${width}.png`, animations: "disabled" });
       }
@@ -111,6 +120,7 @@ function finish(g, rng = seeded(72)) {
     assert.equal(await host.evaluate(() => testState.game.statistics), null);
     assert.notEqual(room.game.statistics.id, history.id);
     assert.equal(E.sum(room.game.statistics.dice), 0);
+    assert.ok(room.game.statistics.players.every(p => p.robbed.theft === 0 && p.robbed.raid === 0));
     // An already-open rules dialog is never replaced; stats wait for its dismissal.
     await host.locator("#gameBaseRules").click();
     await host.locator("#helpDialog[open]").waitFor();
@@ -119,8 +129,41 @@ function finish(g, rng = seeded(72)) {
     await host.locator('[data-close="helpDialog"]').click();
     await host.locator("#statisticsDialog[open]").waitFor();
     await guest.locator("#statisticsDialog[open]").waitFor();
+    room.game.statistics.version = 1;
+    room.game.statistics.players.forEach(p => delete p.robbed);
+    await sync(); await host.locator("#statsTab-robbed").click();
+    assert.match(await host.locator("#statisticsBody").textContent(), /not recorded for this match/);
+    assert.equal(await host.locator("[data-robbed-total]").count(), 0, "Missing historical data is not shown as zero");
+
+    // A controlled finished Pirate Islands match covers the separate raid series and zero counts.
+    await send(host, { type: "create", name: "Alice", seats: 4, mapId: "pirates" });
+    await host.locator("#lobby").waitFor();
+    const pirateCode = await host.locator("#copyCode").textContent();
+    await send(host, { type: "fillBots" }); await host.waitForFunction(() => testState.seats.length === 4);
+    await send(host, { type: "start" }); await host.locator("#game").waitFor();
+    await host.evaluate(() => document.querySelectorAll("dialog[open]").forEach(d => d.close()));
+    const pirateRoom = catan.rooms.get(pirateCode), pirate = pirateRoom.game; clearTimeout(pirateRoom.timer);
+    pirate.phase = "over"; pirate.winner = 0;
+    pirate.statistics.players[0].robbed = { theft: 2, raid: 1 };
+    pirate.statistics.players[2].robbed = { theft: 0, raid: 2 };
+    const syncPirates = async () => {
+      const revision = ++pirate.revision; await send(host, { type: "chat", text: "" });
+      await host.waitForFunction(r => testState.game.revision === r, revision);
+    };
+    await syncPirates(); await host.locator("#statisticsDialog[open]").waitFor();
+    for (const [width, height] of [[1440, 1000], [390, 844]]) {
+      await host.setViewportSize({ width, height }); await host.locator("#statsTab-robbed").click();
+      assert.deepEqual(await host.locator("[data-robbed-total]").allTextContents(), [3, 0, 2, 0].map(n => `${n} 次 / times`));
+      assert.match(await host.locator(".stats-footnote").textContent(), /even if several cards are lost/);
+      assert.equal(await host.locator(".stats-bar-track>span").count(), 3);
+      await host.locator("#statisticsDialog").screenshot({ path: `test-results/catan-stats-robbed-pirates-${width}.png`, animations: "disabled" });
+    }
+    pirate.statistics.players.forEach(p => { p.robbed = { theft: 0, raid: 0 }; });
+    await syncPirates(); await host.locator("#statsTab-robbed").click();
+    assert.deepEqual(await host.locator("[data-robbed-total]").allTextContents(), Array(4).fill("0 次 / times"));
+    assert.equal(await host.locator(".stats-bar-track>span").count(), 0);
     assert.deepEqual(errors, []);
-    console.log("Catan stats UI passed: two clients, all four charts, six seats, desktop/mobile/landscape, keyboard, tables, privacy, reconnect, rematch and deferred auto-open.");
+    console.log("Catan stats UI passed: two clients, all five charts, six seats, desktop/mobile/landscape, keyboard, tables, privacy, reconnect, rematch, legacy and zero robbery counts, pirate raids and deferred auto-open.");
   } finally {
     await browser?.close();
     for (const room of catan.rooms.values()) clearTimeout(room.timer);

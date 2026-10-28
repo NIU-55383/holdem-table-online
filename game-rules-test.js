@@ -42,3 +42,13 @@ test("rules retain the implemented variants, all ten poker ranks and all seven X
   assert.match(read("app.js"), /BoardGameRules.open\("poker", "rankings"\)/);
   assert.doesNotMatch(read("index.html"), /id="handRankModal"/);
 });
+
+test("truth or dare rules cover highest/lowest contests, categories, ties and consent", () => {
+  assert.deepEqual(data.truth.title, ["真心话大冒险规则", "Truth or Dare Rules"]);
+  const rules = JSON.stringify(data.truth);
+  for (const text of ["2–12", "Pass & play", "Online", "Truth only", "Dare only", "Both", "Chill", "Heat", "Wild", "Unmasked", "Showdown", "30 Truth and 20 Dare prompts", "3, 5 or 8 total rounds", "highest roller", "lowest roller", "only those tied highest reroll", "only those tied lowest reroll", "everyone rerolls", "240 characters", "no score or round cost", "consent", "no alcohol", "only skip for 0", "five minutes", "final 20 seconds"]) assert(rules.includes(text), text);
+  assert(!rules.includes("1–2 means Truth"), "dice no longer choose prompt category");
+  assert.equal(data.truth.sources.length, 0, "original club variant has no external official ruleset");
+  assert.match(read("truth.html"), /data-rules-game="truth"/);
+  assert.match(read("index.html"), /class="club-game truth-game" href="truth.html"/);
+});

@@ -22,6 +22,7 @@ async function main() {
     const page = await ctx.newPage(); page.on("pageerror", (e) => errors.push(e.message));
     const cases = [
       { game: "poker", url: "/index.html", button: '[data-rules-game="poker"]', dialog: "#gameRulesDialog", title: "Texas Hold'em Rules" },
+      { game: "truth", url: "/truth.html", button: "#rulesBtn", dialog: "#gameRulesDialog", title: "Truth or Dare Rules" },
       { game: "gomoku", url: "/duel.html?game=gomoku", button: "#rulesBtn", dialog: "#gameRulesDialog", title: "Gomoku Rules" },
       { game: "xiangqi", url: "/duel.html?game=xiangqi", button: "#rulesBtn", dialog: "#gameRulesDialog", title: "Xiangqi Rules" },
       { game: "bridge", url: "/bridge.html", button: "#rulesBtn", dialog: "#rulesDialog", title: "Bridge Rules" },
@@ -65,7 +66,7 @@ async function main() {
     await page.evaluate(() => document.querySelector(".hand-rank-open").click());
     assert.equal(await page.locator('#gameRulesDialog [data-rule-section="rankings"] li').count(), 10);
     assert(await page.locator("#gameRulesDialog .bg-rules-body").evaluate((el) => el.scrollTop > 0));
-    assert.deepEqual(errors, []); console.log("Shared rules browser checks passed: all five games, Seafarers/map rules, four viewports, end scrolling, keyboard, focus, rankings and no gameplay messages.");
+    assert.deepEqual(errors, []); console.log("Shared rules browser checks passed: all six games, Seafarers/map rules, four viewports, end scrolling, keyboard, focus, rankings and no gameplay messages.");
   } finally {
     await browser?.close(); const closed = once(child, "exit"); child.kill(); await closed;
   }

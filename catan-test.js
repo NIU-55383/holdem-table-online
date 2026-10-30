@@ -593,7 +593,7 @@ test("Catan snapshots negotiate compression and still support uncompressed clien
   }
 });
 
-test("live targeted trades wait two seconds, ignore chat timing and schedule only the selected bot", { timeout: 15000 }, async () => {
+test("live trades wait five seconds, preserve human response time and schedule only the selected bot", { timeout: 25000 }, async (t) => {
   const http = require("node:http"), { once } = require("node:events"), { WebSocket } = require("ws");
   const { attachCatan } = require("./catan-server");
   const server = http.createServer(), catan = attachCatan(server), sockets = [];
@@ -604,7 +604,7 @@ test("live targeted trades wait two seconds, ignore chat timing and schedule onl
     sockets.push(ws); ws.on("message", (raw) => messages.push(JSON.parse(raw)));
     const send = (data) => ws.send(JSON.stringify(data));
     const next = async (predicate) => {
-      for (let i = 0; i < 500; i++) { const found = messages.find(predicate); if (found) return found; await new Promise((r) => setTimeout(r, 10)); }
+      for (let i = 0; i < 800; i++) { const found = messages.find(predicate); if (found) return found; await new Promise((r) => setTimeout(r, 10)); }
       throw new Error("Missing trade socket message");
     };
     await once(ws, "open"); send({ type: "hello" }); await next((m) => m.type === "welcome");
@@ -628,23 +628,35 @@ test("live targeted trades wait two seconds, ignore chat timing and schedule onl
     a.send({ type: "action", action: { ...offer, to: 3 } });
     const botOffer = await b.next((m) => m.game?.trade?.to === 3);
     const deadline = room.tradeThinking.deadline;
-    assert.ok(deadline - Date.now() > 1800 && deadline - Date.now() <= 2000);
+    assert.ok(deadline - Date.now() > 4800 && deadline - Date.now() <= 5000);
     await new Promise(resolve => setTimeout(resolve, 700));
     assert.equal(room.game.trade?.id, botOffer.game.trade.id, "No response before the thinking time ends");
     a.send({ type: "chat", text: "Thinking time test" });
     await a.next(m => m.chat?.some(message => message.text === "Thinking time test"));
-    assert.equal(room.tradeThinking.deadline, deadline, "Chat must not restart the two-second wait");
+    assert.equal(room.tradeThinking.deadline, deadline, "Chat must not restart the five-second wait");
+    a.send({ type: "profile", avatar: null });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    assert.equal(room.tradeThinking.deadline, deadline, "Profile updates must not shorten or restart the wait");
     b.send({ type: "action", action: { type: "acceptTrade", offerId: botOffer.game.trade.id } });
     await b.next((m) => m.type === "error" && m.message.includes("addressed to another player"));
     const done = await a.next((m) => m.game?.revision > botOffer.game.revision && !m.game.trade);
-    assert.ok(performance.now() - thinkingStarted >= 1990, "Bot acceptance waits two seconds");
+    const acceptanceTime = performance.now() - thinkingStarted;
+    assert.ok(acceptanceTime >= 4990, "Bot acceptance waits five seconds");
+    t.diagnostic(`Bot accepted after ${acceptanceTime.toFixed(0)} ms`);
     assert.deepEqual(room.game.players[2].resources, [0, 3, 0, 0, 0], "Unselected bot must not trade");
     assert.deepEqual(room.game.players[3].resources, [1, 2, 0, 0, 0], "Selected bot must respond even with earlier bots seated");
     assert.equal(done.game.players[3].resources, null);
     a.send({ type: "action", action: { ...offer, to: null } });
     const open = await b.next((m) => m.game?.revision > done.game.revision && m.game.trade?.to === null);
+    const openDeadline = room.tradeThinking.deadline;
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    assert.equal(room.game.trade?.id, open.game.trade.id, "An open offer remains available to humans after three seconds");
+    assert.deepEqual(room.game.trade.rejected, []);
     b.send({ type: "action", action: { type: "acceptTrade", offerId: open.game.trade.id } });
     const traded = await a.next((m) => m.game?.revision > open.game.revision && !m.game.trade);
+    const humanTrade = structuredClone(room.game);
+    await new Promise(resolve => setTimeout(resolve, Math.max(0, openDeadline - Date.now()) + 100));
+    assert.deepEqual(room.game, humanTrade, "A human acceptance cancels the pending bot response");
     room.game.deck.splice(room.game.deck.indexOf("plenty"), 1);
     room.game.players[0].development.push({ type: "plenty", turn: 0 });
     const beforePlenty = [...room.game.players[0].resources];
@@ -688,7 +700,7 @@ test("live targeted trades wait two seconds, ignore chat timing and schedule onl
   }
 });
 
-test("bot trade rejections also wait two seconds; replacement offers restart and cancelled offers never execute", { timeout: 20000 }, async () => {
+test("bot trade rejections also wait five seconds; replacement offers restart and cancelled offers never execute", { timeout: 35000 }, async (t) => {
   const http = require("node:http"), { once } = require("node:events"), { WebSocket } = require("ws");
   const server = http.createServer(), catan = require("./catan-server").attachCatan(server), sockets = [];
   server.on("upgrade", (request, socket, head) => catan.upgrade(request, socket, head));
@@ -699,7 +711,7 @@ test("bot trade rejections also wait two seconds; replacement offers restart and
     sockets.push(ws); ws.on("message", raw => messages.push(JSON.parse(raw)));
     const send = data => ws.send(JSON.stringify(data));
     const next = async predicate => {
-      for (let i = 0; i < 500; i++) { const found = messages.find(predicate); if (found) return found; await sleep(10); }
+      for (let i = 0; i < 800; i++) { const found = messages.find(predicate); if (found) return found; await sleep(10); }
       throw new Error("Missing timed trade response");
     };
     await once(ws, "open"); send({ type: "hello" }); await next(m => m.type === "welcome");
@@ -721,7 +733,9 @@ test("bot trade rejections also wait two seconds; replacement offers restart and
     await sleep(700);
     assert.deepEqual(room.game.trade.rejected, []);
     await a.next(m => m.game?.trade?.id === first.game.trade.id && m.game.trade.rejected.includes(2));
-    assert.ok(performance.now() - started >= 1990, "Rejecting is not instantaneous either");
+    const rejectionTime = performance.now() - started;
+    assert.ok(rejectionTime >= 4990, "Rejecting also waits five seconds");
+    t.diagnostic(`Bot rejected after ${rejectionTime.toFixed(0)} ms`);
     action(offer);
     const old = await a.next(m => m.game?.trade?.id > first.game.trade.id);
     const oldDeadline = room.tradeThinking.deadline;
@@ -733,13 +747,13 @@ test("bot trade rejections also wait two seconds; replacement offers restart and
     action({ type: "cancelTrade" });
     await a.next(m => m.game?.revision > fresh.game.revision && !m.game.trade);
     const cancelled = structuredClone(room.game);
-    await sleep(2100); assert.deepEqual(room.game, cancelled, "Cancelled offers never transact later");
+    await sleep(5100); assert.deepEqual(room.game, cancelled, "Cancelled offers never transact later");
     action(offer);
     const beforeEnd = await a.next(m => m.game?.trade?.id > fresh.game.trade.id);
     action({ type: "end" });
     await a.next(m => m.game?.revision > beforeEnd.game.revision && m.game.current === 1);
     const ended = structuredClone(room.game);
-    await sleep(2100); assert.deepEqual(room.game, ended, "Ending the turn also cancels pending trade responses");
+    await sleep(5100); assert.deepEqual(room.game, ended, "Ending the turn also cancels pending trade responses");
   } finally {
     for (const ws of sockets) ws.terminate();
     await new Promise(resolve => server.close(resolve));

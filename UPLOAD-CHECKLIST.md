@@ -33,6 +33,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Remove-RetiredFiles.ps1
 
 ## 部署设置
 
+卡坦岛机器人交易等待已改为 5 秒，须提交 `catan-server.js` 并等服务器重新部署；只刷新网页不会更新计时。生产环境不要设置用于加速测试的 `CATAN_BOT_DELAY`。部署后检查全员报价在第 3 秒仍可由真人接受，机器人接受或拒绝均需等待 5 秒，撤回或真人成交后不再自动交易。重启前先结束正在进行的房间。
+
 卡坦岛赛后统计需要一起提交 `catan-stats.js`、`catan-stats-ui.js`、`catan-stats.css` 和修改后的 `catan-engine.js`、`catan-scenarios.js`、`catan.js`、`catan.html`。后端更新后需重启，从新对局开始记录，不能补回旧局数据。部署后玩完一局，检查自动弹出的分数走势、骰子分布、资源产出、建设统计和被抢次数；抢资源或布匹每次记 1 次，海盗舰队造成损失另列为袭击次数，七点弃牌、垄断和未抢到东西不计。结束前不应收到任何统计数据，重连保留本局统计，再来一局清零；旧局未记录被抢次数时应显示未记录。房间仍只存在内存中，重启前请先结束正在进行的对局。
 
 - Build Command：`npm install`

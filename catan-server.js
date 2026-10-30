@@ -84,7 +84,7 @@ function attachCatan(server) {
     if (actor < 0) actor = E.requiredActors(g).find((id) => controlled(room.seats[id])) ?? -1;
     if (tradeId === null) room.tradeThinking = null;
     if (actor < 0) return;
-    let delay = process.env.CATAN_BOT_DELAY ? Number(process.env.CATAN_BOT_DELAY) : tradeId !== null ? 2000 : 1100 + crypto.randomInt(950);
+    let delay = process.env.CATAN_BOT_DELAY ? Number(process.env.CATAN_BOT_DELAY) : tradeId !== null ? 5000 : 1100 + crypto.randomInt(950);
     if (tradeId !== null) {
       const pending = room.tradeThinking, token = room.seats[actor].token;
       // Non-game broadcasts must not restart an offer's thinking time.

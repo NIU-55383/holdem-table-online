@@ -53,7 +53,7 @@ function encode(kind, room) {
     }
   }
   const config = pick(room, CONFIG[kind]);
-  if (kind === "truth") Object.assign(config, { selection: progress.selection || "dice", skipLimit: progress.skipLimit ?? -1 });
+  if (kind === "truth") Object.assign(config, { rounds: progress.rounds, selection: progress.selection || "dice", skipLimit: progress.skipLimit ?? -1 });
   const archive = { format: FORMAT, version: 1, game: kind, savedAt: new Date().toISOString(),
     positions: seats.map((p, i) => p.position ?? i), config, progress };
   checkTree(archive);
@@ -122,14 +122,16 @@ function validateProgress(kind, g, count, config) {
     fail(require("./bridge-engine").Core.Auction.isAuctionValid(g.auction));
   } else if (kind === "truth") {
     fail([2, 3].includes(g.version) && g.playerCount === count && ["playing", "over"].includes(g.phase) && ["roll", "choose", "prepare", "challenge"].includes(g.stage));
-    fail(integer(g.current, 0, count - 1) && [3, 5, 8].includes(g.rounds) && Array.isArray(g.scores) && g.scores.length === count && require("./truth-engine").LEVELS.includes(g.level));
+    fail(integer(g.current, 0, count - 1) && (g.version === 3 ? [0, 3, 5, 8] : [3, 5, 8]).includes(g.rounds) && Array.isArray(g.scores) && g.scores.length === count && require("./truth-engine").LEVELS.includes(g.level));
     if (g.version === 3) {
+      fail(integer(g.turns, 0, Number.MAX_SAFE_INTEGER - 1) && integer(g.round, 1, g.turns + 1));
       fail(count <= 8 && require("./truth-engine").SELECTIONS.includes(g.selection) && integer(g.skipLimit, -1, 10));
       fail(g.selection !== "together" || (count === 2 && g.mode === "truth"));
-      fail(integer(g.replacements, 0, 2) && Array.isArray(g.skipsUsed) && g.skipsUsed.length === count && g.skipsUsed.every(n => integer(n, 0, g.rounds)));
+      fail(integer(g.replacements, 0, 2) && Array.isArray(g.skipsUsed) && g.skipsUsed.length === count && g.skipsUsed.every(n => integer(n, 0, g.turns + 1)));
       fail(g.skipLimit === -1 || g.skipsUsed.every(n => n <= g.skipLimit));
       fail(Array.isArray(g.responses) && g.responses.length === count && g.responses.every(v => v === null || v === "skip" || v === "complete"));
       fail(config.selection === g.selection && config.skipLimit === g.skipLimit);
+      require("./truth-engine").resumeEndless(g); config.rounds = 0;
     } else Object.assign(config, { selection: "dice", skipLimit: -1 });
   } else if (kind === "million") {
     fail(g.version === 2 && ["planning", "negotiation", "snitch", "results", "over"].includes(g.phase) && integer(g.round, 1, 8) && integer(g.leader, 0, count - 1));

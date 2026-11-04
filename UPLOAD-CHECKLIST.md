@@ -35,7 +35,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Remove-RetiredFiles.ps1
 
 五档题库更新须同时部署 `truth-data.js`、`truth-engine.js`、`truth-server.js`、`truth.html`、`truth.css`、`truth.js` 和规则数据。检查失守／摊牌两档可以同屏及联机开局，且真心话、大冒险、混合模式都能正常抽题；每档 30 道真心话、20 道大冒险，原题 ID 保持不变。
 
-部署后检查首页第六个游戏入口，先用同一手机两名玩家玩完一局，再用两台设备加入同一房间：确认仅真心话／仅大冒险／两种都要，全员掷骰、最高点出题、最低点接招、两端并列加赛与全员同点重掷；检查系统题／免费换题／240 字自定义题、只有最低点玩家能完成 +1 或跳过 0，以及全局 3／5／8 轮的实际获胜者和平局显示；检查手机规则滚动、头像互动、断线重连、房主转让、移除双确认、空位暂停与补位。自动托管可掷骰、选择并发送系统题，接招时只跳过不加分。此次玩法改动需重启服务器，结束旧局后重新开房。运行 `npm run test:truth`、`npm run test:truth-ui` 和 `npm run test:rules-ui`。
+真心话不限题数更新：同步部署 `truth-engine.js`、`truth-server.js`、`truth.js`、`truth.html`、`room-archive.js`、规则数据与测试。开局不再有轮数选择，联机和单设备连续玩过 3／5／8 题后都应继续下一题，不出现胜负结算；完成数字仅作记录。确认双人共同回答仍须两人回应后换题，换题额度每题重置，跳过额度不重置；旧 V3 存档（包括已结算的存档）恢复后可继续，V2 骰子旧存档保留原规则。测试主动退出、本地清除、存档及手机布局。先保存原房间再重启服务器，不要只更新前端。运行 `npm run test:truth`、`npm run test:truth-ui`、`npm run test:archives` 和 `npm run test:rules-ui`。
 
 ## 部署设置
 

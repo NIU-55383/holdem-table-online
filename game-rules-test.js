@@ -59,7 +59,8 @@ test("rules retain the implemented variants, all ten poker ranks and all seven X
 test("truth or dare rules cover direct pairs, together, allowances and consent", () => {
   assert.deepEqual(data.truth.title, ["真心话大冒险规则", "Truth or Dare Rules"]);
   const rules = JSON.stringify(data.truth);
-  for (const text of ["2–8", "Pass & play", "Online", "Truth only", "Dare only", "Mixed", "Chill", "Heat", "Wild", "Unmasked", "Showdown", "30 Truth and 20 Dare prompts", "3, 5 or 8 total rounds", "Random pairs", "Respondent asks next", "Answer together", "two replacements per round", "240 characters", "no score or round cost", "consent", "no alcohol", "only skip for 0", "five minutes", "final 20 seconds", "skips for the entire game"]) assert(rules.includes(text), text);
+  for (const text of ["2–8", "Pass & play", "Online", "Truth only", "Dare only", "Mixed", "Chill", "Heat", "Wild", "Unmasked", "Showdown", "30 Truth and 20 Dare prompts", "no question limit", "no fixed endpoint", "Random pairs", "Respondent asks next", "Answer together", "two replacements per round", "240 characters", "without using anyone's skips", "consent", "no alcohol", "only skip", "five minutes", "final 20 seconds", "skips for the entire game"]) assert(rules.includes(text), text);
+  assert(!rules.includes("highest score wins"));assert(!rules.includes("3, 5 or 8 total rounds"));
   assert(!rules.includes("1–2 means Truth"), "dice no longer choose prompt category");
   assert.equal(data.truth.sources.length, 0, "original club variant has no external official ruleset");
   assert.match(read("truth.html"), /data-rules-game="truth"/);

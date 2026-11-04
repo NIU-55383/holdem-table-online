@@ -66,7 +66,7 @@
   function setLevel(value){level=value;document.querySelectorAll("[data-level]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.level===level)));$("levelDescription").innerHTML=`${labels[level][2]}<small>${labels[level][3]}</small><span class="level-count">真心话 30 题 · 大冒险 20 题 / 30 Truth · 20 Dare</span>`;}
   function identity(){const name=$("playerName").value.trim();if(!name){error("先填一个名字 / Enter your name first");$("playerName").focus();return null;}write(localStorage,"boardclub-name",name);return {name,avatar:UI.getAvatar()};}
   function create(){
-    error();const rounds=Number($("rounds").value),maxPlayers=Number($("setupPlayers").value),selection=$("selection").value,skipLimit=Number($("skipLimit").value);
+    error();const rounds=0,maxPlayers=Number($("setupPlayers").value),selection=$("selection").value,skipLimit=Number($("skipLimit").value);
     if(online()){const p=identity();if(p)send({type:"create",...p,level,rounds,mode:category,maxPlayers,selection,skipLimit});return;}
     const names=$("localNames").value.split(/[\n,，、]/).map(s=>s.trim()).filter(Boolean);
     if(names.length!==maxPlayers){error(`请填写 ${maxPlayers} 位玩家的名字 / Enter ${maxPlayers} player names`);return;}
@@ -113,7 +113,7 @@
     $("setup").hidden=!!state;$("roomPanel").hidden=!state;$("chatPanel").hidden=!state||!online();document.body.classList.toggle("in-game",!!state);
     $("modeLabel").innerHTML=`<i data-lucide="${online()?"globe-2":"users"}"></i>${online()?"在线房间 / Online party":"同屏聚会 / Pass & play"}`;
     const orderLabels={random:"随机问答 / Random pairs",chain:"回答者接着问 / Respondent asks next",together:"共同回答 / Answer together",dice:"掷骰选人 / Dice"};
-    $("roundLabel").textContent=g?over?"已完成 / Finished":`第 ${g.round} / ${g.rounds} 轮 · ROUND ${g.round}`:orderLabels[$("selection").value];
+    $("roundLabel").textContent=g?over?"已完成 / Finished":legacy?`第 ${g.round} / ${g.rounds} 轮 · ROUND ${g.round}`:`第 ${g.round} 题 / Question ${g.round}`:orderLabels[$("selection").value];
     const table=document.querySelector(".play-table");table.classList.toggle("has-challenge",active&&g.stage!=="roll");table.classList.toggle("finished",over);
     $("die").dataset.value=g?.die||5;
     $("diceScene").hidden=!legacy;
@@ -143,7 +143,7 @@
     else if(g.stage==="challenge"){
       badge=together?"共同回答 / ANSWER TOGETHER":`${kindName} · ${asker?.name} 问 ${target?.name}`;zh=g.prompt?.zh||"";en=g.prompt?.en||"";
       const respondents=together?online()?[me]:[0,1]:[g.target];
-      buttons=respondents.map(i=>{const responded=together&&g.responses[i]!==null,can=enabled&&!responded,remaining=legacy||g.skipLimit===-1?"∞":Math.max(0,g.skipLimit-g.skipsUsed[i]);return `<div class="answer-actions">${together?`<strong>${esc(state.seats[i].name)}${responded?" · 已回应 / Answered":""}</strong>`:""}<button data-play="complete" data-actor="${i}" class="primary" ${can?"":"disabled"}>完成了 +1 / Done</button><button data-play="skip" data-actor="${i}" class="action-quiet" ${can&&E.canSkip(g,i)?"":"disabled"}>跳过 / Skip (${remaining})</button></div>`;}).join("");
+      buttons=respondents.map(i=>{const responded=together&&g.responses[i]!==null,can=enabled&&!responded,remaining=legacy||g.skipLimit===-1?"∞":Math.max(0,g.skipLimit-g.skipsUsed[i]);return `<div class="answer-actions">${together?`<strong>${esc(state.seats[i].name)}${responded?" · 已回应 / Answered":""}</strong>`:""}<button data-play="complete" data-actor="${i}" class="primary" ${can?"":"disabled"}>完成了${legacy?" +1":""} / Done</button><button data-play="skip" data-actor="${i}" class="action-quiet" ${can&&E.canSkip(g,i)?"":"disabled"}>跳过 / Skip (${remaining})</button></div>`;}).join("");
       if(together&&editor)buttons+=`<button data-play="reroll" ${g.replacements<2?"":"disabled"}><i data-lucide="refresh-cw"></i>换题 / Replace (${2-g.replacements}/2)</button><button data-play="ask">用我的题 / Use my question</button>`;
       hint=together?"两人都回应后进入下一题 / Next question after both respond":mine?(E.canSkip(g,me)?"回答或完成后确认 / Confirm after answering or completing":"跳过次数已用完；不舒服时可以停止游戏。 / No skips left; you can still stop playing."):`等 ${target?.name} 回应 / Waiting for ${target?.name}`;
     }
@@ -158,16 +158,16 @@
     $("kindBadge").textContent=badge;$("promptZh").textContent=zh;$("promptEn").textContent=en;$("playActions").innerHTML=buttons;$("turnHint").textContent=hint;
     if(state){
       if(!online())$("playerName").value=state.seats[state.you]?.name||"";
-      $("roomCode").textContent=online()?state.code:"今晚这一桌";$("roomType").textContent=online()?"ROOM CODE / 房间码":"PASS & PLAY / 同屏聚会";$("copyBtn").hidden=!online();$("roomSettings").textContent=`${categoryNames[state.mode||"mixed"]} · ${labels[state.level][0]} · ${state.rounds} 轮 / rounds · ${orderLabels[state.selection||"dice"]} · 跳过 / Skips ${state.skipLimit===-1||legacy?"∞":state.skipLimit}`;
+      $("roomCode").textContent=online()?state.code:"今晚这一桌";$("roomType").textContent=online()?"ROOM CODE / 房间码":"PASS & PLAY / 同屏聚会";$("copyBtn").hidden=!online();$("roomSettings").textContent=`${categoryNames[state.mode||"mixed"]} · ${labels[state.level][0]}${legacy?` · ${state.rounds} 轮 / rounds`:""} · ${orderLabels[state.selection||"dice"]} · 跳过 / Skips ${state.skipLimit===-1||legacy?"∞":state.skipLimit}`;
       $("playerCount").textContent=`${state.seats.filter(p=>p&&!p.vacant).length} / ${state.maxPlayers||state.seats.length}`;
-      $("players").innerHTML=state.seats.map((p,i)=>{if(!p)return"";const bubble=bubbles.get(i);return `<div class="player-row ${active&&i===g.current?"active":""}">${UI.avatar(p,!!p.connected&&(p.bot||live()),"party-avatar game-avatar",!p.vacant&&i===me)}<div class="player-detail"><strong>${esc(p.name)}${p.bot?" · BOT":""}${active?`<span class="seat-die">⚄ ${g.dice[i]||"—"}</span>`:""}</strong><small>${p.vacant?"空位 / Vacant":`${online()&&i===me?"你 / You · ":""}${online()&&i===state.host?"房主 / Host · ":""}${!g?p.ready?"已准备 / Ready":"未准备 / Not ready":p.auto?"托管 / Auto":active&&i===g.current?"当前操作 / Acting":""}`}</small>${active&&i===g.asker?'<div class="role-tag">出题人 / Asker</div>':active&&i===g.target?'<div class="role-tag low">接招人 / Respondent</div>':""}${bubble?`<span class="player-chat">${esc(bubble.text)}</span>`:""}</div><span class="score">${g?.scores[i]??"—"}<small>${g?"POINTS":""}</small></span>${online()&&!g&&p.bot&&me===state.host?`<button class="remove-bot icon-button" data-remove-bot="${esc(p.socialId)}" aria-label="移除 ${esc(p.name)} / Remove bot"><i data-lucide="x"></i></button>`:""}</div>`;}).join("");
+      $("players").innerHTML=state.seats.map((p,i)=>{if(!p)return"";const bubble=bubbles.get(i);return `<div class="player-row ${active&&i===g.current?"active":""}">${UI.avatar(p,!!p.connected&&(p.bot||live()),"party-avatar game-avatar",!p.vacant&&i===me)}<div class="player-detail"><strong>${esc(p.name)}${p.bot?" · BOT":""}${active?`<span class="seat-die">⚄ ${g.dice[i]||"—"}</span>`:""}</strong><small>${p.vacant?"空位 / Vacant":`${online()&&i===me?"你 / You · ":""}${online()&&i===state.host?"房主 / Host · ":""}${!g?p.ready?"已准备 / Ready":"未准备 / Not ready":p.auto?"托管 / Auto":active&&i===g.current?"当前操作 / Acting":""}`}</small>${active&&i===g.asker?'<div class="role-tag">出题人 / Asker</div>':active&&i===g.target?'<div class="role-tag low">接招人 / Respondent</div>':""}${bubble?`<span class="player-chat">${esc(bubble.text)}</span>`:""}</div><span class="score">${g?.scores[i]??"—"}<small>${g?legacy?"POINTS":"完成 / Done":""}</small></span>${online()&&!g&&p.bot&&me===state.host?`<button class="remove-bot icon-button" data-remove-bot="${esc(p.socialId)}" aria-label="移除 ${esc(p.name)} / Remove bot"><i data-lucide="x"></i></button>`:""}</div>`;}).join("");
       $("lobbyActions").hidden=!!g||!online();$("readyBtn").hidden=me===state.host;$("readyBtn").textContent=state.seats[me]?.ready?"取消准备 / Unready":"准备 / Ready";$("startBtn").hidden=me!==state.host;$("addBotBtn").hidden=me!==state.host;$("addBotBtn").disabled=state.seats.filter(Boolean).length>=state.maxPlayers;
       $("startBtn").disabled=!live()||state.seats.filter(Boolean).length<(state.selection==="dice"?2:state.maxPlayers)||!state.seats.filter(Boolean).every((p,i)=>p.bot||p.connected&&(p.ready||i===state.host));
       $("restartBtn").hidden=!over||online()&&me!==state.host;const restart=$("playActions").querySelector('[data-play="restart"]');if(restart)restart.disabled=online()&&me!==state.host||!live();
       const previous=$("messages").textContent;$("messages").innerHTML=(state.chat||[]).map(m=>`<p><b>${esc(m.name||state.seats[m.playerId]?.name||"玩家")}</b>${esc(m.text)}</p>`).join("");if(previous!==$("messages").textContent)$("messages").scrollTop=$("messages").scrollHeight;
     }
     $("historySection").hidden=!g?.history?.length;
-    $("history").innerHTML=(g?.history||[]).slice().reverse().map(h=>`<li><span>${h.completed?"+1":"PASS"}</span><div><b>${g.selection==="together"?"":`${esc(state.seats[h.asker]?.name||"出题人")} → `}${esc(state.seats[h.target??h.actor]?.name||"接招人")}</b> ${esc(h.prompt?.zh||"")}<small>${esc(h.prompt?.en||"")}</small></div></li>`).join("");
+    $("history").innerHTML=(g?.history||[]).slice().reverse().map(h=>`<li><span>${h.completed?legacy?"+1":"DONE":"PASS"}</span><div><b>${g.selection==="together"?"":`${esc(state.seats[h.asker]?.name||"出题人")} → `}${esc(state.seats[h.target??h.actor]?.name||"接招人")}</b> ${esc(h.prompt?.zh||"")}<small>${esc(h.prompt?.en||"")}</small></div></li>`).join("");
     social.sync();management.sync();icons();
   }
   $("playActions").onclick=event=>{const button=event.target.closest("button");if(!button||button.disabled)return;if(button.id==="setupFocus"){$("setup").scrollIntoView({behavior:"smooth",block:"center"});(online()?$("playerName"):$("localNames")).focus({preventScroll:true});return;}if(button.dataset.play==="restart")restart();else if(button.dataset.play)action(button.dataset.play,button.dataset.kind,!online()&&button.hasAttribute("data-actor")?Number(button.dataset.actor):undefined);};
@@ -188,8 +188,9 @@
   $("chatForm").onsubmit=event=>{event.preventDefault();const text=$("chatText").value.trim();if(text&&send({type:"chat",text}))$("chatText").value="";};
   if(!online()){try{const stored=JSON.parse(read(sessionStorage,localKey)||"null");if([2,3].includes(stored?.game?.version)&&stored.seats?.length>=2&&stored.seats.length<=12&&labels[stored.level]&&stored.game.scores?.length===stored.seats.length){state=stored;state.you=stored.game.current;state.seats.forEach(p=>p.avatar=AvatarData.normalize(p.avatar));}}catch{write(sessionStorage,localKey,null);}}
   if(state&&!online()){
+    E.resumeEndless(state.game);state.rounds=state.game.rounds;state.you=state.game.current;saveLocal();
     level=state.level;category=state.mode||"mixed";$("setupPlayers").value=String(Math.min(8,state.seats.length));$("localNames").value=state.seats.slice(0,8).map(p=>p.name).join("\n");
-    $("rounds").value=String(state.rounds);$("selection").value=E.SELECTIONS.includes(state.selection)?state.selection:"random";$("skipLimit").value=String(state.skipLimit??-1);
+    $("selection").value=E.SELECTIONS.includes(state.selection)?state.selection:"random";$("skipLimit").value=String(state.skipLimit??-1);
     document.querySelectorAll("[data-category]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.category===category)));setupOptions();
   }
   setLevel(level);setMode(mode);soundButton();render();

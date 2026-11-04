@@ -48,6 +48,7 @@ test("new setup: 2-8 seats, exact start count and invalid combinations are rejec
   await a.request({type:"addBot"});await a.request({type:"start"},error);
   await a.request({type:"addBot"});await a.request({type:"start"});
   assert.equal(a.state.game.stage,"choose");assert.equal(a.state.game.version,3);assert.equal(a.state.selection,"random");
+  assert.equal(a.state.rounds,0);assert.equal(a.state.game.rounds,0);
 });
 test("new chain: authoritative prompt budget, custom question, skip count, reconnect and handover", async t => {
   const {a,b,room,client}=await twoPlayers(t,{}, {selection:"chain",maxPlayers:2,mode:"truth",skipLimit:1});
@@ -61,7 +62,19 @@ test("new chain: authoritative prompt budget, custom question, skip count, recon
   assert.equal(back.state.game.skipsUsed[targetId],1);
   await networkAction(clients[room.game.asker],room,"ask");await networkAction(clients[room.game.target],room,"complete");
   await networkAction(clients[room.game.asker],room,"ask");await networkAction(clients[room.game.target],room,"skip",{},error);
-  await networkAction(clients[room.game.target],room,"complete");assert.equal(room.game.phase,"over");
+  await networkAction(clients[room.game.target],room,"complete");assert.equal(room.game.phase,"playing");assert.equal(room.game.round,4);
+});
+
+for (const selection of ["random", "chain", "together"]) test(`${selection}: online play continues past old caps until players leave`, async t => {
+  const {a,b,room}=await twoPlayers(t,{}, {selection,maxPlayers:2,mode:"truth",rounds:3,skipLimit:-1}), clients=[a,b];
+  assert.equal(room.rounds,0);assert.equal(room.game.rounds,0);
+  for(let i=0;i<12;i++) {
+    if(selection==="together") {await networkAction(a,room,"complete");await networkAction(b,room,"skip");}
+    else {await networkAction(clients[room.game.asker],room,"ask");await networkAction(clients[room.game.target],room,i%2?"skip":"complete");}
+    assert.equal(room.game.phase,"playing");assert.equal(room.game.round,i+2);assert.deepEqual(room.game.winners,[]);
+  }
+  await a.request({type:"leave"},e=>e.type==="left");
+  assert.equal(room.game.phase,"playing");assert(room.seats.some(p=>p.ws?.readyState===WebSocket.OPEN));
 });
 test("together: both online players respond only once, shared edits lock after first answer", async t => {
   const {a,b,room}=await twoPlayers(t,{}, {selection:"together",maxPlayers:2,mode:"truth",skipLimit:0});

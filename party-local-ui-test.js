@@ -18,7 +18,8 @@ async function main(){
     assert.equal(await p.locator("#setupPlayers option").count(),7);
     for(const level of ["chill","heat","wild","unmasked","showdown"]){await p.locator(`[data-level="${level}"]`).focus();await p.keyboard.press("Enter");assert.equal(await p.locator(`[data-level="${level}"]`).getAttribute("aria-pressed"),"true");}
     await layout(p,"truth-new-setup");
-    await p.selectOption("#setupPlayers","2");await p.fill("#localNames","Alice\nBob");await p.selectOption("#selection","chain");await p.selectOption("#skipLimit","1");await p.selectOption("#rounds","3");await p.click("#createBtn");
+    assert.equal(await p.locator("#rounds").count(),0);
+    await p.selectOption("#setupPlayers","2");await p.fill("#localNames","Alice\nBob");await p.selectOption("#selection","chain");await p.selectOption("#skipLimit","1");await p.click("#createBtn");
     assert.equal((await local()).game.stage,"choose");assert.equal(await p.locator("#diceScene").isVisible(),false);
     const target=(await local()).game.target;await p.click('[data-play="choose"][data-kind="dare"]');
     await p.click('[data-play="reroll"]');await p.click('[data-play="reroll"]');assert(await p.locator('[data-play="reroll"]').isDisabled());
@@ -26,8 +27,13 @@ async function main(){
     assert.equal((await local()).game.asker,target);assert.equal((await local()).game.skipsUsed[target],1);
     const saved=await local();await p.reload();assert.deepEqual(await local(),saved);
     await p.click('[data-play="choose"][data-kind="truth"]');await p.click('[data-play="ask"]');await p.click('[data-play="complete"]');
-    await p.click('[data-play="choose"][data-kind="truth"]');await p.click('[data-play="ask"]');assert(await p.locator('[data-play="skip"]').isDisabled());await layout(p,"truth-no-skips");await p.click('[data-play="complete"]');assert.equal((await local()).game.phase,"over");
-    await p.click("#leaveBtn");await p.click("#confirmLeave");await p.click('[data-category="truth"]');await p.selectOption("#selection","together");await p.click("#createBtn");
+    await p.click('[data-play="choose"][data-kind="truth"]');await p.click('[data-play="ask"]');assert(await p.locator('[data-play="skip"]').isDisabled());await layout(p,"truth-no-skips");await p.click('[data-play="complete"]');assert.equal((await local()).game.phase,"playing");
+    const progress=await local();
+    await p.evaluate(()=>{const key="boardclub-truth-local",s=JSON.parse(sessionStorage.getItem(key));s.rounds=3;Object.assign(s.game,{rounds:3,round:3,phase:"over",stage:"roll",asker:-1,target:-1,kind:null,prompt:null,winners:[0]});sessionStorage.setItem(key,JSON.stringify(s));});
+    await p.reload();assert.equal((await local()).game.phase,"playing");assert.equal((await local()).game.round,4);assert.deepEqual((await local()).game.skipsUsed,progress.game.skipsUsed);assert.deepEqual((await local()).game.scores,progress.game.scores);
+    for(let i=0;i<10;i++){await p.click('[data-play="choose"][data-kind="truth"]');await p.click('[data-play="ask"]');await p.click('[data-play="complete"]');}
+    assert.equal((await local()).game.round,14);assert.equal((await local()).game.phase,"playing");assert.equal(await p.locator('[data-play="restart"]').count(),0);assert.match(await p.locator("#roundLabel").textContent(),/Question 14/);
+    await p.click("#leaveBtn");await p.click("#confirmLeave");assert.equal(await local(),null);await p.click('[data-category="truth"]');await p.selectOption("#selection","together");await p.click("#createBtn");
     assert.equal((await local()).game.stage,"challenge");assert.equal(await p.locator('[data-play="complete"]').count(),2);
     await p.click('[data-play="reroll"]');await p.fill("#customPrompt","What made you happy today?");await p.click('[data-play="ask"]');
     await p.click('[data-play="complete"][data-actor="1"]');assert.equal((await local()).game.round,1);assert(await p.locator('[data-play="complete"][data-actor="1"]').isDisabled());assert.equal(await p.locator('[data-play="reroll"]').count(),0);
@@ -43,7 +49,14 @@ async function main(){
       if(selection==="together"){assert.equal(await a.locator("#promptZh").textContent(),await b.locator("#promptZh").textContent());await b.click('[data-play="complete"]');await a.waitForFunction(()=>testState.game.responses[1]==="complete");assert(await b.locator('[data-play="complete"]').isDisabled());await a.click('[data-play="complete"]');}
       else{const asker=players[g.asker],answer=players[g.target];assert.equal(await answer.locator('#playActions button:not([disabled])').count(),0);await asker.fill("#customPrompt","An online question");await asker.click('[data-play="ask"]');await answer.click('[data-play="skip"]:not([disabled])');}
       await a.waitForFunction(()=>testState.game.round===2);if(selection==="chain")assert.equal(await a.evaluate(()=>testState.game.asker),g.target);
-      const stored=await a.evaluate(()=>testState.game);await a.reload();await a.waitForFunction(()=>window.testState?.game?.round===2);assert.deepEqual(await a.evaluate(()=>testState.game),stored);await layout(a,`truth-online-${selection}`);await a.context().close();await b.context().close();
+      const stored=await a.evaluate(()=>testState.game);await a.reload();await a.waitForFunction(()=>window.testState?.game?.round===2);assert.deepEqual(await a.evaluate(()=>testState.game),stored);
+      for(let round=3;round<=11;round++){
+        const current=await a.evaluate(()=>testState.game);
+        if(selection==="together"){await a.click('[data-play="complete"]');await b.waitForFunction(()=>testState.game.responses[0]==="complete");await b.click('[data-play="complete"]');}
+        else {await players[current.asker].click('[data-play="ask"]');await players[current.target].click('[data-play="complete"]:not([disabled])');}
+        for(const q of players)await q.waitForFunction(n=>testState.game.round===n,round);
+      }
+      assert.equal(await a.evaluate(()=>testState.game.phase),"playing");await layout(a,`truth-online-${selection}`);await a.context().close();await b.context().close();
     }
     console.log("Truth online: random, chain, together, own-response controls and reconnect OK");
     for(const kind of ["gomoku","xiangqi"]){

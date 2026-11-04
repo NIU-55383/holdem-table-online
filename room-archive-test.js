@@ -60,7 +60,7 @@ async function launch() {
   return { client, port, async close() { sockets.forEach(s => s.terminate()); server.kill(); await once(server, "exit"); assert.equal(errors, ""); } };
 }
 
-for (const kind of ["bridge", "truth", "million"]) test(`${kind}: every phase and final result can be restored`, () => {
+for (const kind of ["bridge", "truth", "million"]) test(`${kind}: every phase and ongoing or final progress can be restored`, () => {
   const r = fixture(kind), E = require(`./${kind}-engine`);
   for (let step = 0; step < 250 && r.game.phase !== "over"; step++) {
     const { room } = decode(encode(kind, r), [kind]);
@@ -69,14 +69,16 @@ for (const kind of ["bridge", "truth", "million"]) test(`${kind}: every phase an
       if (r.game.phase === "trick") E.advanceTrick(r.game);
       else { const actor = E.controller(r.game); E.act(r.game, actor, E.chooseBotAction(r.game, actor)); }
     } else if (kind === "truth") {
-      const g = r.game, type = { roll: "roll", choose: "choose", prepare: "ask", challenge: "skip" }[g.stage];
+      const g = r.game, type = { roll: "roll", choose: "choose", prepare: "ask", challenge: "complete" }[g.stage];
       E.act(g, g.current, type === "choose" ? { type, kind: "truth" } : { type });
     } else {
       room.seats.forEach((_, i) => E.publicGame(room.game, i));
       const actor = E.requiredActors(r.game)[0]; E.act(r.game, actor, E.chooseBotAction(r.game, actor));
     }
   }
-  assert.equal(r.game.phase, "over"); assert.equal(decode(encode(kind, r), [kind]).room.game.phase, "over");
+  const phase = kind === "truth" ? "playing" : "over";
+  assert.equal(r.game.phase, phase); assert.equal(decode(encode(kind, r), [kind]).room.game.phase, phase);
+  if (kind === "truth") assert(r.game.turns > 8);
 });
 
 test("a save survives a completely new server process", { timeout: 30000 }, async () => {

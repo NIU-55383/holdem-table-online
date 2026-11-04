@@ -426,13 +426,13 @@
         {
           "id": "goal",
           "title": [
-            "问答与得分",
-            "Questions & scoring"
+            "问答与挑战",
+            "Questions & challenges"
           ],
           "paragraphs": [
             [
-              "这是本馆原创的 2–8 人聚会玩法，不需要掷骰。回答真心话或完成大冒险得 1 分，跳过得 0 分。指定轮数结束后最高分获胜，同分者共同获胜。",
-              "This original club party game is for 2–8 players, with no dice needed. Answer a truth or complete a dare for 1 point; skip for 0. After the selected rounds, the highest score wins; tied leaders share the win."
+              "这是本馆原创的 2–8 人聚会玩法，不需要掷骰。回答真心话或完成大冒险，想玩就继续，不想玩时退出。不设总题数、不排名，也不会自动结算；玩家旁的数字只记录完成次数。",
+              "This original club party game is for 2–8 players, with no dice needed. Answer truths or complete dares for as long as you like, then leave. There is no question limit, ranking or automatic finish; the number beside each player only counts completed prompts."
             ]
           ]
         },
@@ -452,8 +452,8 @@
               "Choose Truth only, Dare only or Mixed. The first two fix the category; in Mixed, the asker chooses Truth or Dare each round. With two players and Truth only, you can also select Answer together."
             ],
             [
-              "选择轻松 Chill、心跳 Heat、爆场 Wild、失守 Unmasked、摊牌 Showdown 五档题库，每档 30 道真心话、20 道大冒险。全局共 3、5 或 8 轮，不是每人轮数。再设置每人整局可跳过的次数：0、1、2、3、5、10 或不限。设置开局后不变。",
-              "Choose Chill, Heat, Wild, Unmasked or Showdown; each level has 30 Truth and 20 Dare prompts. Select 3, 5 or 8 total rounds, not rounds per person. Set each player's skips for the entire game to 0, 1, 2, 3, 5, 10 or unlimited. Settings stay fixed once play starts."
+              "选择轻松 Chill、心跳 Heat、爆场 Wild、失守 Unmasked、摊牌 Showdown 五档题库，每档 30 道真心话、20 道大冒险。再设置每人整局可跳过的次数：0、1、2、3、5、10 或不限。设置开局后不变。",
+              "Choose Chill, Heat, Wild, Unmasked or Showdown; each level has 30 Truth and 20 Dare prompts. Set each player's skips for the entire game to 0, 1, 2, 3, 5, 10 or unlimited. Settings stay fixed once play starts."
             ]
           ]
         },
@@ -486,16 +486,16 @@
           ],
           "paragraphs": [
             [
-              "系统先给一道题。提问者每轮最多换题两次，不扣分、不消耗轮数；下一轮重新获得两次机会。也可以输入 1–240 字自定义题目，不消耗换题次数。自定义内容应符合所选题型，留空则使用当前系统题。",
-              "A prompt is drawn first. The asker has two replacements per round, with no score or round cost; the allowance resets next round. A custom prompt of 1–240 characters does not use a replacement. Match the selected category; leave the custom box blank to use the drawn prompt."
+              "系统先给一道题。提问者每轮最多换题两次，不消耗任何人的跳过次数；下一题重新获得两次机会。也可以输入 1–240 字自定义题目，不消耗换题次数。自定义内容应符合所选题型，留空则使用当前系统题。",
+              "A prompt is drawn first. The asker has two replacements per round, without using anyone's skips; the allowance resets next question. A custom prompt of 1–240 characters does not use a replacement. Match the selected category; leave the custom box blank to use the drawn prompt."
             ],
             [
               "普通问答中，提问者点击「就问这题」发出问题，然后由回答者确认，不能替对方点击完成。共同回答不需要等待发题。题库用完后重新抽取，可能再遇到之前的题目。",
               "In paired play, the asker selects Ask this, then only the respondent confirms completion. The asker cannot confirm for them. Together mode needs no send step. Once a prompt pool is exhausted, earlier questions may appear again."
             ],
             [
-              "完成得 1 分；跳过得 0 分并消耗本人一次机会，不扣已有分数。次数是每人整局总额，不会每轮重置；刷新、重连、存档恢复或换人也不重置。用完后跳过按钮不可用，开局选「不限」则不限制。",
-              "Complete earns 1 point. Skip earns 0 and uses one personal skip, without deducting existing points. The allowance is per player for the whole game, not per round; refreshes, reconnects, saves and replacements do not reset it. At zero the Skip button is unavailable; Unlimited has no cap."
+              "完成后记一次；跳过不算完成，并消耗本人一次跳过机会。次数是每人整局总额，不会每题重置；刷新、重连、存档恢复或换人也不重置。用完后跳过按钮不可用，开局选「不限」则不限制。",
+              "Done records one completed prompt. Skip does not count as completion and uses one personal skip. The allowance is per player for the whole game, not per question; refreshes, reconnects, saves and replacements do not reset it. At zero the Skip button is unavailable; Unlimited has no cap."
             ]
           ]
         },
@@ -511,25 +511,25 @@
               "A game allowance never obliges anyone to take a challenge: stop or leave whenever uncomfortable. Get consent before involving another person. Never pressure anyone to disclose private information, accept physical contact, be photographed or share publicly."
             ],
             [
-              "游戏不要求喝酒，也没有饮酒惩罚。刺激来自即兴表演和朋友互动；不用危险动作或让人不舒服的要求换取分数。",
-              "The game requires no alcohol and has no drinking penalties. The excitement comes from improvisation and friendly interaction; points never require dangerous actions or uncomfortable requests."
+              "游戏不要求喝酒，也没有饮酒惩罚。刺激来自即兴表演和朋友互动，不需要危险动作或让人不舒服的要求。",
+              "The game requires no alcohol and has no drinking penalties. The excitement comes from improvisation and friendly interaction, without dangerous actions or uncomfortable requests."
             ]
           ]
         },
         {
           "id": "finish",
           "title": [
-            "全局轮数与结算",
-            "Total rounds & results"
+            "继续或退出",
+            "Continue or leave"
           ],
           "paragraphs": [
             [
-              "普通模式一人回应结束一轮，共同回答需两人都回应。换题不增加轮数。达到选定轮数后显示分数和实际获胜者，同分共享胜利，包括全员 0 分。",
-              "One response ends a paired round; together mode requires both responses. Replacements do not add rounds. After the selected rounds, show scores and the actual winners; ties share the win, including a tie at zero."
+              "普通模式一人回应后进入下一题，共同回答需两人都回应。游戏没有固定结束点，想结束时点击退出；想下次接着玩，可以先保存存档。同设备退出会清除本机这局进度；联机退出保留席位，其他人可等你回来或由房主管理补位。",
+              "One response advances paired play; together mode waits for both. Play has no fixed endpoint: leave whenever you are done, or save first to continue another time. Leaving a local game clears its progress on this device. Online, your seat remains so others can wait for you or arrange a host-managed replacement."
             ],
             [
-              "机器人和托管可以自动选题、发题，回应时只跳过得 0 分，不会替真人确认完成。跳过用尽时等待手动回应，机器人可由房主换成真人。若主要用机器人试玩，开局可选不限跳过。在线托管仍显示在线。",
-              "Bots and auto-play can choose and send prompts; when responding they only skip for 0, never claim a real person completed a challenge. At zero skips, wait for a manual response; the host can replace a bot with a human. Choose unlimited skips for bot demonstrations. Connected auto-playing humans stay online."
+              "机器人和托管可以自动选题、发题，回应时只跳过，不会替真人确认完成。跳过用尽时等待手动回应，机器人可由房主换成真人。若主要用机器人试玩，开局可选不限跳过。在线托管仍显示在线。",
+              "Bots and auto-play can choose and send prompts; when responding they only skip, never claim a real person completed a challenge. At zero skips, wait for a manual response; the host can replace a bot with a human. Choose unlimited skips for bot demonstrations. Connected auto-playing humans stay online."
             ]
           ]
         },
@@ -545,8 +545,8 @@
               "Shared room controls apply: a host transfer or request requires the other person's approval. A disconnected host keeps hosting for five minutes; returning in time cancels succession. On expiry, the next online human in seat order takes over. Explicitly leaving transfers hosting immediately."
             ],
             [
-              "开局后房主可通过两次具名确认移除其他真人或机器人，空位保留原座位与分数并暂停行动。新加入的真人填第一个空位，或由房主给指定空位补机器人，全部补齐后继续。移除不是封禁，被移除者可主动输入房间码再次加入；刷新不自动重新入座。",
-              "After starting, the host may remove another human or bot through two confirmations naming the target. The vacant seat keeps its position and score, and play pauses. A new human fills the first vacancy, or the host assigns a bot to a chosen vacancy; play resumes once all vacancies are filled. Removal is not a ban: the person may enter the code to join again, but is not automatically reseated on refresh."
+              "开局后房主可通过两次具名确认移除其他真人或机器人，空位保留原座位与完成次数并暂停行动。新加入的真人填第一个空位，或由房主给指定空位补机器人，全部补齐后继续。移除不是封禁，被移除者可主动输入房间码再次加入；刷新不自动重新入座。",
+              "After starting, the host may remove another human or bot through two confirmations naming the target. The vacant seat keeps its position and completion count, and play pauses. A new human fills the first vacancy, or the host assigns a bot to a chosen vacancy; play resumes once all vacancies are filled. Removal is not a ban: the person may enter the code to join again, but is not automatically reseated on refresh."
             ],
             [
               "两分钟未操作自动托管默认关闭，仅房主可为全房开启。开启后只对当前需行动的在线真人计时，最后 20 秒提醒；有效行动或「我还在」会重置时间。聊天、头像和表情不重置计时，空位时暂停。关闭房间托管会停止超时接管，但保留个人主动开启的托管。",

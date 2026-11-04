@@ -49,7 +49,7 @@
     requireRule(Object.keys(options).every(key => ["level", "rounds", "mode", "selection", "skipLimit"].includes(key)),
       "未知设置 / Unknown option");
     const level = options.level === undefined ? "heat" : options.level;
-    const rounds = options.rounds === undefined ? 3 : options.rounds;
+    const rounds = options.selection === "dice" ? options.rounds ?? 3 : 0;
     const mode = options.mode === undefined ? "mixed" : options.mode;
     const selection = options.selection ?? "random", skipLimit = options.skipLimit ?? 3;
     requireRule(SELECTIONS.includes(selection) || selection === "dice", "选人方式无效 / Invalid turn order");
@@ -57,7 +57,7 @@
     requireRule(Number.isInteger(skipLimit) && skipLimit >= -1 && skipLimit <= 10, "跳过次数须为 0–10 或不限 / Choose 0–10 skips or unlimited");
     requireRule(LEVELS.includes(level), "请选择有效的刺激等级 / Invalid intensity");
     requireRule(MODES.includes(mode), "请选择真心话、大冒险或混合模式 / Invalid mode");
-    requireRule(Number.isInteger(rounds) && rounds >= 1 && rounds <= 10,
+    requireRule((selection !== "dice" && rounds === 0) || (Number.isInteger(rounds) && rounds >= 1 && rounds <= 10),
       "轮数须为 1 至 10 / Choose 1 to 10 rounds");
     validateRng(rng);
     const game = {
@@ -83,6 +83,16 @@
     game.asker = game.selection === "chain" && previousTarget >= 0 ? previousTarget : randomIndex(game.playerCount, rng);
     const others = Array.from({ length: game.playerCount }, (_, i) => i).filter(i => i !== game.asker);
     game.target = others[randomIndex(others.length, rng)]; readyQuestion(game, rng);
+  }
+  // Earlier V3 saves had a round cap. Keep their progress and allowances when resuming.
+  function resumeEndless(game, rng) {
+    if (game.version !== 3) return game;
+    game.rounds = 0; game.round = game.turns + 1; game.winners = [];
+    if (game.phase === "over") {
+      game.phase = "playing";
+      selectPeople(game, rng, game.history.at(-1)?.target ?? -1);
+    }
+    return game;
   }
   function canEdit(game, actor) {
     return actor === game.asker && (game.stage === "prepare" || (game.selection === "together" && game.stage === "challenge" && game.responses.every(v => v === null)));
@@ -203,7 +213,7 @@
       if (pending >= 0) { game.current = pending; return; }
     }
     game.turns++;
-    game.round = Math.min(game.rounds, game.turns + 1);
+    game.round = game.version === 3 ? game.turns + 1 : Math.min(game.rounds, game.turns + 1);
     game.stage = "roll";
     game.current = 0;
     game.die = 0;
@@ -214,7 +224,7 @@
     game.target = -1;
     game.kind = null;
     game.prompt = null;
-    if (game.turns === game.rounds) {
+    if (game.version === 2 && game.turns === game.rounds) {
       game.phase = "over";
       const highest = Math.max(...game.scores);
       game.winners = game.scores.flatMap((score, index) => score === highest ? [index] : []);
@@ -235,7 +245,7 @@
     "操作参数无效 / Invalid action fields");
     validateRng(rng);
     // A final die can trigger a prompt draw. Commit them together or not at all.
-    const next = clone(game);
+    const next = resumeEndless(clone(game), rng);
     switch (action.type) {
       case "roll":
         requireRule(next.stage === "roll", "现在不能掷骰子 / Cannot roll now");
@@ -284,5 +294,5 @@
   }
 
   function snapshot(game) { return clone(game); }
-  return Object.freeze({ LEVELS, MODES, SELECTIONS, requireRule, createGame, act, snapshot, requiredActors, canSkip, canEdit });
+  return Object.freeze({ LEVELS, MODES, SELECTIONS, requireRule, createGame, act, snapshot, requiredActors, canSkip, canEdit, resumeEndless });
 });

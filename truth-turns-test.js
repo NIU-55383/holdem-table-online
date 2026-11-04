@@ -10,8 +10,9 @@ test("new games use 2-8 players, no rolls, and validate setup options",()=>{
     const g=E.createGame(count,{mode,selection},fixed);
     assert.equal(g.version,3);assert.notEqual(g.asker,g.target);assert.notEqual(g.stage,"roll");
     unchanged(g,()=>E.act(g,g.current,{type:"roll"}));
-    for(let n=0;n<3;n++){ask(g);E.act(g,g.target,{type:"complete"},fixed);}
-    assert.equal(g.phase,"over");assert.equal(g.scores.reduce((a,b)=>a+b),3);
+    for(let n=0;n<40;n++){ask(g);E.act(g,g.target,{type:"complete"},fixed);}
+    assert.equal(g.rounds,0);assert.equal(g.phase,"playing");assert.equal(g.round,41);assert.deepEqual(g.winners,[]);assert.equal(g.scores.reduce((a,b)=>a+b),40);
+    assert(g.history.length<=12,"long sessions keep bounded recent history");
   }
   for(const count of [0,1,9,12])assert.throws(()=>E.createGame(count));
   for(const options of [{selection:"bad"},{skipLimit:-2},{skipLimit:11},{skipLimit:1.5},{mode:"dare",selection:"together"}])assert.throws(()=>E.createGame(2,options));
@@ -32,7 +33,7 @@ test("two replacements per question, custom text remains available, budgets surv
   assert.deepEqual(restored.game,g);assert.equal(restored.skipLimit,1);assert.equal(restored.selection,"chain");
   ask(g);E.act(g,g.target,{type:"complete"},fixed);ask(g);
   assert.equal(g.target,target);unchanged(g,()=>E.act(g,target,{type:"skip"}));
-  E.act(g,target,{type:"complete"},fixed);assert.equal(g.phase,"over");
+  E.act(g,target,{type:"complete"},fixed);assert.equal(g.phase,"playing");assert.equal(g.round,4);
 });
 test("together shows one prompt, accepts either respondent, locks edits and rejects duplicates",()=>{
   const g=E.createGame(2,{mode:"truth",selection:"together",skipLimit:1},fixed);
@@ -45,7 +46,7 @@ test("together shows one prompt, accepts either respondent, locks edits and reje
   assert.equal(g.skipsUsed[0],1);unchanged(g,()=>E.act(g,0,{type:"skip"}));
   E.act(g,1,{type:"reroll"},fixed);E.act(g,0,{type:"complete"},fixed);E.act(g,1,{type:"complete"},fixed);
   E.act(g,0,{type:"complete"},fixed);E.act(g,1,{type:"complete"},fixed);
-  assert.equal(g.phase,"over");assert.deepEqual(g.scores,[2,3]);assert.deepEqual(g.winners,[1]);
+  assert.equal(g.phase,"playing");assert.equal(g.round,4);assert.deepEqual(g.scores,[2,3]);assert.deepEqual(g.winners,[]);
 });
 test("zero and unlimited skips, failed randomness and custom validation are atomic",()=>{
   const g=E.createGame(2,{mode:"truth",skipLimit:0},fixed);ask(g);
@@ -53,6 +54,23 @@ test("zero and unlimited skips, failed randomness and custom validation are atom
   unchanged(g,()=>E.act(g,g.target,{type:"complete"},()=>1));
   const both=E.createGame(2,{mode:"truth",selection:"together",skipLimit:-1},fixed);
   unchanged(both,()=>E.act(both,0,{type:"ask",text:"x".repeat(241)}));
-  for(let i=0;i<3;i++){E.act(both,0,{type:"skip"},fixed);E.act(both,1,{type:"skip"},fixed);}
-  assert.deepEqual(both.skipsUsed,[3,3]);assert.deepEqual(both.winners,[0,1]);
+  for(let i=0;i<40;i++){E.act(both,0,{type:"skip"},fixed);E.act(both,1,{type:"skip"},fixed);}
+  assert.deepEqual(both.skipsUsed,[40,40]);assert.deepEqual(both.winners,[]);assert.equal(both.phase,"playing");
+  const r={seats:[{position:0},{position:1}],...both,game:both,maxPlayers:2};
+  assert.deepEqual(Archive.decode(Archive.encode("truth",r),["truth"]).room.game,both);
+});
+
+test("older capped V3 saves resume without resetting progress or allowances",()=>{
+  const g=E.createGame(2,{mode:"truth",selection:"chain",rounds:3,skipLimit:1},fixed);
+  assert.equal(g.rounds,0,"old clients cannot impose a round cap on new games");
+  for(let i=0;i<3;i++){ask(g);E.act(g,g.target,{type:i===0?"skip":"complete"},fixed);}
+  const lastTarget=g.history.at(-1).target, counts=[...g.scores], skips=[...g.skipsUsed], history=E.snapshot(g).history;
+  Object.assign(g,{rounds:3,round:3,phase:"over",stage:"roll",current:0,asker:-1,target:-1,prompt:null,kind:null,winners:[1]});
+  const r={seats:[{position:0},{position:1}],...g,game:g,maxPlayers:2};
+  const restored=Archive.decode(Archive.encode("truth",r),["truth"]).room;
+  assert.equal(restored.rounds,0);assert.equal(restored.game.phase,"playing");assert.equal(restored.game.round,4);
+  assert.equal(restored.game.asker,lastTarget);assert.deepEqual(restored.game.scores,counts);assert.deepEqual(restored.game.skipsUsed,skips);assert.deepEqual(restored.game.history,history);
+  assert.deepEqual(restored.game.winners,[]);
+  const active=E.createGame(2,{mode:"truth"},fixed);active.rounds=5;
+  const prompt=active.prompt;E.resumeEndless(active);assert.equal(active.prompt,prompt);assert.equal(active.rounds,0);
 });

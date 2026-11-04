@@ -136,12 +136,13 @@ function attachTruth(server) {
         session.updated = Date.now();
         if (archives.handle(session, ws, d)) return;
         if (d.type === "create") {
-          const name = clean(d.name), level = d.level ?? "heat", mode = d.mode ?? "mixed", rounds = d.rounds ?? 3, maxPlayers = d.maxPlayers ?? 4;
+          const name = clean(d.name), level = d.level ?? "heat", mode = d.mode ?? "mixed", maxPlayers = d.maxPlayers ?? 4;
           const selection = d.selection ?? "random", skipLimit = d.skipLimit ?? 3;
+          const rounds = selection === "dice" ? d.rounds ?? 3 : 0;
           fail(name, "请输入名字 / Enter your name");
           fail(E.LEVELS.includes(level), "请选择挑战强度 / Choose a challenge level");
           fail(["truth", "dare", "mixed"].includes(mode), "请选择真心话、大冒险或混合 / Choose truth, dare or mixed mode");
-          fail([3, 5, 8].includes(rounds), "请选择 3、5 或 8 轮 / Choose 3, 5 or 8 rounds");
+          fail(selection !== "dice" || [3, 5, 8].includes(rounds), "请选择 3、5 或 8 轮 / Choose 3, 5 or 8 rounds");
           fail(Number.isInteger(maxPlayers) && maxPlayers >= 2 && maxPlayers <= 8, "房间人数为 2–8 人 / Rooms hold 2–8 players");
           E.createGame(maxPlayers, { level, mode, rounds, selection, skipLimit });
           detach(session, true);

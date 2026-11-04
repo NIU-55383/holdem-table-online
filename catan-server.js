@@ -8,7 +8,7 @@ const AvatarData = require("./avatar-data");
 const Social = require("./game-social"), SocialData = require("./social-data");
 
 function attachCatan(server) {
-  const wss = new WebSocketServer({ noServer: true, maxPayload: 32768,
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 2200000,
     perMessageDeflate: { serverNoContextTakeover: true, clientNoContextTakeover: true,
       threshold: 1024, concurrencyLimit: 4, zlibDeflateOptions: { level: 3 } } });
   const rooms = new Map(), sessions = new Map();
@@ -43,6 +43,8 @@ function attachCatan(server) {
   function openPosition(room) {
     return Array.from({ length: room.maxPlayers }, (_, i) => i).find((position) => !room.seats.some((p) => p.position === position));
   }
+  const archives = require("./room-archive").createRoomArchive({ kind: "catan", rooms, sessions, control, send,
+    stop: r => clearTimeout(r.timer), broadcast, validate: r => r.seats.forEach((_, i) => E.publicGame(r.game, i)) });
   function remapChat(room, previousSeats) {
     // Seat indices become game player IDs at start; chat authors must follow the person.
     room.chat.forEach((message) => {
@@ -69,6 +71,7 @@ function attachCatan(server) {
   }
   function broadcast(room) {
     control.sync(room);
+    archives.sync(room);
     room.updated = Date.now();
     room.seats.forEach((p) => { if (!p.bot && p.ws) send(p.ws, snapshot(room, p)); });
     schedule(room);
@@ -143,8 +146,9 @@ function attachCatan(server) {
           session.ws = ws; session.updated = Date.now();
           if (avatar !== undefined) session.avatar = avatar;
           if (oldWs && oldWs !== ws) oldWs.close(4001, "Reconnected");
-          send(ws, { type: "welcome", token: session.token });
           const room = rooms.get(session.room);
+          const member = room?.seats.some(p => p.token === session.token);
+          send(ws, { type: "welcome", token: session.token, room: member ? room.code : null });
           if (room) {
             const seat = room.seats.find((p) => p.token === session.token);
             if (seat) { seat.ws = ws; seat.auto = false; if (avatar !== undefined) seat.avatar = avatar; broadcast(room); }
@@ -153,6 +157,7 @@ function attachCatan(server) {
         }
         fail(session && session.ws === ws, "请先连接 / Connect first");
         session.updated = Date.now();
+        if (archives.handle(session, ws, data)) return;
         if (data.type === "create") {
           const name = clean(data.name); fail(name, "请输入名字 / Enter your name");
           const mapId = data.mapId || "base", map = Maps.get(mapId);
@@ -244,7 +249,7 @@ function attachCatan(server) {
     for (const [token, s] of sessions) if (!s.ws && Date.now() - s.updated > 24 * 3600000) sessions.delete(token);
   }, 30000);
   heartbeat.unref();
-  server.on("close", () => { control.close(); clearInterval(heartbeat); rooms.forEach((r) => clearTimeout(r.timer)); wss.clients.forEach((ws) => ws.terminate()); wss.close(); });
+  server.on("close", () => { archives.close(); control.close(); clearInterval(heartbeat); rooms.forEach((r) => clearTimeout(r.timer)); wss.clients.forEach((ws) => ws.terminate()); wss.close(); });
   const previews = new Map([["base", E.makeBoard()], ...Maps.maps.map((map) => [map.id, E.makeBoard(undefined, map.id)])]);
   previews.set("base:5-6", E.makeBoard(undefined, "base", "default", 6));
   Maps.maps.forEach((map) => previews.set(`${map.id}:random`, E.makeBoard(undefined, map.id, "random")));

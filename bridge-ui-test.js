@@ -22,6 +22,16 @@ async function main() {
   const url = `http://127.0.0.1:${server.address().port}`;
   try {
     await page.goto(url + "/bridge.html"); await page.waitForFunction(() => document.querySelector("#connection").textContent.includes("Connected"));
+    assert.equal(await page.locator('[id*="lesson" i], [id*="tutorial" i], [src*="bridge-lesson"], [href*="bridge-lesson"]').count(), 0);
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: width === 1440 ? 1100 : 844 });
+      assert.equal(await page.locator("#rulesBtn").isVisible(), true);
+      await page.click("#rulesBtn");
+      assert.match(await page.locator("#rulesDialog").innerText(), /桥牌规则[\s\S]*Bridge Rules/);
+      await page.click('[data-close="rulesDialog"]');
+      await page.screenshot({ path: path.join(dir, `bridge-entry-rules-only-${width}.png`), fullPage: true });
+    }
+    await page.setViewportSize({ width: 1440, height: 1100 });
     await page.fill("#playerName", "Alice"); await page.click("#createBtn"); await page.waitForFunction(() => window.testState?.seats.length === 1);
     await page.click("#fillBtn"); await page.waitForFunction(() => window.testState?.seats.length === 4);
     await page.screenshot({ path: path.join(dir, "bridge-lobby-desktop.png"), fullPage: true });
@@ -29,6 +39,7 @@ async function main() {
     await page.click("#lobbySeats [data-social-target]");
     await page.locator(".reaction-options button").first().click(); await page.waitForSelector(".avatar-reaction");
     await page.click("#startBtn"); await page.waitForFunction(() => window.testState?.game?.phase === "auction");
+    assert.equal(await page.evaluate(() => Object.hasOwn(window.testState, "lesson")), false);
     assert.equal(await page.locator("#handPanel .playing-card").count(), 13);
     await page.locator('[data-call="1NT"]').click(); await page.waitForFunction(() => window.testState.game.auction.length === 1);
     assert.match(await page.locator("#auction").innerText(), /1NT/);
@@ -74,8 +85,10 @@ async function main() {
     await page.screenshot({ path: path.join(dir, "bridge-result.png"), fullPage: true });
     await page.click("#nextBtn"); await page.waitForFunction(() => window.testState.game.board === 2);
     await page.reload(); await page.waitForFunction(() => window.testState?.game?.board === 2); assert.equal(await page.locator("#handPanel .playing-card").count(), 13);
+    assert.equal(await page.locator('[id*="lesson" i], [id*="tutorial" i]').count(), 0);
+    assert.equal(await page.evaluate(() => Object.hasOwn(window.testState, "lesson")), false);
     assert.deepEqual(errors, []); assert.deepEqual(failed, []);
-    console.log("Bridge browser checks passed: desktop/mobile, rules, avatars, reactions, auction, dummy, cards, scores, audio and reconnect.");
+    console.log("Bridge browser checks passed: no teaching UI, rules before/during play, desktop/mobile, avatars, reactions, auction, dummy, cards, scores, audio and reconnect.");
   } finally { await browser.close(); await new Promise((resolve) => server.close(resolve)); }
 }
 main().catch((e) => { console.error(e); process.exitCode = 1; });

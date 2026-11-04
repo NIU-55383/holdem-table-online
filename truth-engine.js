@@ -10,6 +10,7 @@
   const LEVELS = Data.LEVELS;
   const KINDS = ["truth", "dare"];
   const MODES = Object.freeze(["truth", "dare", "mixed"]);
+  const SELECTIONS = Object.freeze(["random", "chain", "together"]);
   const ACTIONS = ["roll", "choose", "ask", "complete", "skip", "reroll"];
   const HISTORY_LIMIT = 12;
   const requireRule = (condition, message) => { if (!condition) throw Error(message); };
@@ -41,27 +42,55 @@
   }
 
   function createGame(playerCount, options = {}, rng) {
-    requireRule(Number.isInteger(playerCount) && playerCount >= 2 && playerCount <= 12,
-      "需要 2 至 12 位玩家 / Choose 2 to 12 players");
+    requireRule(Number.isInteger(playerCount) && playerCount >= 2 && playerCount <= (options?.selection === "dice" ? 12 : 8),
+      "需要 2 至 8 位玩家 / Choose 2 to 8 players");
     requireRule(options !== null && typeof options === "object" && !Array.isArray(options),
       "设置无效 / Invalid options");
-    requireRule(Object.keys(options).every(key => ["level", "rounds", "mode"].includes(key)),
+    requireRule(Object.keys(options).every(key => ["level", "rounds", "mode", "selection", "skipLimit"].includes(key)),
       "未知设置 / Unknown option");
     const level = options.level === undefined ? "heat" : options.level;
     const rounds = options.rounds === undefined ? 3 : options.rounds;
     const mode = options.mode === undefined ? "mixed" : options.mode;
+    const selection = options.selection ?? "random", skipLimit = options.skipLimit ?? 3;
+    requireRule(SELECTIONS.includes(selection) || selection === "dice", "选人方式无效 / Invalid turn order");
+    requireRule(selection !== "together" || (playerCount === 2 && mode === "truth"), "共同回答仅限两人真心话 / Answer together requires two players and Truth mode");
+    requireRule(Number.isInteger(skipLimit) && skipLimit >= -1 && skipLimit <= 10, "跳过次数须为 0–10 或不限 / Choose 0–10 skips or unlimited");
     requireRule(LEVELS.includes(level), "请选择有效的刺激等级 / Invalid intensity");
     requireRule(MODES.includes(mode), "请选择真心话、大冒险或混合模式 / Invalid mode");
     requireRule(Number.isInteger(rounds) && rounds >= 1 && rounds <= 10,
       "轮数须为 1 至 10 / Choose 1 to 10 rounds");
     validateRng(rng);
-    return {
-      type: "truth", version: 2, playerCount, phase: "playing", stage: "roll",
+    const game = {
+      type: "truth", version: selection === "dice" ? 2 : 3, playerCount, phase: "playing", stage: "roll",
       current: 0, round: 1, rounds, level, mode, die: 0,
       dice: Array(playerCount).fill(0), tie: null, tieHistory: [], asker: -1, target: -1,
       kind: null, prompt: null, scores: Array(playerCount).fill(0),
       turns: 0, revision: 0, winners: [], history: [], used: {}
     };
+    if (game.version === 3) {
+      Object.assign(game, { selection, skipLimit, skipsUsed: Array(playerCount).fill(0), replacements: 0, responses: Array(playerCount).fill(null) });
+      selectPeople(game, rng);
+    }
+    return game;
+  }
+
+  function selectPeople(game, rng, previousTarget = -1) {
+    game.replacements = 0; game.responses = Array(game.playerCount).fill(null);
+    if (game.selection === "together") {
+      game.asker = game.turns % 2; game.target = -1;
+      draw(game, "truth", rng); return;
+    }
+    game.asker = game.selection === "chain" && previousTarget >= 0 ? previousTarget : randomIndex(game.playerCount, rng);
+    const others = Array.from({ length: game.playerCount }, (_, i) => i).filter(i => i !== game.asker);
+    game.target = others[randomIndex(others.length, rng)]; readyQuestion(game, rng);
+  }
+  function canEdit(game, actor) {
+    return actor === game.asker && (game.stage === "prepare" || (game.selection === "together" && game.stage === "challenge" && game.responses.every(v => v === null)));
+  }
+  function canSkip(game, actor) { return game.version === 2 || game.skipLimit === -1 || game.skipsUsed[actor] < game.skipLimit; }
+  function requiredActors(game) {
+    if (game.phase !== "playing") return [];
+    return game.selection === "together" && game.stage === "challenge" ? game.responses.flatMap((v, i) => v === null ? [i] : []) : [game.current];
   }
 
   function draw(game, kind, rng) {
@@ -77,8 +106,8 @@
     game.used[key] = used.concat(selected.id);
     game.prompt = { id: selected.id, zh: selected.zh, en: selected.en };
     game.kind = kind;
-    game.stage = "prepare";
-    game.current = game.asker;
+    game.stage = game.selection === "together" ? "challenge" : "prepare";
+    game.current = game.selection === "together" ? 0 : game.asker;
   }
 
   function tiedSeats(dice, candidates, role) {
@@ -157,15 +186,22 @@
     }
   }
 
-  function finishContest(game, outcome) {
+  function finishContest(game, outcome, actor, rng) {
     const completed = outcome === "complete", points = completed ? 1 : 0;
-    game.scores[game.target] += points;
+    const target = game.selection === "together" ? actor : game.target, previousTarget = game.target;
+    game.scores[target] += points;
+    if (game.version === 3 && outcome === "skip") game.skipsUsed[target]++;
     game.history.push({
-      actor: game.target, asker: game.asker, target: game.target, round: game.round,
+      actor: target, asker: game.asker, target, round: game.round,
       dice: game.dice.slice(), kind: game.kind, prompt: clone(game.prompt),
       outcome, completed, points
     });
     if (game.history.length > HISTORY_LIMIT) game.history.splice(0, game.history.length - HISTORY_LIMIT);
+    if (game.selection === "together") {
+      game.responses[actor] = outcome;
+      const pending = game.responses.indexOf(null);
+      if (pending >= 0) { game.current = pending; return; }
+    }
     game.turns++;
     game.round = Math.min(game.rounds, game.turns + 1);
     game.stage = "roll";
@@ -182,13 +218,13 @@
       game.phase = "over";
       const highest = Math.max(...game.scores);
       game.winners = game.scores.flatMap((score, index) => score === highest ? [index] : []);
-    }
+    } else if (game.version === 3) selectPeople(game, rng, previousTarget);
   }
 
   function act(game, actor, action, rng) {
     requireRule(game && typeof game === "object" && game.phase === "playing",
       "本局已结束 / Game is not playing");
-    requireRule(Number.isInteger(actor) && actor === game.current,
+    requireRule(Number.isInteger(actor) && (requiredActors(game).includes(actor) || (["ask", "reroll"].includes(action?.type) && canEdit(game, actor))),
       "还没轮到你 / Not your turn");
     requireRule(action !== null && typeof action === "object" && !Array.isArray(action),
       "操作无效 / Invalid action");
@@ -207,17 +243,19 @@
         break;
       case "choose":
         requireRule(next.stage === "choose" && actor === next.asker,
-          "由最高点玩家选类型 / The highest roller chooses");
+          "由提问者选类型 / The asker chooses");
         requireRule(KINDS.includes(action.kind), "请选择真心话或大冒险 / Choose truth or dare");
         draw(next, action.kind, rng);
         break;
       case "reroll":
-        requireRule(next.stage === "prepare" && actor === next.asker,
+        requireRule(canEdit(next, actor),
           "仅提问者可在确认前换题 / Only the asker can replace an unconfirmed question");
+        requireRule(next.version === 2 || next.replacements < 2, "本轮两次换题已用完 / Both prompt replacements have been used");
         draw(next, next.kind, rng);
+        if (next.version === 3) next.replacements++;
         break;
       case "ask": {
-        requireRule(next.stage === "prepare" && actor === next.asker,
+        requireRule(canEdit(next, actor),
           "仅提问者可确认问题 / Only the asker can confirm the question");
         if (Object.prototype.hasOwnProperty.call(action, "text")) {
           requireRule(typeof action.text === "string", "自定义题目须为文本 / Custom prompt must be text");
@@ -229,14 +267,15 @@
           next.prompt = { id: "custom-" + next.round + "-" + (next.revision + 1), zh: text, en: "Custom prompt from the asker." };
         }
         next.stage = "challenge";
-        next.current = next.target;
+        next.current = next.selection === "together" ? 0 : next.target;
         break;
       }
       case "complete":
       case "skip":
-        requireRule(next.stage === "challenge" && actor === next.target,
-          "仅最低点玩家可回应 / Only the lowest roller can respond");
-        finishContest(next, action.type);
+        requireRule(next.stage === "challenge" && (next.selection === "together" ? next.responses[actor] === null : actor === next.target),
+          "仅被问到的玩家可回应 / Only the respondent can answer");
+        requireRule(action.type !== "skip" || canSkip(next, actor), "你的跳过次数已用完 / You have no skips left");
+        finishContest(next, action.type, actor, rng);
         break;
     }
     next.revision++;
@@ -245,5 +284,5 @@
   }
 
   function snapshot(game) { return clone(game); }
-  return Object.freeze({ LEVELS, MODES, requireRule, createGame, act, snapshot });
+  return Object.freeze({ LEVELS, MODES, SELECTIONS, requireRule, createGame, act, snapshot, requiredActors, canSkip, canEdit });
 });

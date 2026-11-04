@@ -23,6 +23,7 @@ async function main() {
     const cases = [
       { game: "poker", url: "/index.html", button: '[data-rules-game="poker"]', dialog: "#gameRulesDialog", title: "Texas Hold'em Rules" },
       { game: "truth", url: "/truth.html", button: "#rulesBtn", dialog: "#gameRulesDialog", title: "Truth or Dare Rules" },
+      { game: "million", url: "/million.html", button: "#rulesBtn", dialog: "#gameRulesDialog", title: "Millions of Dollars" },
       { game: "gomoku", url: "/duel.html?game=gomoku", button: "#rulesBtn", dialog: "#gameRulesDialog", title: "Gomoku Rules" },
       { game: "xiangqi", url: "/duel.html?game=xiangqi", button: "#rulesBtn", dialog: "#gameRulesDialog", title: "Xiangqi Rules" },
       { game: "bridge", url: "/bridge.html", button: "#rulesBtn", dialog: "#rulesDialog", title: "Bridge Rules" },
@@ -32,6 +33,10 @@ async function main() {
     ];
     for (const spec of cases) {
       await page.setViewportSize({ width: 1440, height: 1000 }); await page.goto(base + spec.url);
+      if (spec.game === "bridge") {
+        assert.equal(await page.locator('[id*="lesson" i], [id*="tutorial" i], [src*="bridge-lesson"], [href*="bridge-lesson"]').count(), 0);
+        assert.equal(await page.locator("#rulesDialog [lang=en]").count(), 11);
+      }
       if (spec.game === "poker") await page.click('[data-view-target="online"]');
       await page.evaluate(() => document.querySelectorAll("dialog[open]").forEach((d) => d.close()));
       for (const [width, height] of [[1440, 1000], [390, 844], [320, 740], [740, 320]]) {
@@ -39,6 +44,8 @@ async function main() {
         const before = await page.evaluate(() => window.rulesSent.length);
         await page.locator(spec.button).click(); const dialog = page.locator(spec.dialog); await dialog.waitFor({ state: "visible" });
         assert((await dialog.locator("h2").innerText()).includes(spec.title));
+        assert.equal(await dialog.locator('[data-rule-section="saves"]').count(), 1);
+        assert((await dialog.locator('[data-rule-section="saves"]').innerText()).includes("hidden cards"));
         const stats = await dialog.evaluate((d) => {
           const b = d.getBoundingClientRect(), body = d.querySelector(".bg-rules-body"), s = getComputedStyle(d);
           return { bounds: b.left >= 0 && b.top >= 0 && b.right <= innerWidth + 1 && b.bottom <= innerHeight + 1,
@@ -66,7 +73,7 @@ async function main() {
     await page.evaluate(() => document.querySelector(".hand-rank-open").click());
     assert.equal(await page.locator('#gameRulesDialog [data-rule-section="rankings"] li').count(), 10);
     assert(await page.locator("#gameRulesDialog .bg-rules-body").evaluate((el) => el.scrollTop > 0));
-    assert.deepEqual(errors, []); console.log("Shared rules browser checks passed: all six games, Seafarers/map rules, four viewports, end scrolling, keyboard, focus, rankings and no gameplay messages.");
+    assert.deepEqual(errors, []); console.log("Shared rules browser checks passed: all seven games, Seafarers/map rules, four viewports, end scrolling, keyboard, focus, rankings and no gameplay messages.");
   } finally {
     await browser?.close(); const closed = once(child, "exit"); child.kill(); await closed;
   }

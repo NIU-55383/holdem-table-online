@@ -11,7 +11,7 @@ function createRoomControl(options) {
   const hostGraceMs = Math.max(200, Number(process.env.ROOM_HOST_GRACE_MS) || 300000);
   const meta = (room) => room.roomControl ||= { pending: null, idle: new Map(), idleAuto: false, timeoutAuto: new Set(), hostOffline: null };
   const human = (p) => p && !p.vacant && !p.departed && !bot(p);
-  const paused = (room) => seats(room).some((p) => p?.vacant);
+  const paused = (room) => Boolean(room.archiveRestoring || room.archiveFreeze || seats(room).some((p) => p?.vacant));
   function elect(room, { now = Date.now(), immediate = false } = {}) {
     const m = meta(room), owner = host(room);
     const list = seats(room).map((p, index) => ({p, position:p?.position ?? index})).sort((a,b) => a.position-b.position).map(({p}) => p);
@@ -44,7 +44,7 @@ function createRoomControl(options) {
   function snapshot(room, viewer) {
     const m = meta(room), idle = m.idle.get(viewer);
     return { code: room.code, you: Social.publicId(viewer), host: seats(room).find((p) => identity(p) === host(room)) ? Social.publicId(seats(room).find((p) => identity(p) === host(room))) : null,
-      started: options.started(room), paused: paused(room), auto: Boolean(viewer.auto), idleAuto: m.idleAuto, now: Date.now(),
+      started: options.started(room), paused: paused(room), archive: { supported: true, restoring: Boolean(room.archiveRestoring), saving: Boolean(room.archiveFreeze) }, auto: Boolean(viewer.auto), idleAuto: m.idleAuto, now: Date.now(),
       warning: idle ? { warnAt: idle.deadline - warningMs, deadline: idle.deadline } : null,
       pending: m.pending ? { id: m.pending.id, from: m.pending.from, to: m.pending.to, next: m.pending.next } : null,
       seats: seats(room).map((p, index) => p ? { id: Social.publicId(p), index, position: p.position ?? index, name: p.name, avatar: p.avatar || null, bot: Boolean(bot(p)), vacant: Boolean(p.vacant), connected: !p.vacant && Boolean(bot(p) || connected(p)) } : null) };
@@ -59,9 +59,10 @@ function createRoomControl(options) {
     return next;
   }
   function touch(room, player) { meta(room).idle.delete(player); }
-  function guard(room) { requireRule(!paused(room), "空位待补齐，游戏暂停 / Game paused until all empty seats are filled"); }
+  function guard(room) { requireRule(!paused(room), "游戏暂停，请在房间管理中查看 / Game paused; check room management"); }
   function handle(room, sender, data) {
     if (data.type !== "roomControl") return false;
+    requireRule(!room.archiveFreeze, "正在保存，请等待房主完成或取消 / Saving; wait for the host to finish or cancel");
     sync(room);
     const list = seats(room), m = meta(room), own = Social.publicId(sender), isHost = host(room) === identity(sender);
     requireRule(human(sender) && connected(sender), "连接已失效 / No active seat");

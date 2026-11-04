@@ -18,6 +18,35 @@ async function fixture(t) {
   }
   return { server, api, client };
 }
+test("Bridge has no teaching protocol; normal rooms and bots continue without lesson steps", async (t) => {
+  const { api, client } = await fixture(t), a = await client();
+  const removed = ["createTutorial", "lessonContinue", "lessonRestart"];
+  for (const type of removed) {
+    await a.request({ type, name: "Alice", revision: 0 }, v => v.type === "error");
+    assert.equal(api.rooms.size, 0);
+  }
+  await a.request({ type: "create", name: "Alice", boards: 1 }, v => v.type === "error");
+  assert.equal(api.rooms.size, 0);
+  await a.request({ type: "create", name: "Alice", boards: 4 });
+  const code = a.state.code, room = api.rooms.get(code);
+  assert.equal(Object.hasOwn(a.state, "lesson"), false);
+  assert.equal(Object.hasOwn(room, "tutorial"), false);
+  for (const started of [false, true]) {
+    if (started) { await a.request({ type: "fillBots" }); await a.request({ type: "start" }); }
+    const before = structuredClone(room.game), seats = room.seats.map(p => p.token), scores = structuredClone(room.scores);
+    for (const type of removed) {
+      await a.request({ type, name: "Alice", revision: room.game?.revision ?? 0 }, v => v.type === "error");
+      assert.equal(api.rooms.size, 1); assert.equal(a.state.code, code);
+      assert.deepEqual(room.game, before); assert.deepEqual(room.scores, scores);
+      assert.deepEqual(room.seats.map(p => p.token), seats);
+    }
+  }
+  process.env.BRIDGE_BOT_DELAY = "20";
+  await a.request({ type: "action", action: { type: "call", call: "1NT", revision: room.game.revision } });
+  await until(() => room.game.auction.length > 1, "Bots still respond automatically");
+  assert.equal(Object.hasOwn(a.state, "lesson"), false);
+});
+
 test("Bridge adapter: private hands, seat consent, host consent, vacancies, reconnection and reactions", { timeout: 20000 }, async (t) => {
   const { api, client } = await fixture(t), a = await client(), b = await client();
   await a.request({ type: "create", name: "Alice", boards: 4 }); const code = a.state.code;

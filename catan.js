@@ -6,6 +6,40 @@
   const devNames = { knight: ["骑士", "Knight"], roads: ["道路建设", "Road Building"], plenty: ["丰收", "Year of Plenty"], monopoly: ["垄断", "Monopoly"], vp: ["胜利点", "Victory Point"] };
   const costs = { road: [0, 1], ship: [0, 2], settlement: [0, 1, 2, 3], city: [3, 3, 4, 4, 4], development: [2, 3, 4] };
   const state = { socket: null, room: null, seats: 4, mode: "", selected: null, tradeMode: "bank", resourceMode: "", pending: false, phaseKey: "", diceKey: "", reconnect: null, noticeTimer: null, cardBaseline: false, cardChanges: new Map(), cardChangeTimer: null };
+  const savedRoomsKey = "catan-saved-rooms";
+  function readStored(storage, key) { try { return window[storage].getItem(key) || ""; } catch { return ""; } }
+  function writeStored(storage, key, value) { try { window[storage].setItem(key, value); } catch {} }
+  let token = readStored("sessionStorage", "catan-token"), resumeAttempt = null, resumeTimer = null;
+  function savedRooms() {
+    try {
+      const entries = JSON.parse(readStored("localStorage", savedRoomsKey) || "[]");
+      return Array.isArray(entries) ? entries.filter(r => r && /^C[0-9A-F]{4}$/.test(r.code) && /^[0-9a-f]{48}$/.test(r.token) && typeof r.name === "string" && Number.isFinite(r.updated) && r.updated <= Date.now() && Date.now() - r.updated < 24 * 3600000).slice(0, 8) : [];
+    } catch { return []; }
+  }
+  function rememberRoom(room) {
+    const player = room.seats[room.you];
+    if (!player || !token) return;
+    const entry = { code: room.code, token, name: player.name, updated: Date.now() };
+    writeStored("localStorage", savedRoomsKey, JSON.stringify([entry, ...savedRooms().filter(r => r.code !== room.code && r.token !== token)].slice(0, 8)));
+  }
+  function forgetRoom(code, owner = token) {
+    writeStored("localStorage", savedRoomsKey, JSON.stringify(savedRooms().filter(r => r.code !== code || r.token !== owner)));
+  }
+  function resumeChoice() {
+    const code = $("code").value.trim().toUpperCase(), entries = savedRooms();
+    return code ? entries.find(r => r.code === code) : entries[0];
+  }
+  function renderResume() {
+    const saved = resumeChoice(), button = $("resumeRoom");
+    button.hidden = Boolean(state.room) || !saved;
+    button.disabled = Boolean(resumeAttempt) || state.socket?.readyState !== WebSocket.OPEN;
+    button.textContent = saved ? `返回对局 ${saved.code} / Rejoin as ${saved.name}` : "";
+  }
+  function clearRoomView() {
+    audio.stop(); soundEvents.reset(); resetSupplyFeedback(); viewedTradeKey = ""; clearCardChanges(); clearChatBubbles(); resetBoardView();
+    state.cardBaseline = false; state.room = null; rememberMapIntro(null); state.phaseKey = ""; state.pending = false; state.mode = ""; state.selected = null; state.moveFrom = null;
+    document.querySelectorAll("dialog[open]").forEach(d => d.close()); render();
+  }
   const CARD_CHANGE_DURATION = 3500;
   const audio = window.CatanAudio.create(), soundEvents = window.CatanAudio.tracker(kind => audio.play(kind));
   const music = window.CatanMusic.create();
@@ -65,6 +99,7 @@
   catch { state.skins = window.GameSocialData.normalizeSkins(); }
   const social = window.BoardGameUI.mountInteractions(() => state.room && ({ code: state.room.code, players: state.room.seats, you: state.room.seats[state.room.you]?.socialId, connected: state.socket?.readyState === WebSocket.OPEN }), send, { audio, onSoundChange: () => { renderSoundToggle(); renderAudioSettings(); } });
   const management = window.BoardGameUI.mountRoomControl(() => state.room?.control, send, () => document.querySelector(state.room?.game ? ".game-rule-links" : "#lobby .room-heading"));
+  const archives = BoardGameArchives.mount({ game: "catan", send, view: () => state.room?.control, name: () => $("name").value, anchor: $("name").closest("form") || $("setup") });
   function renderSkins() {
     $("pieceSkins").innerHTML = Object.entries(window.GameSocialData.skins).map(([kind, choices]) => `<fieldset ${kind === "pirate" && state.mapId === "base" ? "hidden" : ""}><legend>${kind === "robber" ? "强盗 / Robber" : "海盗 / Pirate"}</legend><div class="skin-options">${choices.map((s) => `<button type="button" data-skin-kind="${kind}" data-skin="${s.id}" title="${s.label}" aria-label="${s.label}" aria-pressed="${state.skins[kind] === s.id}">${s.emoji || `<svg viewBox="0 0 48 48" aria-hidden="true">${B.icon(s.art)}</svg>`}</button>`).join("")}</div></fieldset>`).join("");
   }
@@ -404,26 +439,54 @@
   }
   function connect() {
     clearTimeout(state.reconnect);
+    clearTimeout(resumeTimer);
+    const previousSocket = state.socket;
     const protocol = location.protocol === "https:" ? "wss:" : "ws:", host = location.protocol === "file:" ? "127.0.0.1:8002" : location.host;
     const ws = new WebSocket(`${protocol}//${host}/catan-ws`); state.socket = ws;
+    if (previousSocket && previousSocket.readyState < WebSocket.CLOSING) previousSocket.close();
     $("connection").textContent = "连接中 / Connecting";
-    ws.addEventListener("open", () => { $("connection").textContent = "已连接 / Connected"; $("connection").classList.remove("offline"); send({ type: "hello", token: sessionStorage.getItem("catan-token") || "", avatar: window.BoardGameUI.getAvatar() }); });
+    renderResume();
+    ws.addEventListener("open", () => {
+      if (state.socket !== ws) return;
+      $("connection").textContent = "已连接 / Connected"; $("connection").classList.remove("offline");
+      send({ type: "hello", token, avatar: window.BoardGameUI.getAvatar() });
+    });
     ws.addEventListener("message", (event) => {
+      if (state.socket !== ws) return;
       let data; try { data = JSON.parse(event.data); } catch { return; }
-      if (data.type === "welcome") { sessionStorage.setItem("catan-token", data.token); soundEvents.reset(); resetBattleFeedback(); resetSupplyFeedback(); state.cardBaseline = false; clearCardChanges(); renderCardChanges(); clearChatBubbles(); }
+      if (archives.receive(data)) return;
+      if (data.type === "welcome") {
+        const previousToken = token, expected = resumeAttempt?.code || state.room?.code;
+        token = data.token; writeStored("sessionStorage", "catan-token", token);
+        soundEvents.reset(); resetBattleFeedback(); resetSupplyFeedback(); state.cardBaseline = false; clearCardChanges(); renderCardChanges(); clearChatBubbles();
+        if (expected && (token !== previousToken || data.room === null || (typeof data.room === "string" && data.room !== expected))) {
+          forgetRoom(expected, previousToken); resumeAttempt = null; clearRoomView();
+          notice("未能恢复原座位：房间或身份已失效。若朋友仍在原局，请让现任房主处理离线座位。 / Could not restore your seat. If friends are still playing, ask the current host to manage the offline seat.");
+        } else if (expected) {
+          // Older servers do not include room membership in the welcome message.
+          resumeTimer = setTimeout(() => {
+            resumeAttempt = null; clearRoomView();
+            notice("未收到原对局，请重试；不要新建房间覆盖原身份。 / No saved game received. Retry without creating a new room.");
+          }, 8000);
+        }
+        renderResume();
+      }
       if (data.type === "reaction") { social.receive(data); return; }
-      if (data.type === "state") { soundEvents.update(data); trackCardChanges(data); trackChatBubbles(data); trackSupplyShortages(data); state.room = data; social.sync(); state.pending = false; render(); showMapIntroduction(); }
+      if (data.type === "state") { clearTimeout(resumeTimer); resumeAttempt = null; rememberRoom(data); soundEvents.update(data); trackCardChanges(data); trackChatBubbles(data); trackSupplyShortages(data); state.room = data; social.sync(); state.pending = false; render(); showMapIntroduction(); }
       if (data.type === "error") { state.pending = false; notice(data.message); renderActions(); renderScenario(); }
-      if (data.type === "left") { audio.stop(); soundEvents.reset(); resetSupplyFeedback(); viewedTradeKey = ""; clearCardChanges(); clearChatBubbles(); resetBoardView(); state.cardBaseline = false; state.room = null; rememberMapIntro(null); state.phaseKey = ""; state.pending = false; state.mode = ""; state.selected = null; state.moveFrom = null; document.querySelectorAll("dialog[open]").forEach((d) => d.close()); render(); if (data.reason) notice(data.reason); }
+      if (data.type === "left") { clearTimeout(resumeTimer); forgetRoom(state.room?.code); resumeAttempt = null; clearRoomView(); if (data.reason) notice(data.reason); }
     });
     ws.addEventListener("close", (event) => {
+      if (state.socket !== ws) return;
+      clearTimeout(resumeTimer);
       audio.stop(); soundEvents.reset(); resetSupplyFeedback(); $("incomingTradeAlert").hidden = true;
-      $("connection").textContent = "正在重连 / Reconnecting"; $("connection").classList.add("offline");
+      $("connection").textContent = event.code === 4001 ? "已在其他页面连接 / Connected elsewhere" : "正在重连 / Reconnecting"; $("connection").classList.add("offline");
+      renderResume();
       if (state.room) render();
       if (event.code !== 4001) state.reconnect = setTimeout(connect, 1800);
       else notice("此座位已在另一个连接打开 / Seat opened in another connection");
     });
-    ws.addEventListener("error", () => ws.close());
+    ws.addEventListener("error", () => { if (state.socket === ws) ws.close(); });
   }
   function playerName() { const name = $("name").value.trim(); if (!name) { notice("请输入你的名字 / Enter your name"); $("name").focus(); return ""; } localStorage.setItem("boardclub-name", name); return name; }
   $("name").value = localStorage.getItem("boardclub-name") || localStorage.getItem("holdem-online-name") || "";
@@ -434,7 +497,20 @@
   $("code").value = new URLSearchParams(location.search).get("room") || "";
   $("seatChoice").addEventListener("click", (e) => { const button = e.target.closest("[data-seats]"); if (!button) return; state.seats = Number(button.dataset.seats); $("seatChoice").querySelectorAll("button").forEach((b) => { b.classList.toggle("selected", b === button); b.setAttribute("aria-pressed", String(b === button)); }); chooseMap(state.mapId); });
   $("create").onclick = () => { const name = playerName(); if (name) send({ type: "create", name, avatar: window.BoardGameUI.getAvatar(), seats: state.seats, mapId: state.mapId, layout: state.layout, skins: state.skins, thieves: state.thieves }); };
-  $("join").onclick = () => { const name = playerName(); if (name) send({ type: "join", name, avatar: window.BoardGameUI.getAvatar(), code: $("code").value }); };
+  $("join").onclick = () => {
+    if (resumeAttempt) return;
+    const name = playerName(); if (!name) return;
+    const code = $("code").value.trim().toUpperCase(), saved = savedRooms().find(r => r.code === code);
+    if (!state.room && saved && saved.token !== token) {
+      resumeAttempt = saved; token = saved.token; writeStored("sessionStorage", "catan-token", token); connect();
+    } else send({ type: "join", name, avatar: window.BoardGameUI.getAvatar(), code });
+  };
+  $("resumeRoom").onclick = () => {
+    const saved = resumeChoice(); if (!saved) return;
+    $("code").value = saved.code; $("name").value = saved.name; $("join").click();
+  };
+  $("code").addEventListener("input", renderResume);
+  window.addEventListener("storage", event => { if (event.key === savedRoomsKey) renderResume(); });
   $("code").addEventListener("keydown", (e) => { if (e.key === "Enter") $("join").click(); });
   for (const id of ["addBot", "fillBots", "start", "rematch"]) $(id).onclick = () => send({ type: id });
   $("removeBot").onclick = () => {
@@ -469,6 +545,7 @@
     music.setEdition(room?.mapId || state.mapId);
     syncIslandRoadDialog();
     $("setup").hidden = Boolean(room); $("lobby").hidden = !room || Boolean(g); $("game").hidden = !g;
+    renderResume();
     renderHarborSetup();
     renderPirateBattle();
     management.sync();

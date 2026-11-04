@@ -26,7 +26,8 @@
       <section id="setup" class="setup-section">
         <h1>开始一局 <small>Start a game</small></h1>
         <div class="identity"><div id="avatarPicker"></div><label>名字 / Name<input id="playerName" maxlength="18" autocomplete="nickname" value=""></label></div>
-        <fieldset><legend>对手 / Opponent</legend><div class="segmented"><label><input type="radio" name="mode" value="ai" checked><span><i data-lucide="bot"></i>机器人 / AI</span></label><label><input type="radio" name="mode" value="friend"><span><i data-lucide="users"></i>好友 / Friend</span></label></div></fieldset>
+        <fieldset><legend>对手 / Opponent</legend><div class="segmented"><label><input type="radio" name="mode" value="ai" checked><span><i data-lucide="bot"></i>机器人 / AI</span></label><label><input type="radio" name="mode" value="friend"><span><i data-lucide="globe-2"></i>好友联机 / Online</span></label><label><input type="radio" name="mode" value="local"><span><i data-lucide="users"></i>同设备 / Pass & play</span></label></div></fieldset>
+        <label id="secondNameRow" class="field-label" hidden>另一位玩家 / Other player<input id="secondName" maxlength="18" autocomplete="off" value="玩家 2"></label>
         <label id="difficultyRow" class="field-label">AI 难度 / Difficulty<select id="difficulty"><option value="easy">入门 / Easy</option><option value="normal" selected>标准 / Standard</option><option value="hard">进阶 / Advanced</option></select></label>
         <fieldset><legend>你的执子 / Your side</legend><div id="sideOptions" class="segmented"></div></fieldset>
         <button id="createBtn" class="primary wide"><i data-lucide="play"></i><span id="createLabel">开始对战 / Play</span></button>
@@ -43,6 +44,6 @@
     </aside>
   </main>
   <dialog id="confirmDialog"><h2 id="confirmTitle"></h2><div class="dialog-actions"><button data-close="confirmDialog">取消 / Cancel</button><button id="confirmYes" class="primary">确认 / Confirm</button></div></dialog>
-  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-audio.js"></script><script src="game-ui.js"></script><script src="game-rules-data.js"></script><script src="game-rules.js"></script><script src="duel-board.js"></script><script src="duel.js"></script>
+  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-audio.js"></script><script src="game-ui.js"></script><script src="game-archives.js"></script><script src="game-rules-data.js"></script><script src="game-rules.js"></script><script src="duel-board.js"></script><script src="duel.js"></script>
 </body>
 </html>

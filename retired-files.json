@@ -1,4 +1,9 @@
 [
+  "bridge-lesson.js",
+  "bridge-lesson-ui.js",
+  "bridge-lesson.css",
+  "bridge-lesson-test.js",
+  "bridge-lesson-ui-test.js",
   "RICHMAN-4FUN-VIDEO-STUDY.md",
   "richman-art.svg",
   "richman-audio.js",

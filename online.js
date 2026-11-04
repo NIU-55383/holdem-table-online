@@ -86,6 +86,7 @@
   };
 
   elements.name.value = localStorage.getItem("holdem-online-name") || "";
+  const archives = BoardGameArchives.mount({ game: "poker", send, view: () => state.room?.control, name: () => elements.name.value, anchor: elements.setup });
   const social = window.BoardGameUI.mountInteractions(() => state.room && ({ code: state.room.code, players: state.room.players, you: state.room.players.find((p) => p.clientId === state.clientId)?.socialId, connected: state.socket?.readyState === WebSocket.OPEN }), send);
   const management = window.BoardGameUI.mountRoomControl(() => state.room?.control, send, () => state.room?.status === "lobby" ? elements.lobby.querySelector(".lobby-heading") : elements.pokerRoom.querySelector(".toolbar-actions"));
   window.BoardGameUI.mountAvatarPicker(document.getElementById("pokerAvatarPicker"), elements.name);
@@ -137,6 +138,7 @@
       } catch {
         return;
       }
+      if (archives.receive(data)) return;
       if (data.type === "reaction") { social.receive(data); return; }
       if (data.type === "state") {
         captureReplayState(data.room);

@@ -7,7 +7,7 @@ const Social = require("./game-social");
 const { createRoomControl } = require("./room-control");
 
 function attachTruth(server) {
-  const wss = new WebSocketServer({ noServer: true, maxPayload: 32768 });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 2200000 });
   const rooms = new Map(), sessions = new Map();
   const send = (ws, data) => { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); };
   const fail = (ok, message) => { if (!ok) throw new Error(message); };
@@ -16,7 +16,7 @@ function attachTruth(server) {
   const stop = (r) => { clearTimeout(r.timer); r.timer = null; r.timerKey = null; };
   const control = createRoomControl({
     rooms, active: (r) => r.game?.phase === "playing", started: (r) => Boolean(r.game),
-    actors: (r) => r.game?.phase === "playing" ? [r.game.current] : [],
+    actors: (r) => r.game ? E.requiredActors(r.game) : [],
     turnKey: (r) => r.game ? String(r.game.revision) : null,
     stop, changed: broadcast,
     remove: (r, p) => {
@@ -29,7 +29,7 @@ function attachTruth(server) {
     return {
       type: "state", code: r.code, you: r.seats.indexOf(viewer),
       host: r.seats.findIndex((p) => p.token === r.host),
-      level: r.level, mode: r.mode, rounds: r.rounds, maxPlayers: r.maxPlayers,
+      level: r.level, mode: r.mode, rounds: r.rounds, maxPlayers: r.maxPlayers, selection: r.selection, skipLimit: r.skipLimit,
       seats: r.seats.map((p) => ({
         name: p.name, socialId: Social.publicId(p), avatar: p.avatar || null,
         position: p.position, bot: Boolean(p.bot), connected: !p.vacant && Boolean(p.bot || online(p)),
@@ -38,32 +38,38 @@ function attachTruth(server) {
       game: r.game ? E.snapshot(r.game) : null, control: control.snapshot(r, viewer), chat: r.chat
     };
   }
+  const archives = require("./room-archive").createRoomArchive({ kind: "truth", rooms, sessions, control, send, stop, broadcast,
+    validate: r => E.snapshot(r.game) });
   function broadcast(r) {
+    archives.sync(r);
     control.sync(r); r.updated = Date.now(); if (r.game) r.lastRevision = r.game.revision;
     for (const p of r.seats) if (!p.bot && !p.vacant) send(p.ws, snapshot(r, p));
     schedule(r);
   }
   function schedule(r) {
-    const game = r.game, player = r.seats[game?.current];
+    const game = r.game;
+    const actor = game && E.requiredActors(game).find(i => r.seats[i]?.bot || (r.seats[i]?.auto && online(r.seats[i])));
+    const player = r.seats[actor];
     // Offline humans always wait, even if they enabled auto-play before disconnecting.
     const automatic = player && !player.vacant && (player.bot || (player.auto && online(player)));
     if (!game || game.phase !== "playing" || control.paused(r) || !automatic ||
         !r.seats.some((p) => !p.bot && !p.vacant && online(p))) { stop(r); return; }
-    const key = [game.revision, game.current, game.stage, player.token].join(":");
+    if (game.stage === "challenge" && !E.canSkip(game, actor)) { stop(r); return; }
+    const key = [game.revision, actor, game.stage, player.token].join(":");
     if (r.timer && r.timerKey === key) return;
     stop(r); r.timerKey = key;
     r.timer = setTimeout(() => {
       r.timer = null; r.timerKey = null;
       if (r.game !== game || control.paused(r) ||
-          [game.revision, game.current, game.stage, r.seats[game.current]?.token].join(":") !== key) return schedule(r);
-      const p = r.seats[game.current];
+          [game.revision, actor, game.stage, r.seats[actor]?.token].join(":") !== key || !E.requiredActors(game).includes(actor)) return schedule(r);
+      const p = r.seats[actor];
       if (!(p.bot || (p.auto && online(p)))) return;
       try {
         // A server cannot decide that a person performed a real-world challenge.
         const action = game.stage === "roll" ? { type: "roll" } :
           game.stage === "choose" ? { type: "choose", kind: "truth" } :
           game.stage === "prepare" ? { type: "ask" } : { type: "skip" };
-        E.act(game, game.current, action); broadcast(r);
+        E.act(game, actor, action); broadcast(r);
       } catch (error) {
         stop(r);
         for (const seat of r.seats) send(seat.ws, { type: "error", message: error.message });
@@ -128,16 +134,19 @@ function attachTruth(server) {
         }
         fail(session && session.ws === ws, "请先连接 / Connect first");
         session.updated = Date.now();
+        if (archives.handle(session, ws, d)) return;
         if (d.type === "create") {
-          const name = clean(d.name), level = d.level ?? "heat", mode = d.mode ?? "mixed", rounds = d.rounds ?? 3, maxPlayers = d.maxPlayers ?? 8;
+          const name = clean(d.name), level = d.level ?? "heat", mode = d.mode ?? "mixed", rounds = d.rounds ?? 3, maxPlayers = d.maxPlayers ?? 4;
+          const selection = d.selection ?? "random", skipLimit = d.skipLimit ?? 3;
           fail(name, "请输入名字 / Enter your name");
           fail(E.LEVELS.includes(level), "请选择挑战强度 / Choose a challenge level");
           fail(["truth", "dare", "mixed"].includes(mode), "请选择真心话、大冒险或混合 / Choose truth, dare or mixed mode");
           fail([3, 5, 8].includes(rounds), "请选择 3、5 或 8 轮 / Choose 3, 5 or 8 rounds");
-          fail(Number.isInteger(maxPlayers) && maxPlayers >= 2 && maxPlayers <= 12, "房间人数为 2–12 人 / Rooms hold 2–12 players");
+          fail(Number.isInteger(maxPlayers) && maxPlayers >= 2 && maxPlayers <= 8, "房间人数为 2–8 人 / Rooms hold 2–8 players");
+          E.createGame(maxPlayers, { level, mode, rounds, selection, skipLimit });
           detach(session, true);
           let code; do { code = "T" + crypto.randomBytes(3).toString("hex").slice(0, 5).toUpperCase(); } while (rooms.has(code));
-          const r = { code, host: session.token, level, mode, rounds, maxPlayers, game: null, chat: [], updated: Date.now(),
+          const r = { code, host: session.token, level, mode, rounds, maxPlayers, selection, skipLimit, game: null, chat: [], updated: Date.now(),
             seats: [{ token: session.token, name, avatar: avatar === undefined ? session.avatar || null : avatar,
               position: 0, bot: false, ready: true, auto: false, ws }] };
           rooms.set(code, r); session.room = code; broadcast(r); return;
@@ -192,11 +201,12 @@ function attachTruth(server) {
           const before = [...r.seats]; r.seats.splice(index, 1); remapChat(r, before);
         } else if (d.type === "start") {
           host(); fail(!r.game && r.seats.length >= 2, "至少两人才能开始 / At least two players are needed");
+          fail(r.selection === "dice" || r.seats.length === r.maxPlayers, "请先坐齐设定人数 / Fill the selected number of seats first");
           fail(r.seats.every((seat) => seat.bot || (online(seat) && (seat.ready || seat.token === r.host))),
             "请等待所有玩家上线并准备 / Wait for everyone to connect and ready up");
           const before = [...r.seats]; r.seats.sort((a, b) => a.position - b.position); remapChat(r, before);
           r.seats.forEach((seat, i) => { seat.position = i; });
-          r.game = E.createGame(r.seats.length, { level: r.level, rounds: r.rounds, mode: r.mode });
+          r.game = E.createGame(r.seats.length, { level: r.level, rounds: r.rounds, mode: r.mode, selection: r.selection, skipLimit: r.skipLimit });
           r.game.revision = (r.lastRevision ?? -1) + 1;
         } else if (d.type === "restart" || d.type === "rematch") {
           host(); fail(r.game?.phase === "over", "本局尚未结束 / Finish this game first");
@@ -226,6 +236,7 @@ function attachTruth(server) {
   }, 30000);
   heartbeat.unref();
   server.on("close", () => {
+    archives.close();
     control.close(); clearInterval(heartbeat); rooms.forEach(stop);
     wss.clients.forEach((ws) => ws.terminate()); wss.close();
   });

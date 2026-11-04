@@ -8,6 +8,7 @@ const { attachCatan } = require("./catan-server");
 const { attachDuel } = require("./duel-server");
 const { attachBridge } = require("./bridge-server");
 const { attachTruth } = require("./truth-server");
+const { attachMillion } = require("./million-server");
 const AvatarData = require("./avatar-data");
 const Social = require("./game-social");
 
@@ -37,6 +38,9 @@ function resumeRoom(room) {
   if (!roomControl.paused(room) && room.status === "handComplete" && !room.nextHandAt) scheduleAutoNext(room);
   broadcast(room); scheduleBot(room);
 }
+const archives = require("./room-archive").createRoomArchive({ kind: "poker", rooms, clients, control: roomControl, send,
+  stop: r => { clearTimeout(r.botTimer); clearTimeout(r.autoNextTimer); r.nextHandAt = 0; }, broadcast: resumeRoom,
+  validate: r => r.players.forEach(p => publicState(r, p.clientId)) });
 const FAMILIAR_BOT_NAMES = [
   "Connie", "Colin", "Angela", "Stephan", "Zoey", "William", "Tim", "Gary", "Alison",
 ];
@@ -1183,6 +1187,7 @@ function publicState(room, clientId) {
 
 function broadcast(room) {
   roomControl.sync(room);
+  archives.sync(room);
   room.players.forEach((player) => {
     if (player.connected && player.socket) {
       send(player.socket, publicState(room, player.clientId));
@@ -1223,6 +1228,7 @@ function handleMessage(client, message) {
     return;
   }
   if (!client.clientId) throw new Error("连接尚未初始化 / Connection not initialized");
+  if (archives.handle(client, client, data)) return;
 
   if (data.type === "create") {
     leaveClient(client, true);
@@ -1365,7 +1371,7 @@ function parseFrames(client, chunk) {
       offset = 10;
     }
     const maskLength = masked ? 4 : 0;
-    if (length > 32768) { client.socket.destroy(); return; }
+    if (length > 2200000) { client.socket.destroy(); return; }
     if (client.buffer.length < offset + maskLength + length) return;
     const mask = masked ? client.buffer.subarray(offset, offset + 4) : null;
     offset += maskLength;
@@ -1396,6 +1402,7 @@ function parseFrames(client, chunk) {
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
+  ".cjs": "application/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".png": "image/png",
@@ -1500,11 +1507,13 @@ const catan = attachCatan(server);
 const duel = attachDuel(server);
 const bridge = attachBridge(server);
 const truth = attachTruth(server);
+const million = attachMillion(server);
 
 server.on("upgrade", (request, socket, head) => {
   if (request.url === "/duel-ws") { duel.upgrade(request, socket, head); return; }
   if (request.url === "/bridge-ws") { bridge.upgrade(request, socket, head); return; }
   if (request.url === "/truth-ws") { truth.upgrade(request, socket, head); return; }
+  if (request.url === "/million-ws") { million.upgrade(request, socket, head); return; }
   if (request.url === "/catan-ws") {
     catan.upgrade(request, socket, head);
     return;
@@ -1542,7 +1551,7 @@ const pokerHeartbeat = setInterval(() => {
   }
 }, 30000);
 pokerHeartbeat.unref();
-server.on("close", () => { roomControl.close(); clearInterval(pokerHeartbeat); });
+server.on("close", () => { archives.close(); roomControl.close(); clearInterval(pokerHeartbeat); });
 
 server.listen(PORT, BIND_HOST, () => {
   const localUrl = `http://127.0.0.1:${PORT}/index.html`;

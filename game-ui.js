@@ -250,7 +250,8 @@
       const ownHost = c.host === c.you, p = c.pending, name = (id) => escape(c.seats.find((s) => s?.id === id)?.name || "Player");
       dialog.querySelector("[data-room-content]").innerHTML = `${p ? `<section class="host-request"><p>${name(p.from)} 提议由 ${name(p.next)} 担任房主 / Proposes ${name(p.next)} as host</p><div>${p.to === c.you ? '<button data-room-action="accept">同意 / Accept</button><button data-room-action="decline">拒绝 / Decline</button>' : p.from === c.you ? '<button data-room-action="cancel">撤回 / Cancel</button>' : '等待回应 / Waiting'}</div></section>` : !ownHost ? '<button data-room-action="requestHost">申请成为房主 / Request host role</button>' : ""}
         <section class="room-auto-options"><label><input type="checkbox" data-room-idle-auto ${c.idleAuto ? "checked" : ""} ${ownHost ? "" : "disabled"}><span>全员两分钟未操作时自动托管<small>Auto-play after 2 minutes idle · ${ownHost ? "All players" : "Host controlled"}</small></span></label>${c.started ? `<button type="button" data-room-action="auto" aria-pressed="${Boolean(c.auto)}">${c.auto ? "取消托管 / Stop auto" : "立即托管 / Start auto"}</button>` : ""}</section>
-        ${c.paused ? '<p class="room-paused-note">全部空位补齐后继续，棋局与资产保留。<small>Resumes when all seats are filled. Game state and assets are preserved.</small></p>' : ""}
+        ${c.paused ? `<p class="room-paused-note">${c.archive?.saving ? "正在保存，等待房主确认或取消。<small>Saving; waiting for the host to finish or cancel.</small>" : c.archive?.restoring ? "存档已恢复。补齐座位后，由房主点击继续。<small>Save restored. Fill all seats, then the host resumes play.</small>" : "全部空位补齐后继续，棋局与资产保留。<small>Resumes when all seats are filled. Game state and assets are preserved.</small>"}</p>` : ""}
+        ${c.started && c.archive?.supported && ownHost ? `<div class="archive-actions">${c.archive.restoring ? `<button data-room-action="archiveContinue" ${c.seats.some(s => !s || s.vacant) ? "disabled" : ""}>继续对局 / Resume game</button>` : ""}<button data-room-action="archiveSave" ${c.archive.saving ? "disabled" : ""}>保存并退出 / Save & leave</button></div>` : ""}
         <div class="room-control-seats">${c.seats.map((s) => s ? `<div class="room-control-seat" data-control-seat="${s.index}"><span>${s.position + 1}. ${escape(s.name)}<small>${s.vacant ? "等待补位 / Open seat" : s.id === c.host ? "房主 / Host" : s.bot ? "机器人 / Bot" : s.connected ? "在线 / Online" : "离线 / Offline"}</small></span><div>${s.vacant ? ownHost ? `<button data-room-action="fillBot" data-target="${s.id}">补机器人 / Add bot</button>` : "" : s.id !== c.you && ownHost ? `${!s.bot && s.connected && !p ? `<button data-room-action="transfer" data-target="${s.id}">转让 / Transfer</button>` : ""}${c.started ? `<button data-room-action="kick" data-target="${s.id}">移除 / Remove</button>` : ""}` : ""}</div></div>` : "").join("")}</div>
         `;
     }
@@ -273,6 +274,8 @@
     dialog.addEventListener("click", (e) => {
       const button = e.target.closest("[data-room-action]"), c = view(); if (!button || !c) return;
       const action = button.dataset.roomAction, target = button.dataset.target;
+      if (action === "archiveSave") { dialog.close(); window.dispatchEvent(new CustomEvent("board-archive-save")); return; }
+      if (action === "archiveContinue") { send({ type: "archiveContinue" }); return; }
       if (action === "kick") {
         confirmRemoval({ name: c.seats.find(s => s?.id === target)?.name || "Player", started: true,
           valid: () => { const now = view(); return now?.code === c.code && now.started && now.host === now.you && target !== now.you && now.seats.some(s => s?.id === target && !s.vacant); },
@@ -294,6 +297,7 @@
       if (key !== c.code) { key = c.code; asked = ""; dismissedWarning = 0; }
       if (lastControl !== c) { offset = c.now - Date.now(); lastControl = c; }
       bar.querySelector("[data-room-paused]").hidden = !c.paused;
+      bar.querySelector("[data-room-paused]").textContent = c.archive?.saving ? "正在保存 / Saving" : c.archive?.restoring ? "存档待续：选座后由房主继续 / Restored: host resumes after seating" : "空位待补齐，游戏暂停 / Paused: waiting for replacement";
       bar.querySelector("[data-room-stay]").hidden = !c.auto;
       bar.querySelector("[data-room-pending]").hidden = !c.pending;
       if (dialog.open) draw();

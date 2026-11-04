@@ -27,7 +27,8 @@ async function fixture(t, overrides = {}) {
       if (event.type === "state") c.state = event;
       if (event.type === "welcome") c.token = event.token;
     });
-    c.send = (data) => ws.send(JSON.stringify(data));
+    // Retain the old protocol coverage for in-progress dice games.
+    c.send = (data) => ws.send(JSON.stringify(data.type === "create" ? { selection: "dice", ...data } : data));
     c.request = async (data, predicate = (event) => event.type === "state") => {
       const start = c.events.length; c.send(data);
       return until(() => c.events.slice(start).find(predicate), JSON.stringify(data));
@@ -37,6 +38,44 @@ async function fixture(t, overrides = {}) {
   return { api, client };
 }
 const error = (event) => event.type === "error";
+test("new setup: 2-8 seats, exact start count and invalid combinations are rejected", async t => {
+  const { api, client } = await fixture(t), a = await client();
+  for (const settings of [{maxPlayers:9},{selection:"together",mode:"dare",maxPlayers:2},{selection:"together",mode:"truth",maxPlayers:3},{skipLimit:11}]) {
+    await a.request({type:"create",name:"Alice",selection:"random",...settings},error);
+    assert.equal(api.rooms.size,0);
+  }
+  await a.request({type:"create",name:"Alice",selection:"random",maxPlayers:3});
+  await a.request({type:"addBot"});await a.request({type:"start"},error);
+  await a.request({type:"addBot"});await a.request({type:"start"});
+  assert.equal(a.state.game.stage,"choose");assert.equal(a.state.game.version,3);assert.equal(a.state.selection,"random");
+});
+test("new chain: authoritative prompt budget, custom question, skip count, reconnect and handover", async t => {
+  const {a,b,room,client}=await twoPlayers(t,{}, {selection:"chain",maxPlayers:2,mode:"truth",skipLimit:1});
+  const clients=[a,b], asker=clients[room.game.asker], target=clients[room.game.target], targetId=room.game.target;
+  await networkAction(target,room,"reroll",{},error);
+  await networkAction(asker,room,"reroll");await networkAction(asker,room,"reroll");
+  const before=JSON.stringify(room.game);await networkAction(asker,room,"reroll",{},error);assert.equal(JSON.stringify(room.game),before);
+  await networkAction(asker,room,"ask",{text:"A custom question"});await networkAction(target,room,"skip");
+  assert.equal(room.game.asker,targetId);assert.equal(room.game.skipsUsed[targetId],1);assert.equal(room.game.replacements,0);
+  const back=await client(target.token);await until(()=>back.state);clients[targetId]=back;
+  assert.equal(back.state.game.skipsUsed[targetId],1);
+  await networkAction(clients[room.game.asker],room,"ask");await networkAction(clients[room.game.target],room,"complete");
+  await networkAction(clients[room.game.asker],room,"ask");await networkAction(clients[room.game.target],room,"skip",{},error);
+  await networkAction(clients[room.game.target],room,"complete");assert.equal(room.game.phase,"over");
+});
+test("together: both online players respond only once, shared edits lock after first answer", async t => {
+  const {a,b,room}=await twoPlayers(t,{}, {selection:"together",maxPlayers:2,mode:"truth",skipLimit:0});
+  assert.equal(room.game.stage,"challenge");assert.equal(a.state.game.prompt.id,b.state.game.prompt.id);
+  await networkAction(b,room,"ask",{text:"Wrong editor"},error);
+  await networkAction(a,room,"ask",{text:"Both answer this"});
+  await networkAction(b,room,"skip",{},error);await networkAction(b,room,"complete");assert.equal(room.game.round,1);
+  await networkAction(b,room,"complete",{},error);await networkAction(a,room,"reroll",{},error);
+  await networkAction(a,room,"complete");assert.equal(room.game.round,2);assert.equal(room.game.asker,1);
+  await networkAction(b,room,"reroll");assert.equal(room.game.replacements,1);
+  await a.request({type:"roomControl",action:"auto",enabled:true});assert.equal(room.timer,null,"zero skips must not falsely confirm a human's completion");
+  await a.request({type:"roomControl",action:"auto",enabled:false});
+  await networkAction(a,room,"complete");await networkAction(b,room,"complete");assert.equal(room.game.round,3);
+});
 async function twoPlayers(t, overrides, settings = {}) {
   const f = await fixture(t, overrides), a = await f.client(), b = await f.client();
   await a.request({ type: "create", name: "Alice", maxPlayers: 4, rounds: 3, level: "heat", ...settings });

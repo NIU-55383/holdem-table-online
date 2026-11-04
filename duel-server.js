@@ -6,7 +6,7 @@ const E = require("./duel-engine"), Avatar = require("./avatar-data");
 const ensure = E.requireRule;
 const Social = require("./game-social");
 function attachDuel(server) {
-  const rooms = new Map(), sessions = new Map(), wss = new WebSocketServer({ noServer: true, maxPayload: 32768 });
+  const rooms = new Map(), sessions = new Map(), wss = new WebSocketServer({ noServer: true, maxPayload: 2200000 });
   let running = 0, closed = false;
   const queue = [];
   const control = require("./room-control").createRoomControl({ rooms,
@@ -24,6 +24,8 @@ function attachDuel(server) {
   }
   const send = (ws, data) => { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); };
   function connected(p) { return p && (p.bot || p.ws?.readyState === WebSocket.OPEN); }
+  const archives = require("./room-archive").createRoomArchive({ kind: "duel", rooms, sessions, control, send, stop,
+    broadcast: r => { broadcast(r); schedule(r); }, validate: r => E.snapshot(r.game) });
   function snapshot(room, token) {
     return { type: "state", code: room.code, kind: room.kind, difficulty: room.difficulty, you: room.seats.findIndex((p) => p?.token === token),
       host: room.seats.findIndex((p) => p?.token === room.host), seats: room.seats.map((p) => p ? { socialId: Social.publicId(p), name: p.name, avatar: p.avatar, bot: p.bot, vacant: Boolean(p.vacant), auto: Boolean(p.auto), connected: Boolean(connected(p)), ready: p.ready, departed: Boolean(p.departed) } : null),
@@ -31,6 +33,7 @@ function attachDuel(server) {
   }
   function broadcast(room) {
     control.sync(room);
+    archives.sync(room);
     room.updated = Date.now();
     room.seats.forEach((p) => { if (p && !p.bot) send(p.ws, snapshot(room, p.token)); });
   }
@@ -111,6 +114,7 @@ function attachDuel(server) {
           return;
         }
         ensure(session?.ws === ws, "请先连接 / Connect first"); session.updated = Date.now();
+        if (archives.handle(session, ws, data)) return;
         if (data.type === "create") {
           ensure(E.TYPES.includes(data.kind) && E.LEVELS.includes(data.difficulty), "设置无效 / Invalid settings");
           ensure(rooms.size < 200, "房间已满 / Server is busy"); const name = clean(data.name); ensure(name, "请输入名字 / Enter a name");
@@ -188,7 +192,7 @@ function attachDuel(server) {
     for (const [code, room] of rooms) if (!room.seats.some((p) => p && !p.bot && connected(p)) && Date.now()-room.updated > 3600000) { stop(room); rooms.delete(code); }
     for (const [token, s] of sessions) if (!s.ws && Date.now()-s.updated > 12*3600000) sessions.delete(token);
   },30000); heartbeat.unref();
-  server.on("close", () => { closed = true; control.close(); clearInterval(heartbeat); rooms.forEach(stop); wss.clients.forEach((ws) => ws.terminate()); wss.close(); });
+  server.on("close", () => { closed = true; archives.close(); control.close(); clearInterval(heartbeat); rooms.forEach(stop); wss.clients.forEach((ws) => ws.terminate()); wss.close(); });
   return { rooms, upgrade: (r,s,h) => wss.handleUpgrade(r,s,h,(ws) => wss.emit("connection",ws,r)) };
 }
 module.exports = { attachDuel };

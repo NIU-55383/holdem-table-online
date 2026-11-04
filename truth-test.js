@@ -4,7 +4,9 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const E = require("./truth-engine");
+const Engine = require("./truth-engine");
+// Legacy dice saves remain playable; new turn orders have separate coverage.
+const E = { ...Engine, createGame: (n, options = {}, rng) => Engine.createGame(n, options && typeof options === "object" && !Array.isArray(options) ? { selection: "dice", ...options } : options, rng) };
 const D = require("./truth-data");
 const fixed = value => () => value;
 function roll(game, die) {
@@ -367,7 +369,7 @@ test("Browser UMD uses unbiased rejection sampling for dice and prompt draws", (
   const browser = browserEngine({ getRandomValues(buffer) {
     assert.ok(words.length > 0); buffer[0] = words.shift(); calls++; return buffer;
   } });
-  const game = browser.TruthEngine.createGame(2, { level: "chill", mode: "truth" });
+  const game = browser.TruthEngine.createGame(2, { level: "chill", mode: "truth", selection: "dice" });
   browser.TruthEngine.act(game, 0, { type: "roll" });
   browser.TruthEngine.act(game, 1, { type: "roll" });
   assert.equal(calls, 6);
@@ -379,7 +381,7 @@ test("Browser UMD uses unbiased rejection sampling for dice and prompt draws", (
 });
 
 test("Unavailable browser crypto fails explicitly; Node default randomness never uses Math.random", () => {
-  const browser = browserEngine(undefined), game = browser.TruthEngine.createGame(2);
+  const browser = browserEngine(undefined), game = browser.TruthEngine.createGame(2, { selection: "dice" });
   unchanged(game, () => browser.TruthEngine.act(game, 0, { type: "roll" }));
   const original = Math.random;
   try {

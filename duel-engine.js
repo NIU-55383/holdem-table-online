@@ -1,6 +1,8 @@
 "use strict";
-const { Xiangqi } = require("./vendor/xiangqi.cjs");
-const Gomoku = require("./gomoku-adapter");
+(function (root, factory) {
+  if (typeof module === "object" && module.exports) module.exports = factory(require("./vendor/xiangqi.cjs").Xiangqi, require("./gomoku-adapter"));
+  else root.DuelEngine = factory(root.Xiangqi, root.GomokuRules);
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Xiangqi, Gomoku) {
 const TYPES = ["gomoku", "xiangqi"], LEVELS = ["easy", "normal", "hard"];
 const requireRule = (ok, message) => { if (!ok) throw Error(message); };
 const sideOf = (color) => color === "r" ? 0 : 1;
@@ -61,4 +63,5 @@ function snapshot(g) {
     current: g.current, phase: g.phase, winner: g.winner, reason: g.reason, moves: g.moves, revision: g.revision,
     check: Boolean(g.chess?.in_check()), legal: legal(g), fen: g.chess?.fen() };
 }
-module.exports = { TYPES, LEVELS, Xiangqi, createGame, move, resign, undo, snapshot, legal, square, index, requireRule };
+return { TYPES, LEVELS, Xiangqi, createGame, move, resign, undo, snapshot, legal, square, index, requireRule };
+});

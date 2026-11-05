@@ -15,15 +15,20 @@ async function main(){
     }
     async function layout(p,label){for(const width of [1440,390,320,740]){await p.setViewportSize({width,height:width===740?360:900});assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${label} overflow ${width}`);await p.screenshot({path:path.join(out,`${label}-${width}.png`),fullPage:true});}await p.setViewportSize({width:390,height:844});}
     const p=await page(),local=()=>p.evaluate(()=>JSON.parse(sessionStorage.getItem("boardclub-truth-local")));
+    assert.equal(await p.locator(".prompt-preview,.bottom-note,.eyebrow,.title-row,.intro,.dice-legend,.table-corner,.edition,#levelDescription").count(),0);
+    assert.equal(await p.locator("h1").textContent(),"真心话大冒险 Truth or Dare");
+    assert.equal(await p.locator("#historySection h2").textContent(),"问题记录 Question History");
     assert.equal(await p.locator("#setupPlayers option").count(),7);
     for(const level of ["chill","heat","wild","unmasked","showdown"]){await p.locator(`[data-level="${level}"]`).focus();await p.keyboard.press("Enter");assert.equal(await p.locator(`[data-level="${level}"]`).getAttribute("aria-pressed"),"true");}
     await layout(p,"truth-new-setup");
     assert.equal(await p.locator("#rounds").count(),0);
     await p.selectOption("#setupPlayers","2");await p.fill("#localNames","Alice\nBob");await p.selectOption("#selection","chain");await p.selectOption("#skipLimit","1");await p.click("#createBtn");
     assert.equal((await local()).game.stage,"choose");assert.equal(await p.locator("#diceScene").isVisible(),false);
+    assert.equal(await p.locator("#roomCode").textContent(),"");assert.equal(await p.locator("#roomCode").isVisible(),false);
     const target=(await local()).game.target;await p.click('[data-play="choose"][data-kind="dare"]');
     await p.click('[data-play="reroll"]');await p.click('[data-play="reroll"]');assert(await p.locator('[data-play="reroll"]').isDisabled());
     await p.fill("#customPrompt","Our custom dare");await p.click('[data-play="ask"]');assert.equal(await p.locator("#promptZh").textContent(),"Our custom dare");await p.click('[data-play="skip"]');
+    assert(await p.locator("#historySection").isVisible());assert.match(await p.locator("#history").textContent(),/Our custom dare/);
     assert.equal((await local()).game.asker,target);assert.equal((await local()).game.skipsUsed[target],1);
     const saved=await local();await p.reload();assert.deepEqual(await local(),saved);
     await p.click('[data-play="choose"][data-kind="truth"]');await p.click('[data-play="ask"]');await p.click('[data-play="complete"]');
@@ -44,6 +49,7 @@ async function main(){
       const a=await page(),b=await page(),players=[a,b];
       for(const [q,name]of[[a,"Laura"],[b,"Colin"]]){await q.click('[data-mode="online"]');await q.waitForFunction(()=>testEvents.some(e=>e.type==="welcome"));await q.fill("#playerName",name);}
       await a.selectOption("#setupPlayers","2");await a.click('[data-category="truth"]');await a.selectOption("#selection",selection);await a.selectOption("#skipLimit","1");await a.click("#createBtn");await a.waitForFunction(()=>window.testState?.code);
+      assert(await a.locator("#roomCode").isVisible());assert.equal(await a.locator("#roomCode").textContent(),await a.evaluate(()=>testState.code));
       await b.fill("#roomInput",await a.evaluate(()=>testState.code));await b.click("#joinForm button");await b.click("#readyBtn");await a.click("#startBtn:not([disabled])");for(const q of players)await q.waitForFunction(()=>window.testState?.game?.version===3);
       const g=await a.evaluate(()=>testState.game);
       if(selection==="together"){assert.equal(await a.locator("#promptZh").textContent(),await b.locator("#promptZh").textContent());await b.click('[data-play="complete"]');await a.waitForFunction(()=>testState.game.responses[1]==="complete");assert(await b.locator('[data-play="complete"]').isDisabled());await a.click('[data-play="complete"]');}

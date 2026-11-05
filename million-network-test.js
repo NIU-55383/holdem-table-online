@@ -437,7 +437,8 @@ test("Million adapter: already-ready bots still answer offers without repeating 
   const revision = room.game.revision; assert.equal(room.timer, null);
   await a.request({ type: "profile", avatar: null }); await sleep(80); assert.equal(room.game.revision, revision);
   await action(a, room, { type: "offer", payer: 0, quitter: 1, slot: 0, amount: 100 });
-  await until(() => room.game.offers[0].status === "accepted");
+  const offerId = room.game.offers.at(-1).id;
+  await until(() => room.game.offers.find(o => o.id === offerId).status === "accepted");
   assert.equal(room.game.players[1].slots[0].withdrawn, true);
   assert.equal(room.game.phase, "negotiation"); assert.equal(room.timer, null);
   assert(!a.events.some(error));
@@ -469,9 +470,10 @@ test("Million adapter: a ready bot's pending offer is answered before another bo
   E.act(room.game, 1, { type: "ready", ready: true }); E.act(room.game, 3, { type: "ready", ready: true });
   api.broadcast(room);
   await action(a, room, { type: "offer", payer: 0, quitter: 1, slot: 0, amount: 100 });
+  const offerId = room.game.offers.at(-1).id;
   await action(a, room, { type: "ready", ready: true });
-  await until(() => room.game.offers[0]?.status !== "pending");
-  assert.equal(room.game.offers[0].status, "accepted");
+  await until(() => room.game.offers.find(o => o.id === offerId)?.status !== "pending");
+  assert.equal(room.game.offers.find(o => o.id === offerId).status, "accepted");
   assert.equal(room.game.players[1].slots[0].withdrawn, true);
   assert(!a.events.some(error));
 });

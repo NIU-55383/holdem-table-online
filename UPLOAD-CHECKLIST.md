@@ -6,6 +6,16 @@
 
 ## 上传步骤
 
+百万美金 2024 与 2016 共用 `million.html`、`million.js/css` 和共享规则阅读器，不另建新版页面。同步部署 `million-2024.js`、`million-bot.js`、`million-data.js`、`million-engine.js`、`million-server.js`、`room-archive.js`、规则数据、`package.json` 及相关测试。检查版本切换后人数上限（旧版 8、新版 9）、角色列表、规则入口和角色详情均对应所选版本；新版不显示旧版威胁卡、禁止连选或暴徒不分赃选项，旧版问号帮助仍可用。
+
+本馆沿用2016模式的赃款数值与奖励配置。2024 每轮仍随机使用 800-1200 万赃款和 100 万角色奖励，旧告密者／恶棍／谋士奖励分别映射技术员／读心者／新版谋士；没有存活匹配就不加奖励。保证金固定每角 200 万，留下的保证金和角色奖励加入中央，按新版顺序取款后向上取整平分。检查六种角色、三人双角色、全体玩家（含退出者）半数投票、最穷带头人及顺时针打破平局，不把旧版分赃方式带入新版。
+
+机器人应按版本和角色评估选择、报价、退出、点名及偷钱，只使用该座位的私有视图与公开线索；检查机器人会虚报身份，聊天和声明标为声称而非已证实身份，不泄露他人暗牌。存档须保留 edition：2016/V2 和 2024/V3 分别恢复，旧 V2 无 edition 的存档仍按 2016 导入，版本不匹配或畸形数据必须拒绝。检查声明、投票、技术员和读心者等待阶段的恢复；重新认领前不显示暗牌，未成交提议与旧投票同意失效，坐齐后仍由房主确认继续。存档含暗牌，勿上传测试存档；部署重启前先保存现有房间。
+
+新版回归：运行 `node --test game-rules-test.js million-rules-test.js` 和 `npm run test:million`，后者包含 `million-2024-test.js`、`million-bot-test.js`、`million-2024-network-test.js`、`million-2024-archive-test.js`，部署时不可漏掉这些新增文件。`npm run test:million-ui` 依次运行旧版 `million-ui-test.js` 和新版 `million-2024-ui-test.js`，两版均需通过；同步部署新增 UI 测试，并检查两版手机与桌面布局。继续运行 `npm run test:rules-ui` 和 `npm run test:archives-ui`。
+
+百万美金的「暴徒参与分赃」说明：同步更新 `million.html`、`million.js`、`million.css`、`game-rules.js`、`game-rules-data.js` 和规则/浏览器测试。开局页、房主大厅设置及其他玩家的只读设置旁都有问号，点击直达勾选与取消勾选的中英介绍，不更改复选框或发送游戏操作；手机与键盘同样可用。共享规则定位使用滚动区域内的实际位置，避免显示上一节残留文字。运行 `node --test million-rules-test.js game-rules-test.js`、`node million-ui-test.js` 和 `node game-rules-ui-test.js`。
+
 真心话 V3 与两款棋类同设备版：一并提交 `truth-engine.js`、`truth-server.js`、`truth.js/html/css`、`duel-local-worker.js`、`duel-engine.js`、`gomoku-adapter.js`、`duel.js/html/css`、`server.js`、`room-archive.js`、首页与规则、`truth-turns-test.js`、`party-local-ui-test.js` 和相关测试/脚本。新版真心话为 2–8 人，不逐个掷骰；验证随机/接力/两人共同回答、两次换题、每人整局跳过额度、自定义题与存档。两款棋类验证单设备双方落子、刷新恢复、悔棋确认、换边与存档；保留已有 `vendor/gomoku.js` 和 `vendor/xiangqi.cjs`。运行 `npm run test:truth`、`npm run test:truth-ui`、`npm run test:archives`、`npm run test:archives-ui`、`npm run test:rules-ui`。旧骰子存档仍可续玩；首次体验新玩法须另开新局。部署前先保存现有房间，不要重启尚未保存的对局。
 
 本次新增七游戏文件存档：一起提交 `room-archive.js`、`game-archives.js`、`room-archive-test.js`、`room-archive-ui-test.js`，以及六个 HTML 页面、六个联机客户端、六个服务端、`room-control.js`、`game-ui.js/css`、`game-rules.js` 和测试、`package.json` 的修改。运行 `npm run test:archives`、`npm run test:archives-ui`、`npm run test:rules-ui`；检查下载后取消不中断对局、确认后全部退出、重启后导入新房间码、按位置认领资产、旧凭证不占位、坐齐仍等房主继续。导入按钮在各游戏开房页；真心话同屏存档在在线模式导入。不要上传 `test-results` 内含暗牌的测试存档。首次部署此功能前的旧服务器没有保存入口，必须先结束原对局，不能靠重启找回已丢失的房间。

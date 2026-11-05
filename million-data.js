@@ -26,16 +26,32 @@
     desc: Object.freeze({ zh: descriptionZh, en: descriptionEn })
   })])));
   const ROLE_IDS = Object.freeze(Object.keys(ROLES));
-  function rolesForCount(count) {
-    if (!Number.isInteger(count) || count < 3 || count > 8) throw Error("需要3至8人 / Requires 3 to 8 players");
+  const MODERN_ROLES = Object.freeze(Object.fromEntries([
+    ["tech", "技术员", "Tech", "#b48ef2", "snitch", "点名一种已公开角色；独自留下罚500万，不分赃", "Name a revealed role; alone: lose $5M, no share"],
+    ["acrobat", "飞贼", "Acrobat", "#e778a4", "acrobat", "先从中央拿500万，再参与分赃", "Take $5M from the center, then share"],
+    ["brute", "暴徒", "Brute", "#ef6b6b", "brute", "每个暴徒拿200万，出局也能拿；唯一时分赃", "Each takes $2M even if eliminated; unique Brute shares"],
+    ["mentalist", "读心者", "Mentalist", "#4fb3e8", "crook", "从仍在场的暴徒、技术员或飞贼中选一位偷200万", "Steal $2M from one surviving Brute, Tech or Acrobat"],
+    ["brain", "谋士", "Brain", "#e6b450", "mastermind", "向中央再加入一份赃款牌金额", "Add the loot card's value to the center again"],
+    ["driver", "司机", "Driver", "#5ccf7f", "driver", "每个仍在场的角色让你从中央拿100万", "Take $1M from the center per surviving role"]
+  ].map(([id, zh, en, color, art, zhText, enText]) => [id, Object.freeze({
+    id, zh, en, color, art, name: zh, english: en,
+    description: Object.freeze({ zh: zhText, en: enText }), desc: Object.freeze({ zh: zhText, en: enText })
+  })])));
+  const MODERN_ROLE_IDS = Object.freeze(Object.keys(MODERN_ROLES));
+  const rolesForEdition = edition => edition === "2024" ? MODERN_ROLES : ROLES;
+  function rolesForCount(count, edition = "2016") {
+    if (!Number.isInteger(count) || count < 3 || count > (edition === "2024" ? 9 : 8)) throw Error("人数不符合所选版本 / Invalid player count for this edition");
+    if (edition === "2024") return MODERN_ROLE_IDS.filter(r =>
+      (r !== "brain" || count >= 7) && (r !== "tech" || count === 3 || count >= 6) && (r !== "mentalist" || count !== 4));
     return ROLE_IDS.slice(0, count === 3 || count >= 7 ? 5 : count >= 5 ? 4 : 3);
   }
   const ACTION_FIELDS = Object.freeze({
     choose: ["roles"], withdraw: ["slot"], ready: ["ready"], transfer: ["to", "amount"],
     threat: ["target", "slot"], offer: ["payer", "quitter", "slot", "amount"],
-    respond: ["offerId", "accept"], cancel: ["offerId"], snitch: ["role"], next: []
+    respond: ["offerId", "accept"], cancel: ["offerId"], snitch: ["role"], next: [],
+    claim: ["roles"], callVote: [], vote: ["yes"], steal: ["target", "slot"]
   });
-  return Object.freeze({ ROLES, ROLE_IDS, rolesForCount, ACTION_FIELDS,
+  return Object.freeze({ ROLES, ROLE_IDS, MODERN_ROLES, MODERN_ROLE_IDS, rolesForEdition, rolesForCount, ACTION_FIELDS,
     INITIAL_CASH: 500, MAX_ROUNDS: 8, WIN_CASH: 2000, CASH_UNIT: 10000,
     TITLE: Object.freeze({ zh: "百万美金", en: "Millions of Dollars" }) });
 });

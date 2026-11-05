@@ -3,6 +3,7 @@
 const { WebSocketServer, WebSocket } = require("ws");
 const crypto = require("node:crypto");
 const E = require("./million-engine");
+const Data = require("./million-data");
 const Avatar = require("./avatar-data");
 const Social = require("./game-social");
 const { createRoomControl } = require("./room-control");
@@ -36,6 +37,7 @@ function attachMillion(server) {
       if (r.game && !r.archiveRestoring) {
         // Assets belong to the seat; outstanding consent belongs to its occupant.
         r.game.players[index].ready = false;
+        if (r.game.vote?.open) r.game.vote.votes[index] = null;
         for (const offer of r.game.offers) {
           if (offer.status === "pending" && [offer.payer, offer.quitter, offer.proposer, offer.responder].includes(index)) offer.status = "stale";
         }
@@ -55,15 +57,19 @@ function attachMillion(server) {
     }
     return next;
   }
-  function capacity(value) {
-    fail(Number.isInteger(value) && value >= 3 && value <= 8, "房间人数为 3-8 人 / Rooms hold 3-8 players");
+  function edition(value = "2016") {
+    fail(["2016", "2024"].includes(value), "版本无效 / Invalid edition");
+    return value;
+  }
+  function capacity(value, selected = "2016") {
+    fail(Number.isInteger(value) && value >= 3 && value <= (selected === "2024" ? 9 : 8), "人数不符合所选版本 / Invalid capacity for this edition");
     return value;
   }
   function snapshot(r, viewer) {
     const you = r.seats.indexOf(viewer);
     return {
       type: "state", code: r.code, you, host: r.seats.findIndex((p) => p.token === r.host),
-      capacity: r.capacity, settings: r.settings,
+      capacity: r.capacity, edition: r.edition || "2016", settings: r.settings,
       seats: r.seats.map((p) => ({
         socialId: Social.publicId(p), name: p.name, position: p.position, avatar: p.avatar || null,
         bot: Boolean(p.bot), vacant: Boolean(p.vacant), connected: !p.vacant && Boolean(p.bot || online(p)), auto: Boolean(p.auto)
@@ -88,15 +94,38 @@ function attachMillion(server) {
   function applyAction(r, actor, action) {
     const previousPhase = r.game.phase;
     E.act(r.game, actor, action);
+    if (action.type === "claim") {
+      const roles = Data.rolesForEdition(r.game.edition);
+      addChat(r, actor, `我声称是${action.roles.map(id => roles[id].zh).join("、")}。 / I claim ${action.roles.map(id => roles[id].en).join(" + ")}.`);
+    }
     if (r.game.phase === "negotiation" && (previousPhase !== "negotiation" || action.type !== "ready")) {
       r.negotiationUntil = Date.now() + negotiationDelay;
     }
   }
-  function automatedActors(game) {
+  function addChat(r, actor, text) {
+    r.chat.push({ id: crypto.randomUUID(), playerId: actor, name: r.seats[actor].name,
+      text: clean(text, 220), time: Date.now(), round: r.game?.round || 0, generation: r.generation || 0 });
+    r.chat = r.chat.slice(-40);
+  }
+  function botMemory(r, actor) {
+    const key = `${r.generation}:${r.game.round}:${r.seats[actor].token}`;
+    if (r.botRoundKey !== `${r.generation}:${r.game.round}`) {
+      r.botRoundKey = `${r.generation}:${r.game.round}`; r.botMemory = new Map();
+    }
+    if (!r.botMemory.has(key)) r.botMemory.set(key, { spoke: false, steps: 0 });
+    return r.botMemory.get(key);
+  }
+  function automatedActors(r) {
+    const game = r.game;
     const actors = [];
     if (game.phase === "negotiation") {
       // Answer offers before another bot's ready action can close negotiation.
       for (const offer of game.offers) if (offer.status === "pending" && !actors.includes(offer.responder)) actors.push(offer.responder);
+      // Give each bot a bounded negotiation opportunity before the leader calls a vote.
+      if (game.edition === "2024" && !game.vote.open) r.seats.forEach((seat, i) => {
+        if (seat.bot && i !== game.leader && game.players[i].slots.some(s => !s.withdrawn)
+            && botMemory(r, i).steps < 2 && !actors.includes(i)) actors.push(i);
+      });
     }
     for (const actor of E.requiredActors(game)) if (!actors.includes(actor)) actors.push(actor);
     return actors;
@@ -105,7 +134,7 @@ function attachMillion(server) {
   function schedule(r) {
     const game = r.game;
     if (closed || !game || game.phase === "over" || control.paused(r) || !humansOnline(r) || waitingOffline(r)) { stop(r); return; }
-    const actor = automatedActors(game).find((i) => automatic(r.seats[i]));
+    const actor = automatedActors(r).find((i) => automatic(r.seats[i]));
     if (actor === undefined) { stop(r); return; }
     const player = r.seats[actor], key = `${game.revision}:${actor}:${player.token}:${r.negotiationUntil || 0}`;
     if (r.timer && r.timerKey === key) return;
@@ -116,10 +145,20 @@ function attachMillion(server) {
       r.timer = null; r.timerKey = null;
       if (closed || r.game !== game || control.paused(r) || !humansOnline(r) || waitingOffline(r) ||
           `${game.revision}:${actor}:${r.seats[actor]?.token}:${r.negotiationUntil || 0}` !== key ||
-          !automatedActors(game).includes(actor) || !automatic(r.seats[actor])) return schedule(r);
+          !automatedActors(r).includes(actor) || !automatic(r.seats[actor])) return schedule(r);
       try {
-        const action = E.chooseBotAction(game, actor);
-        if (!action) return;
+        const memory = botMemory(r, actor);
+        if (game.phase === "negotiation" && r.seats[actor].bot && !memory.spoke) {
+          const text = E.chooseBotSpeech(game, actor);
+          if (text) addChat(r, actor, text);
+          memory.spoke = true;
+        }
+        const action = E.chooseBotAction(game, actor, undefined, r.chat.filter(m => m.generation === (r.generation || 0)));
+        if (game.phase === "negotiation") memory.steps++;
+        if (!action) { memory.steps = 2; broadcast(r); return; }
+        if (r.seats[actor].bot && action.type === "offer") addChat(r, actor,
+          action.quitter === actor ? "付我100万，我退出这个身份。 / Pay me $1M and I'll withdraw this role."
+            : `${r.seats[action.quitter].name}，我付100万，请你退出这个身份。 / ${r.seats[action.quitter].name}, take $1M to withdraw this role.`);
         applyAction(r, actor, action); control.touch(r, r.seats[actor]); broadcast(r);
       } catch (error) {
         stop(r);
@@ -187,12 +226,14 @@ function attachMillion(server) {
         session.updated = Date.now();
         if (archives.handle(session, ws, d)) return;
         if (d.type === "create") {
-          const name = clean(d.name), size = capacity(d.capacity ?? 4), rules = settings(d.settings ?? {});
+          const selected = edition(d.edition), name = clean(d.name), size = capacity(d.capacity ?? 4, selected);
+          const rules = settings(d.settings ?? {});
+          if (selected === "2024") { rules.bruteShares = true; rules.noRepeat = false; }
           fail(name, "请输入名字 / Enter your name");
           detach(session, true);
           if (avatar !== undefined) session.avatar = avatar;
           let code; do { code = "M" + crypto.randomBytes(3).toString("hex").slice(0, 5).toUpperCase(); } while (rooms.has(code));
-          const r = { code, host: session.token, capacity: size, settings: rules, game: null, generation: 0, chat: [], updated: Date.now(),
+          const r = { code, host: session.token, capacity: size, edition: selected, settings: rules, game: null, generation: 0, chat: [], updated: Date.now(),
             seats: [{ token: session.token, name, avatar: session.avatar || null, position: 0, bot: false, auto: false, ws }] };
           rooms.set(code, r); session.room = code; broadcast(r); return;
         }
@@ -226,18 +267,20 @@ function attachMillion(server) {
         if (d.type === "profile") {
           fail(avatar !== undefined, "请选择头像 / Choose an avatar"); p.avatar = avatar; session.avatar = avatar;
         } else if (d.type === "chat") {
-          fail(!r.game || !["negotiation", "snitch"].includes(r.game.phase) ||
+          fail(!r.game || !["negotiation", "snitch", "mentalist"].includes(r.game.phase) ||
             r.game.players[you].slots.some((slot) => !slot.withdrawn), "本轮已退出，请等待结算后聊天 / Withdrawn players can chat after the round");
           const text = clean(d.text, 160);
           if (text) {
             fail(!p.lastChat || Date.now() - p.lastChat >= 500, "发送太快 / Please slow down"); p.lastChat = Date.now();
-            r.chat.push({ id: crypto.randomUUID(), playerId: you, name: p.name, text, time: Date.now() }); r.chat = r.chat.slice(-40);
+            addChat(r, you, text);
           }
         } else if (d.type === "settings") {
           host(); fail(!r.game, "已经开始 / Already started");
-          const rules = settings(d.settings ?? {}, r.settings), size = capacity(d.capacity ?? r.capacity);
+          const selected = edition(d.edition ?? r.edition), rules = settings(d.settings ?? {}, r.settings);
+          const size = capacity(d.capacity ?? r.capacity, selected);
+          if (selected === "2024") { rules.bruteShares = true; rules.noRepeat = false; }
           fail(size >= r.seats.length && r.seats.every((seat) => seat.position < size), "已有座位超出人数上限 / Existing seats exceed capacity");
-          r.settings = rules; r.capacity = size;
+          r.settings = rules; r.capacity = size; r.edition = selected;
         } else if (d.type === "addBot") { host(); addBot(r); }
         else if (d.type === "fillBots") { host(); fail(!r.game, "已经开始 / Already started"); while (r.seats.length < r.capacity) addBot(r); }
         else if (d.type === "removeBot") {
@@ -249,7 +292,7 @@ function attachMillion(server) {
           host(); fail(!r.game && r.seats.length === r.capacity, "请坐满选定人数 / Fill the selected room capacity");
           fail(r.seats.every((seat) => seat.bot || online(seat)), "请等待所有玩家上线 / Wait for everyone to connect");
           const before = [...r.seats]; r.seats.sort((a, b) => a.position - b.position); remapChat(r, before);
-          stop(r); r.game = E.createGame(r.seats.map((seat) => seat.name), r.settings); r.generation++;
+          stop(r); r.game = E.createGame(r.seats.map((seat) => seat.name), { ...r.settings, edition: r.edition || "2016" }); r.generation++;
           r.game.revision = Math.max(r.game.revision, (r.lastRevision ?? -1) + 1); r.negotiationUntil = 0; r.resultsKey = null;
         } else if (d.type === "rematch") {
           host(); fail(r.game?.phase === "over", "本局尚未结束 / Finish this game first");

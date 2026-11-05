@@ -24,6 +24,7 @@ async function main() {
       { game: "poker", url: "/index.html", button: '[data-rules-game="poker"]', dialog: "#gameRulesDialog", title: "Texas Hold'em Rules" },
       { game: "truth", url: "/truth.html", button: "#rulesBtn", dialog: "#gameRulesDialog", title: "Truth or Dare Rules" },
       { game: "million", url: "/million.html", button: "#rulesBtn", dialog: "#gameRulesDialog", title: "Millions of Dollars" },
+      { game: "million-brute", url: "/million.html", button: '#createSettings [data-rules-section="brute-sharing"]', dialog: "#gameRulesDialog", title: "Millions of Dollars" },
       { game: "gomoku", url: "/duel.html?game=gomoku", button: "#rulesBtn", dialog: "#gameRulesDialog", title: "Gomoku Rules" },
       { game: "xiangqi", url: "/duel.html?game=xiangqi", button: "#rulesBtn", dialog: "#gameRulesDialog", title: "Xiangqi Rules" },
       { game: "bridge", url: "/bridge.html", button: "#rulesBtn", dialog: "#rulesDialog", title: "Bridge Rules" },

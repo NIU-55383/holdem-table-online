@@ -11,7 +11,7 @@ const integer = (v, low, high) => Number.isSafeInteger(v) && v >= low && v <= hi
 const CONFIG = {
   catan: ["mapId", "layout", "thieves", "maxPlayers", "skins"], bridge: ["boards", "scores"],
   gomoku: ["difficulty"], xiangqi: ["difficulty"], truth: ["level", "mode", "rounds", "maxPlayers", "selection", "skipLimit"],
-  million: ["capacity", "settings"], poker: ["maxPlayers", "startingStack", "blindInterval", "practiceMode"]
+  million: ["capacity", "settings", "edition"], poker: ["maxPlayers", "startingStack", "blindInterval", "practiceMode"]
 };
 const POKER = ["status", "handNumber", "dealer", "smallBlind", "bigBlind", "blindLevel", "smallBlindAmount", "bigBlindAmount", "street", "board", "burned", "deck", "pot", "currentBet", "minRaise", "raiseCount", "lastAggressor", "actor", "message", "log", "winners", "wasShowdown", "autoNext"];
 const POKER_SEAT = ["chips", "hand", "bet", "totalBet", "folded", "showCards", "allIn"];
@@ -32,6 +32,166 @@ function checkTree(value) {
   visit(value, 0);
 }
 
+function clearMillionConsents(g) {
+  g.players.forEach(p => { p.ready = false; });
+  g.offers.forEach(o => { if (o.status === "pending") o.status = "stale"; });
+  if (g.edition === "2024" && g.phase === "negotiation") {
+    g.vote.open = false;
+    g.vote.votes = g.players.map(() => null);
+  }
+}
+
+function anonymizeMillion(g) {
+  const seatName = i => `座位 ${i + 1} / Seat ${i + 1}`;
+  const names = g.players.map(p => p.name);
+  for (const state of [g, g.result, ...(g.history || [])].filter(Boolean)) {
+    const replacements = new Map();
+    state.players.forEach((p, i) => {
+      for (const name of [names[i], p.name]) if (typeof name === "string" && name && name !== seatName(i)) replacements.set(name, seatName(i));
+      p.name = seatName(i);
+    });
+    // Logs contain rendered names as well as seat indices; anonymize both languages.
+    const escaped = [...replacements.keys()].sort((a, b) => b.length - a.length).map(s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    if (escaped.length) for (const entry of state.logs || []) for (const key of ["zh", "en"]) {
+      if (typeof entry[key] === "string") entry[key] = entry[key].replace(new RegExp(escaped.join("|"), "g"), name => replacements.get(name));
+    }
+  }
+}
+
+function validateModernMillion(g, count, config) {
+  const Data = require("./million-data"), order = Data.MODERN_ROLE_IDS, roles = Data.rolesForCount(count, "2024");
+  const object = v => v !== null && typeof v === "object" && !Array.isArray(v);
+  const array = (v, max) => Array.isArray(v) && v.length <= max;
+  const same = (a, b) => Array.isArray(a) && a.length === b.length && a.every((v, i) => v === b[i]);
+  const actor = v => integer(v, 0, count - 1), slot = v => integer(v, 0, g.slotsPerPlayer - 1);
+  const role = v => roles.includes(v), money = v => integer(v, 0, 1000000);
+  const resolved = ["results", "over"].includes(g.phase);
+  const heisting = ["snitch", "mentalist", "results", "over"].includes(g.phase);
+  fail(g.type === "million" && ["planning", "claims", "negotiation", "snitch", "mentalist", "results", "over"].includes(g.phase));
+  fail(g.maxRounds === 5 && integer(g.round, 1, g.maxRounds) && actor(g.leader));
+  fail(g.slotsPerPlayer === (count === 3 ? 2 : 1) && same(g.availableRoles, roles));
+  for (const settings of [g.settings, config.settings]) {
+    fail(object(settings) && Object.keys(settings).every(k => ["bruteShares", "noRepeat"].includes(k)) && settings.bruteShares === true && settings.noRepeat === false);
+  }
+  // The club's bonus deck retains mapped legacy roles, even outside this count's pool.
+  fail([800, 900, 1000, 1100, 1200].includes(g.loot) && g.ante === 200 && (g.bonusRole === null || order.includes(g.bonusRole)));
+  fail(money(g.lootPool) && money(g.publicFund) && integer(g.reserve, -1000000, 1000000) && integer(g.offerSequence, 0, 10000000));
+  fail(array(g.players, count) && g.players.length === count);
+  function checkSlots(list) {
+    fail(array(list, g.slotsPerPlayer) && list.length === g.slotsPerPlayer);
+    list.forEach((s, i) => {
+      fail(object(s) && s.slot === i && (s.role === null || role(s.role)) && typeof s.withdrawn === "boolean" && typeof s.refunded === "boolean");
+      fail(integer(s.paidAnte, 0, g.ante) && money(s.share) && ["waiting", "active", "withdrawn", "duplicate", "eliminated", "sharing", "alone"].includes(s.status));
+      fail(s.role === null ? s.status === "waiting" && !s.withdrawn && !s.refunded && s.paidAnte === 0 && s.share === 0 : s.status !== "waiting");
+      fail(s.withdrawn === (s.status === "withdrawn"));
+    });
+    const chosen = list.filter(s => s.role !== null).map(s => s.role);
+    fail(new Set(chosen).size === chosen.length);
+  }
+  for (const p of g.players) {
+    fail(object(p) && typeof p.name === "string" && money(p.cash) && money(p.roundStartCash));
+    fail(p.threats === 0 && p.pendingThreats === 0 && typeof p.locked === "boolean" && typeof p.ready === "boolean");
+    fail(array(p.lastRoles, g.slotsPerPlayer) && p.lastRoles.every(role));
+    checkSlots(p.slots);
+    fail(p.slots.every(s => p.locked ? role(s.role) : s.role === null));
+    fail(g.phase === "planning" || p.locked);
+    if (["planning", "claims"].includes(g.phase)) fail(p.slots.every(s => !s.withdrawn && ["waiting", "active"].includes(s.status)));
+  }
+  const allSlots = g.players.flatMap(p => p.slots);
+  fail(array(g.revealedCards, allSlots.length - 1) && g.revealedCards.every(role));
+  if (g.phase === "planning") fail(g.hiddenCard === null && g.revealedCards.length === 0 && g.players.some(p => !p.locked));
+  else {
+    fail(role(g.hiddenCard));
+    fail(same([...g.revealedCards, g.hiddenCard].sort(), allSlots.map(s => s.role).sort()));
+  }
+  function checkIntel(intel) {
+    fail(array(intel, count) && intel.length === count && intel.every(v => object(v) && Object.keys(v).length === 0));
+  }
+  checkIntel(g.intel);
+  fail(array(g.claims, count) && g.claims.length === count);
+  for (const claim of g.claims) fail(claim === null || (array(claim, g.slotsPerPlayer) && claim.length === g.slotsPerPlayer && claim.every(role)));
+  if (g.phase === "claims") {
+    const made = g.claims.filter(c => c !== null).length;
+    fail(made < count && g.claimActor === (g.leader + made) % count);
+    for (let i = 0; i < count; i++) fail((g.claims[(g.leader + i) % count] !== null) === (i < made));
+  } else {
+    fail(g.claimActor === null && g.claims.every(c => g.phase === "planning" ? c === null : c !== null));
+  }
+  fail(object(g.vote) && typeof g.vote.open === "boolean" && integer(g.vote.attempt, 0, 10000000));
+  fail(array(g.vote.votes, count) && g.vote.votes.length === count && g.vote.votes.every(v => v === null || typeof v === "boolean"));
+  fail(!g.vote.open || (g.phase === "negotiation" && g.vote.attempt > 0));
+  if (["planning", "claims"].includes(g.phase)) fail(g.vote.attempt === 0 && g.vote.votes.every(v => v === null));
+  if (heisting) {
+    fail(object(g.heist) && integer(g.heist.cursor, 1, order.length) && same(g.heist.revealed, order.slice(0, g.heist.cursor)));
+    const cursor = g.phase === "snitch" ? order.indexOf("tech") + 1 : g.phase === "mentalist" ? order.indexOf("mentalist") + 1 : order.length;
+    fail(g.heist.cursor === cursor && g.publicFund === 0);
+  } else fail(g.heist === null);
+  const live = s => !s.withdrawn && ["active", "sharing"].includes(s.status);
+  if (g.snitch !== null) {
+    const s = g.snitch;
+    fail(object(s) && actor(s.actor) && s.player === s.actor && slot(s.slot));
+    const tech = g.players[s.actor].slots[s.slot];
+    fail(tech.role === "tech" && (live(tech) || (resolved && tech.status === "alone" && !tech.withdrawn)));
+    fail(same(s.options, [...new Set(g.revealedCards.filter(r => r !== "tech"))]));
+    fail(s.role === null || s.options.includes(s.role));
+    fail(heisting && (g.phase === "snitch" ? s.role === null && s.options.length > 0 : s.options.length === 0 || s.role !== null));
+  } else fail(g.phase !== "snitch");
+  if (g.phase === "mentalist") {
+    const m = g.mentalist;
+    fail(object(m) && actor(m.actor) && slot(m.slot));
+    fail(g.players[m.actor].slots[m.slot].role === "mentalist" && live(g.players[m.actor].slots[m.slot]));
+    const targets = g.players.flatMap((p, owner) => p.slots.flatMap(s => live(s) && ["tech", "acrobat", "brute"].includes(s.role) ? [{ owner, slot: s.slot, role: s.role }] : []));
+    fail(targets.length > 0 && array(m.targets, allSlots.length) && m.targets.length === targets.length);
+    m.targets.forEach((t, i) => fail(object(t) && actor(t.owner) && slot(t.slot) && t.owner === targets[i].owner && t.slot === targets[i].slot && t.role === targets[i].role));
+  } else fail(g.mentalist === null);
+  fail(g.phase === "results" ? actor(g.nextLeader) : g.nextLeader === null);
+  if (resolved) fail(g.lootPool === 0);
+  fail(array(g.offers, 5000));
+  const offerIds = new Set();
+  for (const o of g.offers) {
+    fail(object(o) && typeof o.id === "string" && o.id.length <= 80 && !offerIds.has(o.id) && o.round === g.round);
+    offerIds.add(o.id);
+    fail([o.payer, o.quitter, o.proposer, o.responder].every(actor) && o.payer !== o.quitter && slot(o.slot));
+    fail((o.proposer === o.payer && o.responder === o.quitter) || (o.proposer === o.quitter && o.responder === o.payer));
+    fail(integer(o.amount, 100, 1000000) && o.amount % 100 === 0 && ["pending", "stale", "expired", "accepted", "rejected", "cancelled"].includes(o.status));
+  }
+  function checkLogs(logs) {
+    fail(array(logs, 10000));
+    for (const entry of logs) {
+      fail(object(entry) && typeof entry.type === "string" && typeof entry.zh === "string" && typeof entry.en === "string");
+      for (const key of ["owner", "from", "to"]) if (entry[key] !== undefined) fail(actor(entry[key]));
+      if (entry.slot !== undefined) fail(slot(entry.slot));
+      if (entry.role !== undefined) fail(role(entry.role));
+      if (entry.roles !== undefined) fail(array(entry.roles, g.slotsPerPlayer) && entry.roles.every(role));
+    }
+  }
+  function checkResult(r, round) {
+    fail(object(r) && r.round === round && actor(r.leader) && [800, 900, 1000, 1100, 1200].includes(r.loot) && r.ante === 200);
+    fail((r.bonusRole === null || order.includes(r.bonusRole)) && (r.namedRole === null || role(r.namedRole)));
+    for (const key of ["totalLoot", "share", "remainder", "penalty", "topUp"]) fail(money(r[key]));
+    fail(array(r.players, count) && r.players.length === count);
+    for (const p of r.players) {
+      fail(object(p) && typeof p.name === "string" && money(p.cash) && integer(p.delta, -1000000, 1000000));
+      checkSlots(p.slots); fail(p.slots.every(s => role(s.role)));
+    }
+    fail(array(r.revealedCards, allSlots.length - 1) && r.revealedCards.length === allSlots.length - 1 && r.revealedCards.every(role));
+    fail(array(r.participants, allSlots.length));
+    const refs = new Set();
+    for (const s of r.participants) {
+      fail(object(s) && actor(s.owner) && slot(s.slot) && role(s.role) && r.players[s.owner].slots[s.slot].role === s.role);
+      const key = `${s.owner}:${s.slot}`; fail(!refs.has(key)); refs.add(key);
+    }
+    fail(array(r.splitting, count) && r.splitting.every(actor) && new Set(r.splitting).size === r.splitting.length);
+    checkIntel(r.privateIntel); checkLogs(r.logs);
+  }
+  checkLogs(g.logs);
+  fail(array(g.history, g.maxRounds) && g.history.length === g.round - (resolved ? 0 : 1));
+  g.history.forEach((r, i) => checkResult(r, i + 1));
+  if (resolved) checkResult(g.result, g.round); else fail(g.result === null);
+  fail(array(g.winners, 1) && g.winners.every(actor));
+  fail(g.phase === "over" ? g.winners.length === 1 && ["target", "round-limit"].includes(g.winReason) : g.winners.length === 0 && g.winReason === null);
+}
+
 function encode(kind, room) {
   const seats = kind === "poker" ? room.players : room.seats;
   fail(CONFIG[kind] && seats.every(Boolean));
@@ -44,15 +204,14 @@ function encode(kind, room) {
     progress = pick(room.game, ["moves", "phase", "winner", "reason", "revision"]);
   } else {
     progress = copy(room.game);
-    if (progress.players) progress.players.forEach((p, i) => { p.name = `座位 ${i + 1} / Seat ${i + 1}`; });
+    if (kind === "million") anonymizeMillion(progress);
+    else if (progress.players) progress.players.forEach((p, i) => { p.name = `座位 ${i + 1} / Seat ${i + 1}`; });
     // Pending offers and ready acknowledgements belong to the departing people.
     if (kind === "catan") progress.trade = null;
-    if (kind === "million") {
-      progress.players.forEach(p => { p.ready = false; });
-      progress.offers.forEach(o => { if (o.status === "pending") o.status = "stale"; });
-    }
+    if (kind === "million") clearMillionConsents(progress);
   }
   const config = pick(room, CONFIG[kind]);
+  if (kind === "million" && config.edition === undefined) config.edition = progress.edition ?? "2016";
   if (kind === "truth") Object.assign(config, { rounds: progress.rounds, selection: progress.selection || "dice", skipLimit: progress.skipLimit ?? -1 });
   const archive = { format: FORMAT, version: 1, game: kind, savedAt: new Date().toISOString(),
     positions: seats.map((p, i) => p.position ?? i), config, progress };
@@ -134,10 +293,17 @@ function validateProgress(kind, g, count, config) {
       require("./truth-engine").resumeEndless(g); config.rounds = 0;
     } else Object.assign(config, { selection: "dice", skipLimit: -1 });
   } else if (kind === "million") {
-    fail(g.version === 2 && ["planning", "negotiation", "snitch", "results", "over"].includes(g.phase) && integer(g.round, 1, 8) && integer(g.leader, 0, count - 1));
-    fail(Array.isArray(g.players) && g.players.length === count && Array.isArray(g.intel) && g.intel.length === count && Array.isArray(g.offers) && g.offers.length <= 5000);
-    fail(g.players.every(p => integer(p.cash, 0, 1000000) && Array.isArray(p.slots) && p.slots.length === (count === 3 ? 2 : 1)));
-    g.players.forEach(p => { p.ready = false; }); g.offers.forEach(o => { if (o.status === "pending") o.status = "stale"; });
+    const edition = g.edition === undefined && g.version === 2 ? "2016" : g.edition;
+    fail((edition === "2016" && g.version === 2) || (edition === "2024" && g.version === 3));
+    if (config.edition === undefined) config.edition = edition;
+    fail(config.edition === edition && integer(count, 3, edition === "2024" ? 9 : 8) && config.capacity === count);
+    if (edition === "2024") validateModernMillion(g, count, config);
+    else {
+      fail(["planning", "negotiation", "snitch", "results", "over"].includes(g.phase) && integer(g.round, 1, 8) && integer(g.leader, 0, count - 1));
+      fail(Array.isArray(g.players) && g.players.length === count && Array.isArray(g.intel) && g.intel.length === count && Array.isArray(g.offers) && g.offers.length <= 5000);
+      fail(g.players.every(p => integer(p.cash, 0, 1000000) && Array.isArray(p.slots) && p.slots.length === (count === 3 ? 2 : 1)));
+    }
+    clearMillionConsents(g); anonymizeMillion(g);
   }
   if (g.players) g.players.forEach((p, i) => { p.name = `座位 ${i + 1} / Seat ${i + 1}`; });
   return g;
@@ -148,11 +314,12 @@ function decode(input, allowed) {
   checkTree(input);
   fail(input?.format === FORMAT && input.version === 1 && allowed.includes(input.game));
   const a = copy(input), kind = a.game, count = a.positions?.length;
-  const bounds = { catan: [3, 6], bridge: [4, 4], gomoku: [2, 2], xiangqi: [2, 2], truth: [2, 12], million: [3, 8], poker: [2, 8] }[kind];
+  const bounds = { catan: [3, 6], bridge: [4, 4], gomoku: [2, 2], xiangqi: [2, 2], truth: [2, 12], million: [3, 9], poker: [2, 8] }[kind];
   fail(Array.isArray(a.positions) && integer(count, ...bounds) && new Set(a.positions).size === count && a.positions.every(p => integer(p, 0, 11)));
   fail(a.config && typeof a.config === "object" && !Array.isArray(a.config));
   const config = pick(a.config, CONFIG[kind]);
   const progress = validateProgress(kind, a.progress, count, config);
+  if (kind === "million") fail(a.positions.every(p => p < config.capacity));
   const seats = a.positions.map((position, i) => ({ token: crypto.randomUUID(), name: `座位 ${i + 1} / Seat ${i + 1}`, position, avatar: null, bot: false, auto: false, vacant: true, ready: false, ws: null }));
   const room = { ...config, host: "", seats, game: progress, chat: [], pending: null, seatSwap: null, job: null, timer: null, timerKey: null, updated: Date.now(), archiveRestoring: true };
   if (["gomoku", "xiangqi"].includes(kind)) room.kind = kind;

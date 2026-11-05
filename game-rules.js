@@ -72,7 +72,7 @@
     if (!dialog.open) dialog.showModal();
     body.scrollTop = 0;
     const section = [...body.querySelectorAll("[data-rule-section]")].find((s) => s.dataset.ruleSection === sectionId);
-    if (section) body.scrollTop = section.offsetTop - body.offsetTop;
+    if (section) body.scrollTop += section.getBoundingClientRect().top - body.getBoundingClientRect().top;
     return true;
   }
   document.querySelectorAll("[data-rules-dialog]").forEach(prepare);

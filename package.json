@@ -22,8 +22,8 @@
     "test:music": "node catan-music-test.js --browser",
     "test:truth": "node --test truth-test.js truth-turns-test.js truth-network-test.js",
     "test:truth-ui": "node truth-ui-test.js",
-    "test:million": "node --test million-test.js million-network-test.js million-rules-test.js",
-    "test:million-ui": "node million-ui-test.js"
+    "test:million": "node --test million-test.js million-network-test.js million-rules-test.js million-2024-test.js million-bot-test.js million-2024-network-test.js million-2024-archive-test.js",
+    "test:million-ui": "node million-ui-test.js && node million-2024-ui-test.js"
   },
   "engines": {
     "node": ">=20"

@@ -31,13 +31,19 @@
   const management = UI.mountRoomControl(() => state?.control, send, () => $("roomTools"));
   const archives = BoardGameArchives.mount({ game: "million", send, view: () => state?.control, name: () => $("playerName").value, anchor: $("setup") });
   const pname = index => state?.seats[index]?.name || "Player";
-  function roleTag(id, faded = false) { const r = D.ROLES[id]; return r ? `<span class="role-tag role-${id}${faded ? " faded" : ""}">${esc(r.zh)} <small>${esc(r.en)}</small></span>` : `<span class="hidden-role">${icon("lock-keyhole")}身份保密 / Hidden</span>`; }
+  const createEdition = () => $("edition").querySelector("input:checked").value;
+  const edition = () => state?.game?.edition || state?.edition || (state ? "2016" : createEdition());
+  const modern = () => edition() === "2024";
+  const roles = () => D.rolesForEdition(edition());
+  const rulesGame = () => modern() ? "million2024" : "million";
+  const roleArt = id => `<svg viewBox="0 0 100 100" aria-hidden="true"><use href="million-art.svg#${esc(roles()[id].art || id)}"></use></svg>`;
+  function roleTag(id, faded = false) { const r = roles()[id]; return r ? `<span class="role-tag role-${id}${faded ? " faded" : ""}">${esc(r.zh)} <small>${esc(r.en)}</small></span>` : `<span class="hidden-role">${icon("lock-keyhole")}身份保密 / Hidden</span>`; }
   function roleCard(id, selectable, disabled = false) {
-    const r = D.ROLES[id];
+    const r = roles()[id], description = modern() ? [r.description.zh, r.description.en] : short[id];
     const attrs = selectable
       ? `data-pick="${id}" aria-pressed="${picked.includes(id)}" ${disabled ? "disabled" : ""}`
-      : `data-rules-game="million" data-rules-section="role-${id}" title="${r.zh}规则 / ${r.en} rules"`;
-    return `<button type="button" class="role-card role-${id}${selectable && picked.includes(id) ? " selected" : ""}${!selectable && disabled ? " inactive" : ""}" ${attrs}><svg viewBox="0 0 100 100" aria-hidden="true"><use href="million-art.svg#${id}"></use></svg><b>${r.zh}</b><small>${r.en}</small><div class="role-description">${short[id][0]}<br>${short[id][1]}</div></button>`;
+      : `data-rules-game="${rulesGame()}" data-rules-section="role-${id}" title="${r.zh}规则 / ${r.en} rules"`;
+    return `<button type="button" class="role-card role-${id}${selectable && picked.includes(id) ? " selected" : ""}${!selectable && disabled ? " inactive" : ""}" ${attrs}>${roleArt(id)}<b>${r.zh}</b><small>${r.en}</small><div class="role-description">${description[0]}<br>${description[1]}</div></button>`;
   }
   function error(message = "") { $("error").textContent = message; }
   function send(data) { if (!live()) { error("连接中断，正在重连 / Reconnecting, please wait"); return false; } socket.send(JSON.stringify(data)); return true; }
@@ -85,15 +91,27 @@
     current.onerror = () => { $("connection").textContent = "连接中断 / Disconnected"; };
   }
   function confirm(title, text, run, valid) { confirmRequest = { run, valid }; $("confirmTitle").textContent = title; $("confirmText").textContent = text; $("confirmDialog").showModal(); }
-  function settingLabels(settings) { return `<span>${settings.noRepeat ? "角色不可连选 / No consecutive repeats" : "角色可连选 / Repeats allowed"}</span><br><span>${settings.bruteShares ? "暴徒分赃（旧版规则） / Brute shares (2016)" : "暴徒不分赃（本馆变体） / Brute leaves (house rule)"}</span>`; }
+  function bruteHelp() { return `<button type="button" class="setting-help" data-rules-game="million" data-rules-section="brute-sharing" title="暴徒分赃说明 / Brute sharing help" aria-label="暴徒分赃说明 / Brute sharing help">${icon("circle-help")}</button>`; }
+  function settingLabels(settings) { return `<span>${settings.noRepeat ? "角色不可连选 / No consecutive repeats" : "角色可连选 / Repeats allowed"}</span><br><div class="setting-with-help"><span>${settings.bruteShares ? "暴徒分赃（旧版规则） / Brute shares (2016)" : "暴徒不分赃（本馆变体） / Brute leaves (house rule)"}</span>${bruteHelp()}</div>`; }
+  function capacityOptions(selected, minimum = 3) {
+    return Array.from({ length: modern() ? 7 : 6 }, (_, i) => i + 3).map(n => `<option value="${n}" ${n === selected ? "selected" : ""} ${n < minimum ? "disabled" : ""}>${n === 3 ? "3 人 · 双角色 / Two roles each" : `${n} 人 / Players`}</option>`).join("");
+  }
+  function lobbySettings(host) {
+    const editable = host && !state.game, minimum = Math.max(3, state.seats.length, ...state.seats.map(p => (p.position ?? 0) + 1));
+    const editionLabel = modern() ? "2024 · 新版 / New edition" : "2016 · 经典版 / Classic";
+    const selector = editable ? `<div class="lobby-settings"><fieldset id="roomEdition" class="edition-control" ${!live() ? "disabled" : ""}><legend>版本 / Edition</legend><div class="edition-options"><label><input type="radio" name="roomEdition" data-edition="2016" value="2016" ${!modern() ? "checked" : ""} ${minimum > 8 ? "disabled" : ""}><span>2016</span></label><label><input type="radio" name="roomEdition" data-edition="2024" value="2024" ${modern() ? "checked" : ""}><span>2024</span></label></div></fieldset><label>房间人数 / Seats<select id="roomCapacity" ${!live() ? "disabled" : ""}>${capacityOptions(state.capacity, minimum)}</select></label></div>` : `<span>${editionLabel} · ${state.capacity} 人 / Players</span>`;
+    if (modern()) return `${selector}<p>起始 1000 万 · 每个角色保证金 200 万<br>Start $10M · $2M ante per role</p>`;
+    return selector + (editable ? `<div class="settings-fields"><label><input data-setting="noRepeat" type="checkbox" ${state.settings.noRepeat ? "checked" : ""}>连续两轮不选同一角色<small>No consecutive repeats</small></label><div class="setting-with-help"><label><input data-setting="bruteShares" type="checkbox" ${state.settings.bruteShares ? "checked" : ""}>暴徒参与分赃（旧版规则）<small>Brute shares; disable for house rule</small></label>${bruteHelp()}</div></div>` : settingLabels(state.settings));
+  }
   function renderPlayers() {
     const g = state.game;
-    const outcomes = { withdrawn: "已退出 / Withdrawn", eliminated: "被点名 / Named", duplicate: "撞车出局 / Duplicate", sharing: "参与分赃 / Shares", alone: "独存罚款 / Lone Snitch", exited: "获威胁后离场 / Threat, no share" };
+    const outcomes = { withdrawn: "已退出 / Withdrawn", eliminated: "被点名 / Named", duplicate: "撞车出局 / Duplicate", sharing: "参与分赃 / Shares", alone: modern() ? "独存罚款 / Lone Tech" : "独存罚款 / Lone Snitch", exited: "获威胁后离场 / Threat, no share" };
     $("playerCount").textContent = `${state.seats.filter(p => !p.vacant).length} / ${state.capacity}`;
     $("players").innerHTML = state.seats.map((p, i) => {
       const info = g?.players[i], bubble = bubbles.get(i), mine = i === state.you;
-      const tags = info ? info.slots.map(s => `${roleTag(s.role, s.withdrawn)}${outcomes[s.status] ? `<span class="player-outcome">${outcomes[s.status]}</span>` : ""}`).join("") : "";
-      return `<div class="player-row ${mine ? "mine" : ""}" data-seat="${i}">${UI.avatar(p, !!p.connected && (p.bot || live()), "million-avatar", mine && !p.vacant)}<div class="player-detail"><strong>${esc(p.name)}${mine ? " · 你 / You" : ""}</strong><small>${p.vacant ? "空位 / Vacant" : `${p.connected && (p.bot || live()) ? "在线 / Online" : "离线 / Offline"}${p.bot ? " · BOT" : ""}${state.host === i ? " · 房主 / Host" : ""}${p.auto && !p.bot ? " · 托管 / Auto" : ""}${g?.leader === i ? " · 带头人 / Leader" : ""}`}</small>${info ? `<small>${info.threats + info.pendingThreats ? `威胁卡 / Threats: ${info.threats}${info.pendingThreats ? ` (+${info.pendingThreats} 下轮 / next round)` : ""}` : ""}</small>` : ""}${bubble ? `<span class="player-chat">${esc(bubble.text)}</span>` : ""}</div><div class="player-cash">${info ? `<strong>${cash(info.cash)}</strong><small>${dollars(info.cash)}${["results", "over"].includes(g.phase) ? ` · <span class="${info.delta > 0 ? "up" : info.delta < 0 ? "down" : ""}">${info.delta > 0 ? "+" : ""}${info.delta}万</span>` : ""}</small>` : `<small>${p.vacant ? "等待补位 / Open" : "已入座 / Seated"}</small>`}</div><div class="player-roles">${g?.phase === "planning" && !mine ? `<span class="hidden-role">${info.locked ? "已选定 / Locked" : "选择中 / Choosing"}</span>` : tags}${info?.lastRoles?.length ? `<small>上轮 / Last: ${info.lastRoles.map(r => D.ROLES[r].zh).join(" · ")}</small>` : ""}${!g && p.bot && state.host === state.you ? `<button class="icon-button" data-remove="${esc(p.socialId)}" title="移除 ${esc(p.name)} / Remove" aria-label="移除 ${esc(p.name)} / Remove">${icon("user-minus")}</button>` : ""}</div></div>`;
+      // Only render identities provided by this seat's redacted public view; claims never reveal cards.
+      const tags = info ? info.slots.map(s => `<div class="player-role-slot">${info.slots.length > 1 ? `<small>#${s.slot + 1}</small>` : ""}${roleTag(s.role, s.withdrawn || ["duplicate", "eliminated"].includes(s.status))}${outcomes[s.status] ? `<span class="player-outcome">${outcomes[s.status]}</span>` : ""}${modern() && g.claims?.[i]?.[s.slot] ? `<span class="role-claim"><small>声称 / Claims</small>${roleTag(g.claims[i][s.slot], s.withdrawn)}</span>` : ""}</div>`).join("") : "";
+      return `<div class="player-row ${mine ? "mine" : ""}" data-seat="${i}">${UI.avatar(p, !!p.connected && (p.bot || live()), "million-avatar", mine && !p.vacant)}<div class="player-detail"><strong>${esc(p.name)}${mine ? " · 你 / You" : ""}</strong><small>${p.vacant ? "空位 / Vacant" : `${p.connected && (p.bot || live()) ? "在线 / Online" : "离线 / Offline"}${p.bot ? " · BOT" : ""}${state.host === i ? " · 房主 / Host" : ""}${p.auto && !p.bot ? " · 托管 / Auto" : ""}${g?.leader === i ? " · 带头人 / Leader" : ""}`}</small>${info && !modern() ? `<small>${info.threats + info.pendingThreats ? `威胁卡 / Threats: ${info.threats}${info.pendingThreats ? ` (+${info.pendingThreats} 下轮 / next round)` : ""}` : ""}</small>` : ""}${bubble ? `<span class="player-chat">${esc(bubble.text)}</span>` : ""}</div><div class="player-cash">${info ? `<strong>${cash(info.cash)}</strong><small>${dollars(info.cash)}${["results", "over"].includes(g.phase) ? ` · <span class="${info.delta > 0 ? "up" : info.delta < 0 ? "down" : ""}">${info.delta > 0 ? "+" : ""}${info.delta}万</span>` : ""}</small>` : `<small>${p.vacant ? "等待补位 / Open" : "已入座 / Seated"}</small>`}</div><div class="player-roles">${g?.phase === "planning" && !mine ? `<span class="hidden-role">${info.locked ? "已选定 / Locked" : "选择中 / Choosing"}</span>` : tags}${info?.lastRoles?.length ? `<small>上轮 / Last: ${info.lastRoles.map(r => esc(roles()[r].zh)).join(" · ")}</small>` : ""}${!g && p.bot && state.host === state.you ? `<button class="icon-button" data-remove="${esc(p.socialId)}" title="移除 ${esc(p.name)} / Remove" aria-label="移除 ${esc(p.name)} / Remove">${icon("user-minus")}</button>` : ""}</div></div>`;
     }).join("");
   }
   function selectOptions(players) { return players.map(i => `<option value="${i}">${esc(pname(i))}</option>`).join(""); }
@@ -101,22 +119,41 @@
     const pending = g.offers.filter(o => o.status === "pending");
     return `<h3>交易提议 / Offers</h3>${pending.length ? `<ul class="offers">${pending.map(o => `<li><b>${esc(pname(o.payer))}</b> → <b>${esc(pname(o.quitter))}</b> · ${cash(o.amount)} / ${dollars(o.amount)}<br>退出角色 ${o.slot + 1} / Withdraw role ${o.slot + 1}${o.responder === state.you ? `<div class="buttons"><button data-response="${esc(o.id)}" data-accept="true">${icon("check")}接受 / Accept</button><button data-response="${esc(o.id)}" data-accept="false">${icon("x")}拒绝 / Reject</button></div>` : o.proposer === state.you ? `<div class="buttons"><button data-cancel-offer="${esc(o.id)}">${icon("undo-2")}撤回 / Cancel</button></div>` : ""}</li>`).join("")}</ul>` : `<p>暂无交易 / No open offers</p>`}`;
   }
+  function claimsHTML(g, me) {
+    const count = (g.claims || []).filter(Boolean).length;
+    if (g.claimActor !== state.you) return `<h2>身份声明 / Role declarations</h2><p>等待 ${esc(pname(g.claimActor))} 声明身份。<small>Waiting for ${esc(pname(g.claimActor))} to declare their roles.</small></p><p>${count} / ${g.players.length} 已声明 / declared</p>`;
+    return `<h2>声明你的身份 / Declare your roles</h2>${me.slots.map(s => `<div class="claim-slot"><div class="my-slot"><span>角色 ${s.slot + 1} / Role ${s.slot + 1}</span>${roleTag(s.role)}</div><label>公开声明 / Public claim<select data-k="claim${s.slot}"><option value="">请选择 / Choose a claim</option>${g.availableRoles.map(id => `<option value="${id}">${esc(roles()[id].zh)} / ${esc(roles()[id].en)}</option>`).join("")}</select></label></div>`).join("")}<button id="submitClaims" class="primary wide" ${me.slots.every(s => g.availableRoles.includes(drafts[`claim${s.slot}`])) ? "" : "disabled"}>${icon("message-square")}确认声明 / Declare</button><p>${count} / ${g.players.length} 已声明 / declared</p>`;
+  }
+  function voteHTML(g, me) {
+    if (!modern()) return me.slots.some(s => !s.withdrawn) ? `<h3>开车确认 / Ready for the heist</h3><div class="ready-list">${g.players.map((p, i) => p.slots.some(s => !s.withdrawn) ? `<span class="${p.ready ? "ready" : ""}">${icon(p.ready ? "circle-check" : "clock-3")}${esc(pname(i))}</span>` : "").join("")}</div><button id="readyHeist" class="${me.ready ? "" : "primary"} wide">${icon(me.ready ? "undo-2" : "car")}${me.ready ? "取消确认 / Not ready" : "确认开车 / Ready for the heist"}</button><p>所有在场玩家确认后立即开车，未接受的交易取消。<small>Starts when every active player is ready; unanswered offers expire.</small></p>` : "";
+    const vote = g.vote, yes = vote.votes.filter(v => v === true).length, threshold = Math.ceil(g.players.length / 2);
+    const tally = `<div class="vote-list">${g.players.map((_, i) => `<span>${esc(pname(i))}<small>${vote.votes[i] === true ? "赞成 / Yes" : vote.votes[i] === false ? "反对 / No" : "待投票 / Pending"}</small></span>`).join("")}</div>`;
+    const controls = vote.open ? vote.votes[state.you] == null ? `<div class="vote-actions"><button data-vote="yes" class="primary">${icon("check")}赞成 / Yes</button><button data-vote="no">${icon("x")}反对 / No</button></div>` : `<p>你已投票 / Your vote is recorded</p>` : g.leader === state.you ? `<button id="callVote" class="primary wide">${icon("vote")}发起投票 / Call vote</button>` : `<p>等待 ${esc(pname(g.leader))} 发起投票。<small>Waiting for leader ${esc(pname(g.leader))} to call a vote.</small></p>`;
+    return `<section class="heist-vote"><h3>开车投票 / Heist vote${vote.attempt ? ` · ${vote.attempt}` : ""}</h3><p>${vote.open ? `${yes} / ${threshold} 票赞成 / yes votes needed` : vote.attempt ? "上次未通过，继续谈判 / Vote failed; negotiations continue" : "尚未发起 / Not called yet"}</p>${vote.attempt ? tally : ""}${controls}</section>`;
+  }
   function actionHTML(g, me) {
     const others = g.players.map((_, i) => i).filter(i => i !== state.you);
     if (g.phase === "planning") return `<h2>${me.locked ? "已锁定身份 / Roles locked" : `秘密选择 ${g.slotsPerPlayer} 个身份 / Choose ${g.slotsPerPlayer} role${g.slotsPerPlayer > 1 ? "s" : ""}`}</h2>${me.locked ? `<div class="public-roles">${me.slots.map(s => roleTag(s.role)).join("")}</div><p>等待其他玩家 / Waiting for the others</p>` : `<p>每个角色保证金 ${cash(g.ante)} / ${dollars(g.ante)}<small>选定后本轮不可更改；三人局需两个不同角色。<br>Locked for this round; choose two different roles in a three-player game.</small></p><div class="role-picker">${g.availableRoles.map(id => roleCard(id, true, !g.allowedRoles.includes(id))).join("")}</div><button id="lockRoles" class="primary wide" ${picked.length !== g.slotsPerPlayer ? "disabled" : ""}>${icon("lock-keyhole")}确认身份 / Lock roles</button>`}<p>${g.players.filter(p => p.locked).length} / ${g.players.length} 已选定 / locked</p>`;
-    if (g.phase === "snitch") return g.snitch.player === state.you ? `<h2>告密：点名一种身份 / Name a role</h2><p>必须选择一种公开身份，不能跳过。该身份仍在场者全部出局；若最后只剩你，扣300万且不分赃。<small>You must name a public role, with no pass. Its active characters are eliminated. If left alone, lose $3M and take no loot.</small></p><div class="role-picker">${g.snitch.options.map(r => `<button data-name-role="${r}" class="role-card role-${r}"><svg viewBox="0 0 100 100" aria-hidden="true"><use href="million-art.svg#${r}"></use></svg><b>${D.ROLES[r].zh}</b><small>${D.ROLES[r].en}</small></button>`).join("")}</div>` : `<h2>等待告密者 / Waiting for the Snitch</h2><p>${esc(pname(g.snitch.player))} 正在点名一种身份。<small>${esc(pname(g.snitch.player))} is choosing which role to eliminate.</small></p>`;
+    if (g.phase === "claims") return claimsHTML(g, me);
+    if (g.phase === "snitch") {
+      const actor = g.snitch.actor ?? g.snitch.player, penalty = modern() ? 500 : 300;
+      return actor === state.you ? `<h2>${modern() ? "技术员" : "告密"}：点名一种身份 / Name a role</h2><p>必须选择一种公开身份，不能跳过。该身份仍在场者全部出局；若最后只剩你，扣${penalty}万且不分赃。<small>You must name a public role, with no pass. Its active characters are eliminated. If left alone, lose ${dollars(penalty)} and take no loot.</small></p><div class="role-picker">${g.snitch.options.map(r => `<button data-name-role="${r}" class="role-card role-${r}">${roleArt(r)}<b>${roles()[r].zh}</b><small>${roles()[r].en}</small></button>`).join("")}</div>` : `<h2>${modern() ? "等待技术员 / Waiting for the Tech" : "等待告密者 / Waiting for the Snitch"}</h2><p>${esc(pname(actor))} 正在点名一种身份。<small>${esc(pname(actor))} is choosing which role to eliminate.</small></p>`;
+    }
+    if (g.phase === "mentalist") return g.mentalist.actor === state.you ? `<h2>读心者 / Mentalist</h2><p>偷取 200 万 / Steal $2M</p><div class="steal-targets">${g.mentalist.targets.map(t => `<button data-steal="${t.owner}:${t.slot}">${icon("hand-coins")}<span>${esc(pname(t.owner))} · #${t.slot + 1}</span>${roleTag(t.role)}</button>`).join("")}</div>` : `<h2>等待读心者 / Waiting for the Mentalist</h2><p>${esc(pname(g.mentalist.actor))} 正在选择目标。<small>${esc(pname(g.mentalist.actor))} is choosing a target.</small></p>`;
     if (["results", "over"].includes(g.phase)) {
       const wins = g.winners.map(pname), result = g.result;
       const leader = state.seats[g.leader], canNext = g.leader === state.you || state.host === state.you && (leader.bot || !leader.connected || leader.auto);
       const next = g.phase === "over" ? state.you === state.host ? `<button id="rematchBtn" class="primary wide">${icon("rotate-ccw")}再来一局 / Play again</button>` : `<p>等待房主再开一局 / Waiting for the host</p>` : canNext ? `<button id="nextRound" class="primary wide">${icon("arrow-right")}下一轮 / Next round</button>` : `<p>等待 ${esc(pname(g.leader))} 开始下一轮。<small>Waiting for ${esc(pname(g.leader))} to start the next round.</small></p>`;
       const logItems = list => list.map(l => `<li>${esc(l.zh)}<small>${esc(l.en)}</small></li>`).join("");
-      return `${g.phase === "over" ? `<div class="result-title">${esc(wins.join("、"))} ${wins.length > 1 ? "共同胜利" : "胜利"}<small>${esc(wins.join(" & "))} ${wins.length > 1 ? "win together" : "wins"}</small></div>` : `<h2>第 ${g.round} 轮结算 / Round ${g.round}</h2>`}<p>分赃 ${cash(result.totalLoot)} / ${dollars(result.totalLoot)} · 每份 ${cash(result.share)}<small>Each share: ${dollars(result.share)} · Remainder: ${dollars(result.remainder)}</small></p><ul class="details-list">${logItems((result.logs || []).filter(l => ["snitch", "snitch-alone", "no-share", "driver-fee", "crook-steal", "bonus", "threat-earned"].includes(l.type)))}</ul>${next}<details class="full-ledger"><summary>完整账目 <small>Full ledger · amounts in ×$10k</small></summary><ol class="details-list">${logItems((result.logs || []).filter(l => l.type !== "role-result"))}</ol></details>`;
+      const important = ["snitch", "snitch-alone", "no-share", "driver-fee", "crook-steal", "bonus", "threat-earned", "tech-alone", "acrobat-take", "brute-take", "mentalist-steal", "brain-add", "driver-take", "pool-bonus"];
+      return `${g.phase === "over" ? `<div class="result-title">${esc(wins.join("、"))} ${wins.length > 1 ? "共同胜利" : "胜利"}<small>${esc(wins.join(" & "))} ${wins.length > 1 ? "win together" : "wins"}</small></div>` : `<h2>第 ${g.round} 轮结算 / Round ${g.round}</h2>`}<p>分赃 ${cash(result.totalLoot)} / ${dollars(result.totalLoot)} · 每份 ${cash(result.share)}<small>Each share: ${dollars(result.share)} · ${modern() ? `储备补足 / Reserve top-up: ${dollars(result.topUp || 0)}` : `Remainder: ${dollars(result.remainder)}`}</small></p><ul class="details-list">${logItems((result.logs || []).filter(l => important.includes(l.type)))}</ul>${modern() && g.phase === "results" && Number.isInteger(g.nextLeader) ? `<p>下轮带头人 / Next leader: ${esc(pname(g.nextLeader))}</p>` : ""}${next}<details class="full-ledger"><summary>完整账目 <small>Full ledger · amounts in ×$10k</small></summary><ol class="details-list">${logItems((result.logs || []).filter(l => l.type !== "role-result"))}</ol></details>`;
     }
     const active = me.slots.filter(s => !s.withdrawn), targetSlots = others.flatMap(i => g.players[i].slots.filter(s => !s.withdrawn).map(s => `<option value="${i}:${s.slot}">${esc(pname(i))} · 角色 ${s.slot + 1} / Role ${s.slot + 1}</option>`));
-    return `<h2>你的身份 / Your roles</h2>${me.slots.map(s => `<div class="my-slot">${roleTag(s.role, s.withdrawn)}${s.withdrawn ? `<small>已退出 / Withdrawn</small>` : `<button data-withdraw="${s.slot}">${icon("log-out")}退出 / Withdraw</button>`}</div>`).join("")}${!active.length ? `<p>你已退出本轮，保留谈判所得。<small>You have withdrawn and keep any negotiated payments.</small></p>` : ""}${offersHTML(g)}${active.length ? `<details><summary>谈个价钱 <small>Make a deal</small></summary>${targetSlots.length ? `<div class="form-row"><label>让谁退出 / Who withdraws<select data-k="paySlot">${targetSlots.join("")}</select></label><label>金额 / ×$10k<input data-k="payAmount" type="number" min="100" max="${me.cash}" step="100" value="100"></label><button id="payOffer" class="wide">${icon("handshake")}出钱让对方退出 / Pay them to leave</button></div>` : ""}<div class="form-row"><label>请谁付钱 / Ask payer<select data-k="askPayer">${selectOptions(others)}</select></label><label>金额 / ×$10k<input data-k="askAmount" type="number" min="100" step="100" value="100"></label>${active.length > 1 ? `<label>我的角色 / My role<select data-k="askSlot">${active.map(s => `<option value="${s.slot}">${D.ROLES[s.role].zh} / ${D.ROLES[s.role].en}</option>`).join("")}</select></label>` : ""}<button id="askOffer" class="wide">${icon("hand-coins")}收钱后我退出 / Pay me to leave</button></div><p>接受交易后自动付款并退出。<small>Accepting executes payment and withdrawal together.</small></p></details><details><summary>直接付款 <small>Direct payment</small></summary><div class="form-row"><label>付给 / Recipient<select data-k="transferTo">${selectOptions(others)}</select></label><label>金额 / ×$10k<input data-k="transferAmount" type="number" min="100" max="${me.cash}" step="100" value="100"></label><button id="transferBtn" class="wide">${icon("banknote")}付款 / Pay</button></div><p>直接付款不会让对方自动退出。<small>A direct payment does not make the recipient withdraw.</small></p></details><h3>开车确认 / Ready for the heist</h3><div class="ready-list">${g.players.map((p, i) => p.slots.some(s => !s.withdrawn) ? `<span class="${p.ready ? "ready" : ""}">${icon(p.ready ? "circle-check" : "clock-3")}${esc(pname(i))}</span>` : "").join("")}</div><button id="readyHeist" class="${me.ready ? "" : "primary"} wide">${icon(me.ready ? "undo-2" : "car")}${me.ready ? "取消确认 / Not ready" : "确认开车 / Ready for the heist"}</button><p>所有在场玩家确认后立即开车，未接受的交易取消。<small>Starts when every active player is ready; unanswered offers expire.</small></p>` : ""}`;
+    return `<h2>你的身份 / Your roles</h2>${me.slots.map(s => `<div class="my-slot">${roleTag(s.role, s.withdrawn)}${s.withdrawn ? `<small>已退出 / Withdrawn</small>` : `<button data-withdraw="${s.slot}">${icon("log-out")}退出 / Withdraw</button>`}</div>`).join("")}${!active.length ? `<p>你已退出本轮，保留谈判所得。<small>You have withdrawn and keep any negotiated payments.</small></p>` : ""}
+      ${modern() ? voteHTML(g, me) : ""}${offersHTML(g)}${active.length ? `<details><summary>谈个价钱 <small>Make a deal</small></summary>${targetSlots.length ? `<div class="form-row"><label>让谁退出 / Who withdraws<select data-k="paySlot">${targetSlots.join("")}</select></label><label>金额 / ×$10k<input data-k="payAmount" type="number" min="100" max="${me.cash}" step="100" value="100"></label><button id="payOffer" class="wide">${icon("handshake")}出钱让对方退出 / Pay them to leave</button></div>` : ""}<div class="form-row"><label>请谁付钱 / Ask payer<select data-k="askPayer">${selectOptions(others)}</select></label><label>金额 / ×$10k<input data-k="askAmount" type="number" min="100" step="100" value="100"></label>${active.length > 1 ? `<label>我的角色 / My role<select data-k="askSlot">${active.map(s => `<option value="${s.slot}">${roles()[s.role].zh} / ${roles()[s.role].en}</option>`).join("")}</select></label>` : ""}<button id="askOffer" class="wide">${icon("hand-coins")}收钱后我退出 / Pay me to leave</button></div><p>接受交易后自动付款并退出。<small>Accepting executes payment and withdrawal together.</small></p></details><details><summary>直接付款 <small>Direct payment</small></summary><div class="form-row"><label>付给 / Recipient<select data-k="transferTo">${selectOptions(others)}</select></label><label>金额 / ×$10k<input data-k="transferAmount" type="number" min="100" max="${me.cash}" step="100" value="100"></label><button id="transferBtn" class="wide">${icon("banknote")}付款 / Pay</button></div><p>直接付款不会让对方自动退出。<small>A direct payment does not make the recipient withdraw.</small></p></details>` : ""}${!modern() ? voteHTML(g, me) : ""}`;
   }
   function threatsHTML(g, me) {
-    if (!me.threats || !["planning", "negotiation", "snitch"].includes(g.phase)) return "";
+    if (modern() || !me.threats || !["planning", "negotiation", "snitch"].includes(g.phase)) return "";
     const targets = g.players.flatMap((p, i) => i === state.you || !p.locked ? [] : p.slots
       .filter(s => !s.role).map(s => `<option value="${i}:${s.slot}">${esc(pname(i))} · 角色 ${s.slot + 1} / Character ${s.slot + 1}</option>`));
     return `<h3>威胁卡 / Threats · ${me.threats}</h3><div class="form-row"><label>查看一张角色牌 / Inspect one card<select data-k="threatTarget">${targets.join("")}</select></label><button id="threatBtn">${icon("scan-eye")}使用 / Use</button></div>`;
@@ -128,28 +165,43 @@
   function render() {
     const g = state?.game, me = g?.players[state.you], host = state && state.you === state.host;
     document.body.classList.toggle("in-room", !!state);
+    document.body.classList.toggle("edition-2024", modern());
+    $("createSettings").hidden = modern(); $("variantRules").hidden = modern();
+    if (!state) $("capacity").innerHTML = capacityOptions(Math.min(Number($("capacity").value), modern() ? 9 : 8));
+    $("rulesBtn").dataset.rulesGame = rulesGame();
+    document.querySelector('.roles-section [data-rules-game]').dataset.rulesGame = rulesGame();
     const focus = document.activeElement?.dataset?.k;
-    const key = g ? `${state.code}:${g.round}` : "";
+    const key = g ? `${state.code}:${g.edition}:${g.round}` : "";
     if (key !== draftKey) { draftKey = key; drafts = {}; picked = []; }
     if (g?.phase !== "planning" || me?.locked) picked = [];
     $("setup").hidden = !!state; $("roomPanel").hidden = !state; $("crewSection").hidden = !state; $("chatPanel").hidden = !state; $("actionPanel").hidden = !g;
     if (matchMedia("(max-width: 900px)").matches) $("turnStatus").after($("actionPanel"));
     else $("roomPanel").after($("actionPanel"));
     $("createBtn").disabled = !live(); $("joinForm").querySelector("button").disabled = !live();
-    $("roundLabel").textContent = g ? `第 ${g.round} / ${g.maxRounds} 轮 · ROUND ${g.round}` : `${state?.capacity || "3–8"} 人 / Players`;
-    $("phaseTrack").querySelectorAll("li").forEach(li => li.classList.toggle("active", li.dataset.phase === (g?.phase === "over" ? "results" : g?.phase)));
+    $("roundLabel").textContent = g ? `${edition()} · 第 ${g.round} / ${g.maxRounds} 轮 · ROUND ${g.round}` : `${edition()} · ${state?.capacity || (modern() ? "3–9" : "3–8")} 人 / Players`;
+    $("goalLabel").innerHTML = icon("trophy") + (modern() ? "本轮结算后 5000 万 · 或第 5 轮最富有<small>$50M after a round, or richest after round 5</small>" : "分赃后 2000 万 · 或第 8 轮最富有<small>$20M after sharing, or richest after round 8</small>");
+    const phases = [["planning", "准备", "Choose roles"], ...(modern() ? [["claims", "声明", "Declare"]] : []), ["negotiation", "谈判", "Negotiate"], ["snitch", "抢劫", "The heist"], ["results", "分赃", "Split the loot"]];
+    const phase = g?.phase === "over" ? "results" : g?.phase === "mentalist" ? "snitch" : g?.phase;
+    $("phaseTrack").innerHTML = phases.map(([id, zh, en], i) => `<li data-phase="${id}" ${id === phase ? 'class="active" aria-current="step"' : ""}><b>0${i + 1}</b>${zh}<small>${en}</small></li>`).join("");
     $("lootAmount").innerHTML = g ? `${g.loot}<small> 万 / ${dollars(g.loot)}</small>` : "—";
-    $("lootDetails").innerHTML = g ? `保证金 / Ante · ${cash(g.ante)} / ${dollars(g.ante)}<br>奖励 / Bonus · ${g.bonusRole ? roleTag(g.bonusRole) : "无 / None"}` : "保证金 / Ante · —";
+    $("lootDetails").innerHTML = g ? `保证金 / Ante · ${cash(g.ante)} / ${dollars(g.ante)}<br>奖励 / Bonus · ${g.bonusRole ? roleTag(g.bonusRole) : "无 / None"}` : modern() ? "起始 / Start · 1000万 / $10M<br>保证金 / Ante · 200万 / $2M" : "保证金 / Ante · —";
     $("leaderLabel").textContent = g ? `带头人 / Leader · ${pname(g.leader)}` : "等朋友到齐 / Waiting for your crew";
-    $("fundLabel").textContent = `待退保证金 / Ante escrow · ${cash(g?.publicFund || 0)}`;
-    $("publicRoles").innerHTML = g?.hiddenCount ? `<small>公共区 / Public roles</small>${g.revealedCards.map(r => roleTag(r)).join("")}<span class="hidden-role">${icon("lock-keyhole")}藏起 1 张 / One hidden</span>` : `<small>${g ? "等待所有玩家选定身份 / Waiting for everyone's roles" : "秘密身份 · 自由谈判 · 八轮分赃 / Hidden roles · Negotiation · Eight rounds"}</small>`;
-    const available = g?.availableRoles || (state ? D.rolesForCount(state.capacity) : D.ROLE_IDS);
-    $("roleGallery").innerHTML = D.ROLE_IDS.map(id => roleCard(id, false, !available.includes(id))).join("");
+    $("fundLabel").textContent = g && modern() ? `当前奖池 / Current pool · ${cash(g.lootPool + g.publicFund)} / ${dollars(g.lootPool + g.publicFund)}（含保证金 / Ante included）` : `待退保证金 / Ante escrow · ${cash(g?.publicFund || 0)}`;
+    $("publicRoles").innerHTML = g?.hiddenCount ? `<small>公共区 / Public roles</small>${g.revealedCards.map(r => roleTag(r)).join("")}<span class="hidden-role">${icon("lock-keyhole")}藏起 1 张 / One hidden</span>` : `<small>${g ? "等待所有玩家选定身份 / Waiting for everyone's roles" : modern() ? "秘密身份 · 公开声明 · 五轮分赃 / Hidden roles · Declarations · Five rounds" : "秘密身份 · 自由谈判 · 八轮分赃 / Hidden roles · Negotiation · Eight rounds"}</small>`;
+    const available = g?.availableRoles || D.rolesForCount(state?.capacity || Number($("capacity").value), edition());
+    $("roleGallery").innerHTML = Object.keys(roles()).map(id => roleCard(id, false, !available.includes(id))).join("");
     let status = "选择身份，谈好价钱，一起开车。", english = "Choose a role. Make a deal. Split the loot.";
     if (state && !g) { status = `等待入座 · ${state.seats.length} / ${state.capacity}`; english = host ? "Invite friends or fill the seats with bots." : "The host will start when the crew is complete."; }
     if (g?.phase === "planning") { status = me.locked ? "身份已锁定，等其他人选择。" : `秘密选择 ${g.slotsPerPlayer} 个${g.slotsPerPlayer > 1 ? "不同" : ""}身份`; english = me.locked ? "Roles locked. Waiting for the others." : `Choose ${g.slotsPerPlayer} secret role${g.slotsPerPlayer > 1 ? "s" : ""}.`; }
-    if (g?.phase === "negotiation") { status = me.slots.every(s => s.withdrawn) ? "你已退出本轮，等待分赃。" : me.ready ? "你已确认开车，等待其他人。" : "谈判中：可以留下、交易或退出。"; english = me.slots.every(s => s.withdrawn) ? "You have withdrawn. Waiting for settlement." : me.ready ? "Ready for the heist. Waiting for the others." : "Negotiate, make a deal, or withdraw."; }
-    if (g?.phase === "snitch") { status = `${pname(g.snitch.player)} 正在告密`; english = `${pname(g.snitch.player)} is naming a role.`; }
+    if (g?.phase === "claims") { status = `${pname(g.claimActor)} 正在声明身份。`; english = `${pname(g.claimActor)} is declaring roles.`; }
+    if (g?.phase === "negotiation") {
+      if (modern()) {
+        status = g.vote.open ? "开车投票中，退出者也参与投票。" : me.slots.every(s => s.withdrawn) ? "你已退出，仍可参与开车投票。" : "谈判中：可以留下、交易或退出。";
+        english = g.vote.open ? "Heist vote open, including withdrawn players." : me.slots.every(s => s.withdrawn) ? "You have withdrawn, but still vote on the heist." : "Negotiate, make a deal, or withdraw.";
+      } else { status = me.slots.every(s => s.withdrawn) ? "你已退出本轮，等待分赃。" : me.ready ? "你已确认开车，等待其他人。" : "谈判中：可以留下、交易或退出。"; english = me.slots.every(s => s.withdrawn) ? "You have withdrawn. Waiting for settlement." : me.ready ? "Ready for the heist. Waiting for the others." : "Negotiate, make a deal, or withdraw."; }
+    }
+    if (g?.phase === "snitch") { const actor = g.snitch.actor ?? g.snitch.player; status = `${pname(actor)} 正在${modern() ? "用技术员点名" : "告密"}`; english = `${pname(actor)} is naming a role.`; }
+    if (g?.phase === "mentalist") { status = `${pname(g.mentalist.actor)} 正在选择偷取目标`; english = `${pname(g.mentalist.actor)} is choosing whom to steal from.`; }
     if (g?.phase === "results") { status = "本轮已结算，查看每人的收支。"; english = "Round settled. Review each player's gains and losses."; }
     if (g?.phase === "over") { status = `${g.winners.map(pname).join("、")} 胜利`; english = `${g.winners.map(pname).join(" & ")} ${g.winners.length > 1 ? "win together" : "wins"}.`; }
     if (state?.control?.paused) { status = "有空位待补齐，游戏已暂停。"; english = "Paused until all vacant seats are filled."; }
@@ -159,7 +211,7 @@
     $("turnStatus").classList.toggle("your-turn", !!g?.requiredActors.includes(state.you)); $("turnStatus").classList.toggle("paused", !!state?.control?.paused);
     if (state) {
       $("roomCode").textContent = state.code; renderPlayers();
-      $("roomSettings").innerHTML = !g && host ? `<div class="settings-fields"><label><input data-setting="noRepeat" type="checkbox" ${state.settings.noRepeat ? "checked" : ""}>连续两轮不选同一角色<small>No consecutive repeats</small></label><label><input data-setting="bruteShares" type="checkbox" ${state.settings.bruteShares ? "checked" : ""}>暴徒参与分赃（旧版规则）<small>Brute shares; disable for house rule</small></label></div>` : settingLabels(state.settings);
+      $("roomSettings").innerHTML = lobbySettings(host);
       $("lobbyActions").hidden = !!g || !host; $("addBotBtn").disabled = !live() || state.seats.length >= state.capacity; $("fillBotsBtn").disabled = $("addBotBtn").disabled; $("startBtn").disabled = !live() || state.seats.length !== state.capacity || state.seats.some(p => !p.bot && !p.connected) || !!state.control?.paused;
       if (g) $("actionPanel").innerHTML = actionHTML(g, me) + threatsHTML(g, me);
       const threatTarget = document.querySelector('[data-k="threatTarget"]');
@@ -171,7 +223,7 @@
       if (g && (!live() || busy || state.control?.paused || state.seats[state.you]?.auto)) $("actionPanel").querySelectorAll('button,input,select').forEach(el => el.disabled = true);
       const oldMessages = $("messages").textContent;
       $("messages").innerHTML = (state.chat || []).map(m => `<p><b>${esc(m.name || pname(m.playerId))}</b>${esc(m.text)}</p>`).join(""); if ($("messages").textContent !== oldMessages) $("messages").scrollTop = $("messages").scrollHeight;
-      const silent = g && ["negotiation", "snitch"].includes(g.phase) && me.slots.every(s => s.withdrawn);
+      const silent = g && ["negotiation", "snitch", "mentalist"].includes(g.phase) && me.slots.every(s => s.withdrawn);
       $("chatText").disabled = !live() || !!silent; $("chatForm").querySelector("button").disabled = !live() || !!silent;
       $("chatHint").textContent = silent ? "本轮已退出，请保持沉默 / Withdrawn players stay silent this round" : "";
     }
@@ -182,8 +234,19 @@
     restoreDrafts(focus); social.sync(); management.sync(); icons();
   }
   const val = key => document.querySelector(`[data-k="${key}"]`)?.value;
+  const editionSettings = (selected, settings) => selected === "2024" ? { noRepeat: false, bruteShares: true } : { noRepeat: !!settings.noRepeat, bruteShares: !!settings.bruteShares };
   document.addEventListener("input", e => { if (e.target.dataset.k) drafts[e.target.dataset.k] = e.target.value; });
-  document.addEventListener("change", e => { if (e.target.dataset.k) drafts[e.target.dataset.k] = e.target.value; if (e.target.dataset.setting) send({ type: "settings", settings: { [e.target.dataset.setting]: e.target.checked } }); });
+  document.addEventListener("change", e => {
+    const el = e.target;
+    if (el.dataset.k) { drafts[el.dataset.k] = el.value; if (el.dataset.k.startsWith("claim")) render(); }
+    if (el.closest("#edition") || el.id === "capacity") render();
+    if (state && !state.game && state.you === state.host && (el.closest("#roomEdition") || el.id === "roomCapacity" || el.dataset.setting)) {
+      const selected = el.closest("#roomEdition") ? el.value : edition();
+      const capacity = el.id === "roomCapacity" ? Number(el.value) : Math.min(state.capacity, selected === "2024" ? 9 : 8);
+      const settings = { ...state.settings, ...(el.dataset.setting ? { [el.dataset.setting]: el.checked } : {}) };
+      send({ type: "settings", edition: selected, capacity, settings: editionSettings(selected, settings) });
+    }
+  });
   $("actionPanel").onclick = e => {
     const b = e.target.closest("button"); if (!b || b.disabled || !state?.game) return;
     const g = state.game, me = g.players[state.you], code = state.code, round = g.round;
@@ -191,9 +254,16 @@
     const valid = () => state?.code === code && state.game?.round === round && state.game?.phase === g.phase && state.seats.map(p => p.socialId).join(":") === roster && live() && !state.control?.paused;
     if (b.dataset.pick) { const r = b.dataset.pick; if (picked.includes(r)) picked = picked.filter(x => x !== r); else { if (picked.length >= g.slotsPerPlayer) picked.shift(); picked.push(r); } render(); }
     else if (b.id === "lockRoles") act({ type: "choose", roles: picked.slice() });
+    else if (b.id === "submitClaims" && g.phase === "claims" && g.claimActor === state.you) {
+      const claims = me.slots.map(s => val(`claim${s.slot}`));
+      if (claims.every(r => g.availableRoles.includes(r))) act({ type: "claim", roles: claims });
+    }
+    else if (b.id === "callVote") act({ type: "callVote" });
+    else if (b.dataset.vote) act({ type: "vote", yes: b.dataset.vote === "yes" });
+    else if (b.dataset.steal) { const [target, slot] = b.dataset.steal.split(":").map(Number); act({ type: "steal", target, slot }); }
     else if (b.dataset.withdraw !== undefined) { const slot = Number(b.dataset.withdraw); confirm("退出本轮 / Withdraw", "退出后拿回整笔保证金，保留谈判收入，但不能反悔，也不再参与分赃。 / Your full ante is returned and negotiated payments are kept. Withdrawal is final; this role gets no loot.", () => act({ type: "withdraw", slot }), () => valid() && !state.game.players[state.you].slots[slot].withdrawn); }
-    else if (b.id === "readyHeist") act({ type: "ready", ready: !me.ready });
-    else if (b.dataset.nameRole) { const role = b.dataset.nameRole; confirm("确认告密 / Name this role", `${D.ROLES[role].zh}仍在场的角色将全部出局。 / All active ${D.ROLES[role].en} roles will be eliminated.`, () => act({ type: "snitch", role }), valid); }
+    else if (b.id === "readyHeist" && !modern()) act({ type: "ready", ready: !me.ready });
+    else if (b.dataset.nameRole) { const role = b.dataset.nameRole; confirm(modern() ? "确认点名 / Name this role" : "确认告密 / Name this role", `${roles()[role].zh}仍在场的角色将全部出局。 / All active ${roles()[role].en} roles will be eliminated.`, () => act({ type: "snitch", role }), valid); }
     else if (b.id === "nextRound") act({ type: "next" });
     else if (b.id === "rematchBtn") send({ type: "rematch" });
     else if (b.id === "payOffer") { const [quitter, slot] = String(val("paySlot")).split(":").map(Number); act({ type: "offer", payer: state.you, quitter, slot, amount: Number(val("payAmount")) }); }
@@ -201,12 +271,12 @@
     else if (b.dataset.response) { const offerId = b.dataset.response, accept = b.dataset.accept === "true", o = g.offers.find(x => x.id === offerId); if (!accept) act({ type: "respond", offerId, accept }); else confirm("接受交易 / Accept deal", `${pname(o.payer)} 支付 ${cash(o.amount)} 给 ${pname(o.quitter)}，后者的角色 ${o.slot + 1} 退出。 / ${pname(o.payer)} pays ${dollars(o.amount)} to ${pname(o.quitter)}, whose role ${o.slot + 1} withdraws.`, () => act({ type: "respond", offerId, accept: true }), () => valid() && state.game.offers.some(x => x.id === offerId && x.status === "pending")); }
     else if (b.dataset.cancelOffer) act({ type: "cancel", offerId: b.dataset.cancelOffer });
     else if (b.id === "transferBtn") { const to = Number(val("transferTo")), amount = Number(val("transferAmount")); if (!Number.isSafeInteger(amount) || amount <= 0 || amount % 100 !== 0 || amount > me.cash) return error("付款须为100万的整数倍且不能超过余额 / Pay in whole $1M within your balance"); confirm("直接付款 / Direct payment", `向 ${pname(to)} 支付 ${cash(amount)}。对方不会自动退出。 / Pay ${dollars(amount)} to ${pname(to)}. They will not automatically withdraw.`, () => act({ type: "transfer", to, amount }), valid); }
-    else if (b.id === "threatBtn") { const [target, slot] = String(val("threatTarget")).split(":").map(Number); act({ type: "threat", target, slot }); }
+    else if (b.id === "threatBtn" && !modern()) { const [target, slot] = String(val("threatTarget")).split(":").map(Number); act({ type: "threat", target, slot }); }
   };
   $("players").onclick = e => { const b = e.target.closest("[data-remove]"); if (!b || !state) return; const code = state.code, target = b.dataset.remove, host = state.seats[state.host]?.socialId; UI.confirmRemoval({ name: state.seats.find(p => p.socialId === target)?.name || "Bot", started: false, valid: () => state?.code === code && !state.game && state.you === state.host && state.seats[state.host]?.socialId === host && state.seats.some(p => p.bot && p.socialId === target), remove: () => send({ type: "removeBot", target }) }); };
   $("playerName").value = read(localStorage, "boardclub-name") || ""; UI.mountAvatarPicker($("avatarPicker"), $("playerName")); $("roomInput").value = params.get("room") || "";
   window.addEventListener("board-avatar-change", ({ detail }) => { if (state) send({ type: "profile", avatar: detail.avatar }); });
-  $("createBtn").onclick = () => { const p = identity(); if (p) send({ type: "create", ...p, capacity: Number($("capacity").value), settings: { noRepeat: $("noRepeat").checked, bruteShares: $("bruteShares").checked } }); };
+  $("createBtn").onclick = () => { const p = identity(); if (p) send({ type: "create", ...p, edition: createEdition(), capacity: Number($("capacity").value), settings: editionSettings(createEdition(), { noRepeat: $("noRepeat").checked, bruteShares: $("bruteShares").checked }) }); };
   $("joinForm").onsubmit = e => { e.preventDefault(); const p = identity(); if (p) send({ type: "join", ...p, code: $("roomInput").value.trim().toUpperCase() }); };
   $("addBotBtn").onclick = () => send({ type: "addBot" }); $("fillBotsBtn").onclick = () => send({ type: "fillBots" }); $("startBtn").onclick = () => send({ type: "start" });
   $("chatForm").onsubmit = e => { e.preventDefault(); const text = $("chatText").value.trim(); if (text && send({ type: "chat", text })) $("chatText").value = ""; };

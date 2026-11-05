@@ -56,6 +56,30 @@ test("rules retain the implemented variants, all ten poker ranks and all seven X
   assert.doesNotMatch(read("index.html"), /id="handRankModal"/);
 });
 
+test("Millions editions keep separate rule entries and six modern role anchors in the shared UI", () => {
+  assert.notStrictEqual(data.million2024, data.million);
+  assert.deepEqual(data.million2024.title, ["百万美金 2024 规则", "Millions of Dollars 2024 Rules"]);
+  assert.deepEqual(data.million.title, ["百万美金规则", "Millions of Dollars Rules"]);
+  const modernIds = data.million2024.sections.map(s => s.id);
+  assert.deepEqual(modernIds.filter(id => id.startsWith("role-")),
+    ["role-tech", "role-acrobat", "role-brute", "role-mentalist", "role-brain", "role-driver"]);
+  for (const id of ["goal", "setup", "flow", "planning", "negotiation", "ready", "roles", "split", "three-player", "club", "room"]) assert(modernIds.includes(id), id);
+  for (const id of ["role-snitch", "role-crook", "role-mastermind", "variants", "brute-sharing"]) {
+    assert(data.million.sections.some(s => s.id === id), `2016 retains ${id}`);
+    assert(!modernIds.includes(id), `2024 excludes ${id}`);
+  }
+  assert.deepEqual(data.million2024.sources.map(([, url]) => url), [
+    "https://www.grailgames.games/our-games/millions-of-dollars",
+    "https://www.grailgames.games/s/RulesRole-S_MoD_EN.pdf"
+  ]);
+  const html = read("million.html"), client = read("million.js");
+  assert.match(html, /id="edition"/);
+  for (const edition of ["2016", "2024"]) assert(html.includes(`value="${edition}"`));
+  assert.match(client, /modern\(\)\s*\?\s*"million2024"\s*:\s*"million"/);
+  assert.match(client, /dataset\.rulesGame\s*=\s*rulesGame\(\)/);
+  assert(client.includes('data-rules-section="role-${id}"'));
+});
+
 test("truth or dare rules cover direct pairs, together, allowances and consent", () => {
   assert.deepEqual(data.truth.title, ["真心话大冒险规则", "Truth or Dare Rules"]);
   const rules = JSON.stringify(data.truth);

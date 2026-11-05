@@ -1,13 +1,15 @@
 "use strict";
 (function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory(require("./million-data"), require("node:crypto"));
-  else root.MillionEngine = factory(root.MillionData, root.crypto);
-})(typeof globalThis !== "undefined" ? globalThis : this, function (Data, cryptoSource) {
+  if (typeof module === "object" && module.exports) module.exports = factory(require("./million-data"), require("node:crypto"), require("./million-2024"), require("./million-bot"));
+  else root.MillionEngine = factory(root.MillionData, root.crypto, root.Million2024, root.MillionBot);
+})(typeof globalThis !== "undefined" ? globalThis : this, function (Data, cryptoSource, Modern, Bot) {
   if (!Data) throw Error("先加载角色资料 / Load million-data.js first");
   const rule = (ok, message) => { if (!ok) throw Error(message); };
   const clone = value => JSON.parse(JSON.stringify(value));
   const isObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
   const seat = (g, index) => Number.isInteger(index) && index >= 0 && index < g.players.length;
+  const modern = g => g.edition === "2024";
+  const edition = Modern?.(Data, { rule, clone, slots, log, moveCash });
   function randomIndex(size, rng) {
     rule(rng === undefined || typeof rng === "function", "随机源无效 / Invalid random source");
     if (rng !== undefined) {
@@ -61,6 +63,17 @@
     g.loot = 800 + 100 * randomIndex(5, rng);
     g.ante = g.loot === 800 ? 100 : g.loot === 1200 ? 200 : 100 + 100 * randomIndex(2, rng);
     g.bonusRole = [null, ...g.availableRoles][randomIndex(g.availableRoles.length + 1, rng)];
+    if (modern(g)) {
+      // This club deliberately retains the legacy loot amounts and $1M bonuses.
+      g.ante = 200;
+      const legacyRoles = Data.rolesForCount(Math.min(8, g.players.length));
+      const bonus = [null, ...legacyRoles][randomIndex(legacyRoles.length + 1, rng)];
+      g.bonusRole = ({ snitch: "tech", crook: "mentalist", mastermind: "brain" })[bonus] || bonus;
+      g.lootPool = g.loot; g.reserve -= g.loot;
+      g.claims = g.players.map(() => null); g.claimActor = null;
+      g.vote = { open: false, votes: g.players.map(() => null), attempt: 0 };
+      g.heist = null; g.mentalist = null; g.nextLeader = null;
+    }
     g.revealedCards = [];
     g.hiddenCard = null;
     g.offers = [];
@@ -82,15 +95,18 @@
     }
   }
   function createGame(names, settings = {}, rng) {
-    rule(Array.isArray(names) && names.length >= 3 && names.length <= 8, "需要3至8人 / Requires 3 to 8 players");
+    rule(isObject(settings) && Object.keys(settings).every(k => ["bruteShares", "noRepeat", "edition"].includes(k)), "设置无效 / Invalid settings");
+    const selectedEdition = settings.edition ?? "2016", { edition: ignored, ...options } = settings;
+    rule(["2016", "2024"].includes(selectedEdition), "版本无效 / Invalid edition");
+    rule(Array.isArray(names) && names.length >= 3 && names.length <= (selectedEdition === "2024" ? 9 : 8), "人数不符合所选版本 / Invalid player count for this edition");
     rule(names.every(name => typeof name === "string" && name.trim().length > 0 && [...name.trim()].length <= 40), "玩家名称无效 / Invalid player names");
-    rule(isObject(settings) && Object.keys(settings).every(k => ["bruteShares", "noRepeat"].includes(k)), "设置无效 / Invalid settings");
-    for (const value of Object.values(settings)) rule(typeof value === "boolean", "设置须为开关 / Settings must be boolean");
+    for (const value of Object.values(options)) rule(typeof value === "boolean", "设置须为开关 / Settings must be boolean");
+    rule(selectedEdition !== "2024" || (edition && !options.noRepeat && options.bruteShares !== false), "新版不使用旧版变体 / Legacy variants are not available in 2024");
     const g = {
-      type: "million", version: 2, revision: 0, round: 1, maxRounds: Data.MAX_ROUNDS,
-      leader: randomIndex(names.length, rng), settings: { bruteShares: true, noRepeat: false, ...settings },
-      slotsPerPlayer: names.length === 3 ? 2 : 1, availableRoles: Data.rolesForCount(names.length),
-      players: names.map(name => ({ name: name.trim(), cash: Data.INITIAL_CASH, threats: 0, pendingThreats: 0, lastRoles: [], slots: [] })),
+      type: "million", version: selectedEdition === "2024" ? 3 : 2, edition: selectedEdition, revision: 0, round: 1, maxRounds: selectedEdition === "2024" ? 5 : Data.MAX_ROUNDS,
+      leader: randomIndex(names.length, rng), settings: { bruteShares: true, noRepeat: false, ...options },
+      slotsPerPlayer: names.length === 3 ? 2 : 1, availableRoles: Data.rolesForCount(names.length, selectedEdition),
+      players: names.map(name => ({ name: name.trim(), cash: selectedEdition === "2024" ? 1000 : Data.INITIAL_CASH, threats: 0, pendingThreats: 0, lastRoles: [], slots: [] })),
       // Reserve is the house's signed net balance; negative means money supplied.
       publicFund: 0, reserve: 0, offerSequence: 0, history: [], winners: [], winReason: null
     };
@@ -198,6 +214,7 @@
     } else g.phase = "results";
   }
   function beginHeist(g) {
+    if (modern(g)) return edition.beginHeist(g);
     for (const o of g.offers) if (o.status === "pending") o.status = "expired";
     const snitches = active(g).filter(s => s.role === "snitch");
     if (snitches.length === 1) {
@@ -210,6 +227,7 @@
     finish(g, null);
   }
   function maybeHeist(g) {
+    if (modern(g)) return edition.maybeHeist(g);
     if (g.phase === "negotiation" && g.players.every(p => !p.slots.some(s => !s.withdrawn) || p.ready)) beginHeist(g);
   }
   function validateTransfer(g, payer, recipient, amount) {
@@ -219,6 +237,8 @@
   }
   function perform(g, actor, a, rng) {
     const p = g.players[actor];
+    if (modern(g) && edition.perform(g, actor, a)) return;
+    if (!modern(g)) rule(!["claim", "callVote", "vote", "steal"].includes(a.type), "此操作仅限新版 / This action requires the 2024 edition");
     if (a.type === "threat") {
       rule(["planning", "negotiation", "snitch"].includes(g.phase), "本轮身份已揭晓 / This round's roles are already revealed");
       rule(seat(g, a.target) && a.target !== actor && p.threats > 0, "威胁目标或标记无效 / Invalid threat target or no token");
@@ -255,14 +275,15 @@
         const cards = shuffled(slots(g).map(s => s.role), rng);
         g.hiddenCard = cards.pop();
         g.revealedCards = cards;
-        g.phase = "negotiation";
+        g.phase = modern(g) ? "claims" : "negotiation";
+        if (modern(g)) g.claimActor = g.leader;
       }
       return;
     }
     if (a.type === "next") {
       rule(g.phase === "results" && actor === g.leader, "由本轮领队开始下一轮 / This round's leader starts the next round");
       g.round++;
-      g.leader = (g.leader + 1) % g.players.length;
+      g.leader = modern(g) ? g.nextLeader : (g.leader + 1) % g.players.length;
       startRound(g, rng);
       return;
     }
@@ -346,6 +367,11 @@
   }
   function requiredActors(g) {
     if (g.phase === "planning") return g.players.flatMap((p, i) => p.locked ? [] : [i]);
+    if (modern(g)) {
+      if (g.phase === "claims") return [g.claimActor];
+      if (g.phase === "mentalist") return [g.mentalist.actor];
+      if (g.phase === "negotiation") return g.vote.open ? g.vote.votes.flatMap((v, i) => v === null ? [i] : []) : [g.leader];
+    }
     if (g.phase === "negotiation") return g.players.flatMap((p, i) => p.ready || p.slots.every(s => s.withdrawn) ? [] : [i]);
     if (g.phase === "snitch") return [g.snitch.actor];
     if (g.phase === "results") return [g.leader];
@@ -353,7 +379,7 @@
   }
   function visibleSlot(g, s, owner, viewer, intel, resolved) {
     const known = seat(g, viewer) && intel[viewer] && intel[viewer][`${owner}:${s.slot}`];
-    const visible = owner === viewer || g.phase === "over" || known || resolved
+    const visible = owner === viewer || g.phase === "over" || known || resolved || (modern(g) && !s.withdrawn && g.heist?.revealed.includes(s.role))
       || (!resolved && g.phase === "snitch" && g.snitch.actor === owner && g.snitch.slot === s.slot);
     return { id: s.slot, slot: s.slot, role: visible ? s.role : null, withdrawn: s.withdrawn,
       paidAnte: s.paidAnte, refunded: s.refunded, status: s.status, outcome: s.status, share: s.share };
@@ -364,7 +390,7 @@
     return {
       round: result.round, leader: result.leader, loot: result.loot, ante: result.ante,
       bonusRole: result.bonusRole, revealedCards: result.revealedCards.slice(), namedRole: result.namedRole,
-      totalLoot: result.totalLoot, share: result.share, remainder: result.remainder, penalty: result.penalty,
+      totalLoot: result.totalLoot, share: result.share, remainder: result.remainder, penalty: result.penalty, topUp: result.topUp || 0,
       participants: clone(result.participants), splitting: result.splitting.slice(), logs: clone(result.logs),
       players: result.players.map((p, owner) => ({ name: p.name, cash: p.cash, delta: p.delta, ledger: ledger(result.logs, owner),
         slots: p.slots.map(s => visibleSlot(g, s, owner, viewer, result.privateIntel, true)) }))
@@ -374,7 +400,8 @@
     if (!seat(g, viewer)) viewer = -1;
     const resolved = g.phase === "results" || g.phase === "over";
     return {
-      type: "million", version: g.version, revision: g.revision, phase: g.phase, round: g.round,
+      type: "million", version: g.version, edition: g.edition || "2016", revision: g.revision, phase: g.phase, round: g.round,
+      ...(modern(g) ? { lootPool: g.lootPool, claims: clone(g.claims), claimActor: g.claimActor, vote: clone(g.vote), mentalist: clone(g.mentalist), nextLeader: g.nextLeader } : {}),
       maxRounds: g.maxRounds, leader: g.leader, settings: clone(g.settings), availableRoles: g.availableRoles.slice(),
       allowedRoles: g.availableRoles.filter(role => !g.settings.noRepeat || !seat(g, viewer) || !g.players[viewer].lastRoles.includes(role)),
       slotsPerPlayer: g.slotsPerPlayer, loot: g.loot, ante: g.ante, bonusRole: g.bonusRole,
@@ -396,35 +423,15 @@
       winners: g.winners.slice(), winReason: g.winReason
     };
   }
-  function chooseBotAction(game, actor, rng) {
+  function chooseBotAction(game, actor, rng, chat = []) {
     rule(seat(game, actor), "玩家无效 / Invalid actor");
     // Decisions deliberately consume only the same redacted state sent to this seat.
-    const g = publicGame(game, actor), p = g.players[actor];
-    if (g.phase === "planning" && !p.locked) {
-      const choices = g.availableRoles.filter(role => !g.settings.noRepeat || !p.lastRoles.includes(role));
-      return { type: "choose", roles: shuffled(choices, rng).slice(0, g.slotsPerPlayer) };
-    }
-    if (g.phase === "results" && actor === g.leader) return { type: "next" };
-    if (g.phase === "snitch" && g.snitch.actor === actor) {
-      const own = p.slots.filter(s => !s.withdrawn).map(s => s.role);
-      const options = g.snitch.options.filter(r => !own.includes(r));
-      const pool = options.length ? options : g.snitch.options;
-      return { type: "snitch", role: pool[randomIndex(pool.length, rng)] };
-    }
-    if (g.phase !== "negotiation") return null;
-    const offer = g.offers.find(o => o.status === "pending" && o.responder === actor);
-    if (offer) return { type: "respond", offerId: offer.id,
-      accept: offer.quitter === actor ? offer.amount >= 100 : offer.amount <= 100 && p.cash >= offer.amount };
-    if (p.ready || p.slots.every(s => s.withdrawn)) return null;
-    const visibleCounts = {};
-    for (const role of g.revealedCards) visibleCounts[role] = (visibleCounts[role] || 0) + 1;
-    const risky = p.slots.find(s => !s.withdrawn && s.role !== "brute" && visibleCounts[s.role] >= 2);
-    if (risky && randomIndex(4, rng) !== 0) return { type: "withdraw", slot: risky.slot };
-    if (p.threats > 0) {
-      const target = g.players.findIndex((other, i) => i !== actor && other.slots.some(s => !s.withdrawn && !s.role));
-      if (target >= 0) return { type: "threat", target, slot: g.players[target].slots.find(s => !s.withdrawn && !s.role).slot };
-    }
-    return { type: "ready", ready: true };
+    rule(Bot, "先加载机器人策略 / Load million-bot.js first");
+    return Bot.choose(publicGame(game, actor), actor, () => randomIndex(0x1000000, rng) / 0x1000000, chat);
   }
-  return Object.freeze({ createGame, act, requiredActors, publicGame, chooseBotAction });
+  function chooseBotSpeech(game, actor, rng) {
+    rule(seat(game, actor) && Bot, "机器人无效 / Invalid bot");
+    return Bot.speech(publicGame(game, actor), actor, () => randomIndex(0x1000000, rng) / 0x1000000);
+  }
+  return Object.freeze({ createGame, act, requiredActors, publicGame, chooseBotAction, chooseBotSpeech });
 });

@@ -335,16 +335,33 @@
           ]
         },
         {
+          "id": "brute-sharing",
+          "title": [
+            "暴徒参与分赃开关",
+            "Brute sharing option"
+          ],
+          "paragraphs": [
+            [
+              "勾选（默认，旧版规则）：暴徒没有退出、没有与其他暴徒重复，也未被告密者点名时，拿回保证金、获得一张下轮起可用的威胁卡，并参与平分赃款。司机车费、恶棍拿钱和赃款牌的角色奖励也照常结算。",
+              "Checked (default, 2016 rules): a Brute who has not withdrawn, is unique and is not named by the Snitch recovers the ante, earns a threat usable from the next round, and shares the loot. Driver fares, Crook payments and loot-card role bonuses also apply normally."
+            ],
+            [
+              "取消勾选：这就是「暴徒不分赃」的自订玩法，不是旧版官方规则。满足上述条件的暴徒只退保证金、拿威胁卡，随后离场：不占分赃份额、不付司机钱、不被恶棍拿钱，也不领赃款牌奖励。若因此只剩告密者，仍触发独存罚款，最多扣 300 万且不分赃。",
+              "Unchecked: Brute does not share, a house rule rather than the 2016 rulebook. An eligible Brute only recovers the ante and earns a threat, then leaves: no loot share, Driver fare, Crook payment or loot-card bonus. A Snitch left alone this way still pays its penalty of up to $3M and takes no loot."
+            ],
+            [
+              "无论是否勾选，暴徒主动退出、撞车或被点名时都拿回保证金，但不拿威胁卡、不分赃。只有房主在开局前可以更改这个开关。",
+              "With either setting, a Brute who withdraws, is duplicated or is named gets the ante back, but no threat or loot share. Only the host may change this option before starting."
+            ]
+          ]
+        },
+        {
           "id": "club",
           "title": [
             "本馆设置与差异",
             "Club settings & differences"
           ],
           "paragraphs": [
-            [
-              "「暴徒不分赃」是参考站的自订玩法，不是旧版官方规则。默认暴徒参与分赃。关闭后，唯一且未被点名的暴徒只退保证金、拿威胁卡，随后离场：不占份额、不付司机钱、不被恶棍拿钱，也不领赃款牌奖励。若因此只剩告密者，照样触发独存罚款。两项玩法开关都只能由房主在开局前更改。",
-              "Brute does not share is a house rule from the reference website, not the 2016 rulebook. By default Brute shares. If disabled, a unique unnamed Brute only recovers the ante and earns a threat, then leaves: no share, fare, Crook payment or loot-card bonus. A Snitch left alone this way still pays its penalty. Only the host may change either variant before starting."
-            ],
             [
               "赃款牌尚未完全校对：本馆目前每轮随机生成 800、900、1000、1100 或 1200 万；800 万配 100 万保证金，1200 万配 200 万，其余随机配 100 或 200 万；奖励从本局角色或无奖励中随机选。原版则是固定十张牌抽八张，不能把当前随机分布当作官方牌组。",
               "Loot cards are not fully verified: this club currently generates $8M, $9M, $10M, $11M or $12M each round. $8M uses a $1M ante, $12M uses $2M, and other amounts randomly use either ante. The bonus is a random available role or none. The original draws eight of ten fixed cards; this random distribution is not the official deck."
@@ -415,6 +432,222 @@
           "参考站：角色颜色及暴徒不分赃变体 / Reference: role colors & Brute house rule",
           "https://million-dollar-9khy.onrender.com/"
         ]
+      ]
+    },
+    million2024: {
+      "title": ["百万美金 2024 规则", "Millions of Dollars 2024 Rules"],
+      "sections": [
+        {
+          "id": "goal",
+          "title": ["目标与胜利", "Goal & victory"],
+          "paragraphs": [
+            [
+              "2024 年版供 3-9 人游玩，每人起始 1000 万（$10M），最多 5 轮。秘密选角色、声明身份、谈判退出，再执行抢劫并分赃，争取成为最富有的人。100 万 = $1M。",
+              "The 2024 edition is for 3-9 players, starting with $10M each and lasting up to 5 rounds. Secretly choose roles, declare them, negotiate withdrawals, resolve the heist and share the loot to become the richest player. 100 wan = $1M."
+            ],
+            [
+              "每轮全部结算后，只要任何玩家现金达到 5000 万（$50M），游戏立即结束，由全场现金最多者单独获胜，不要求该玩家本轮参与分赃。否则在第 5 轮结算后比较现金。并列时，从本轮带头人的下一座起顺时针，先遇到的并列者获胜，不共同获胜。",
+              "After a round is fully settled, anyone reaching $50M ends the game immediately; the richest player overall is the sole winner, whether or not they shared that round. Otherwise compare cash after round 5. Break ties by taking the first tied player clockwise starting AFTER the current leader; victory is not shared."
+            ]
+          ]
+        },
+        {
+          "id": "setup",
+          "title": ["人数、角色与带头人", "Players, roles & leader"],
+          "items": [
+            ["4 人：飞贼、暴徒、司机。", "4 players: Acrobat, Brute and Driver."],
+            ["5 人：在上述角色中加入读心者。", "5 players: add Mentalist to those roles."],
+            ["3 人或 6 人：再加入技术员，共五种角色。", "3 or 6 players: also add Tech, for five roles."],
+            ["7-9 人：再加入谋士，使用全部六种角色。", "7-9 players: also add Brain, using all six roles."]
+          ],
+          "paragraphs": [
+            [
+              "每人每轮选一个角色；仅三人局每人选两个不同角色。不同玩家可以选相同角色。本馆随机指定首轮带头人；以后由轮末现金最少者担任。最穷者并列时，从当前带头人的下一座起顺时针，先遇到的并列者接任。带头人与房主是不同身份。",
+              "Choose one role each round, except with three players, when each chooses two different roles. Different players may choose the same role. This club selects the first leader randomly; later the poorest player after settlement leads. Break poorest-player ties clockwise starting after the current leader. Leader and room host are separate roles."
+            ]
+          ]
+        },
+        {
+          "id": "flow",
+          "title": ["每轮流程", "Round sequence"],
+          "paragraphs": [
+            [
+              "准备赃款并秘密选角缴保证金 → 混洗角色牌，只藏一张，其余公开 → 从带头人起顺时针逐人声明身份 → 谈判、付款与退出 → 带头人发起公开投票 → 达标立即抢劫，按角色顺序结算 → 加奖励、平分余款、检查胜利并确定下一位带头人。",
+              "Set out the loot, secretly choose roles and pay antes; shuffle the chosen cards and reveal all but one; declare roles clockwise from the leader; negotiate, pay and withdraw; the leader calls a public vote; sufficient yes votes immediately start the heist; resolve roles in order, add bonuses, split the remainder, check victory and choose the next leader."
+            ]
+          ]
+        },
+        {
+          "id": "planning",
+          "title": ["秘密选角与保证金", "Secret roles & antes"],
+          "paragraphs": [
+            [
+              "先公开本轮赃款和奖励，每个选定角色缴 200 万（$2M）保证金。角色锁定后不能改选。全部选好后，将所有选定角色对应的牌混洗，随机藏一张，其余公开；公开牌只表示角色种类和数量，不揭示归属。退出也不会撤走这些公开线索。",
+              "Reveal this round's loot and bonus, then pay a $2M ante for each chosen role. Locked choices cannot change. Shuffle all chosen role cards, hide one at random and reveal the rest. These clues show role types and counts, not owners, and remain visible even after withdrawals."
+            ],
+            [
+              "本馆允许现金不足者照常参加：先付现有现金，缺额由储备补足。退出时取回该角色完整的 200 万，包括储备补的部分；留下的保证金在抢劫开始时全部并入中央奖池，不再单独退还，即使该角色随后被淘汰。",
+              "In this club, insufficient cash does not prevent play: contribute what you have and let the reserve cover the shortfall. Withdrawal refunds the full $2M per role, including reserve funding. Antes of roles that stay join the central pot when the heist starts and are not refunded separately, even if those roles are later eliminated."
+            ]
+          ]
+        },
+        {
+          "id": "negotiation",
+          "title": ["声明、谈判与退出", "Claims, deals & withdrawal"],
+          "paragraphs": [
+            [
+              "从带头人开始顺时针，每人必须声明自己派出的角色，可以说真话，也可以撒谎；三人局声明两个角色。声明不是已证实的身份，机器人也可能虚报，不能把机器人发言当作翻牌结果。全部声明完成后进入自由谈判。",
+              "Starting with the leader and proceeding clockwise, everyone must claim the role they sent, truthfully or as a bluff; claim two roles with three players. Claims are not confirmed identities. Bots can bluff too, so their statements are not reveals. Open negotiation follows once everyone has declared."
+            ],
+            [
+              "可以无条件退出，也可谈钱换取某个角色退出。退出不可反悔，拿回该角色整笔保证金并保留谈判所得；该角色不再发动能力或分赃。本馆的退出提议经对方接受后同时付款并退出；接受前可拒绝或撤回。直接转账不会自动使对方退出，付款以 100 万为单位且不能超过现金。全部角色退出后不能继续交易，但仍有投票权。",
+              "Withdraw freely or negotiate payment for a particular role to leave. Withdrawal is final: recover its full ante and keep negotiated payments, but that role gets no ability or share. Here, accepting a withdrawal offer executes payment and withdrawal together; before acceptance it can be rejected or cancelled. Direct transfers do not force withdrawal. Payments use whole $1M and cannot exceed cash. Fully withdrawn players cannot trade but still vote."
+            ]
+          ]
+        },
+        {
+          "id": "ready",
+          "title": ["公开投票开始抢劫", "Public vote to start the heist"],
+          "paragraphs": [
+            [
+              "只有带头人能发起公开投票。全体玩家每人一票，包括已经完全退出者；三人局也不是每个角色一票。赞成达到全体人数的一半（向上取整，例如 5 人需 3 票、6 人需 3 票），立即结束谈判并开始抢劫，不必等待剩余玩家。",
+              "Only the leader can call a public vote. Every player has one vote, including fully withdrawn players; three-player games still vote per person, not per role. At least half of ALL players must agree, rounded up: 3 yes votes with either 5 or 6 players. Reaching that threshold immediately ends negotiation and starts the heist without waiting for remaining votes."
+            ],
+            [
+              "本馆发起投票时记带头人一张赞成票；每轮投票每人只能投一次。全部投完仍不达标就继续谈判，可再发起投票。掉线不算赞成。抢劫开始后不能退出，未成交提议失效，角色亮出时不得再谎报。",
+              "In this club, calling a vote records the leader's yes; each player votes once per ballot. If everyone votes without reaching the threshold, negotiations continue and another ballot may be called. Disconnection is not a yes. Once the heist starts, withdrawals stop, pending offers expire and revealed roles must be truthful."
+            ]
+          ]
+        },
+        {
+          "id": "roles",
+          "title": ["六种角色与结算顺序", "Six roles & resolution order"],
+          "paragraphs": [
+            [
+              "严格按技术员 → 飞贼 → 暴徒 → 读心者 → 谋士 → 司机结算。每种角色被叫到时，如果仍在抢劫中的同类角色有两个或更多，该角色全部淘汰，通常不发动能力。暴徒有例外：所有未退出的暴徒仍各拿 200 万，包括撞车或被技术员淘汰的暴徒。",
+              "Resolve strictly in this order: Tech, Acrobat, Brute, Mentalist, Brain, Driver. When a role is called, two or more of that role still in the heist are all eliminated, normally without an ability. Brute is the exception: every non-withdrawn Brute still takes $2M, including duplicated Brutes and those eliminated by Tech."
+            ],
+            [
+              "下文的「仍在场／存活」指没有退出、也没有被淘汰的角色。除暴徒取款例外外，只有存活角色发动能力；能力结算后仍留下，随后也参与平分。现金或中央余额不足时的限额见「本馆设置」。",
+              "Below, participating or surviving means neither withdrawn nor eliminated. Except for the Brute payout, only survivors use abilities. Using an ability does not remove a role from the later equal split. See Club settings for cash and pot limits."
+            ]
+          ]
+        },
+        {
+          "id": "role-tech",
+          "title": ["技术员：必须点名，独存受罚", "Tech: mandatory naming & lone penalty"],
+          "paragraphs": [
+            [
+              "唯一仍在场的技术员必须从中央已公开的角色牌中选一种其他角色，不能跳过、点自己或点只在暗牌上的角色；被点名的在场角色全部淘汰，通常不能发动能力或分赃，但未退出的暴徒仍可拿 200 万。被点名角色若已全部退出，就无人因此出局；若根本没有其他公开角色可选，系统自动继续，并非允许主动跳过。",
+              "A sole participating Tech MUST name another role shown among the public cards. No passing, naming Tech or choosing a role found only on the hidden card. All participating characters of the named role are eliminated, losing abilities and shares except for non-withdrawn Brutes' $2M payout. Naming a role whose players all withdrew eliminates nobody. With no other public role available, play advances automatically; this is not an optional pass."
+            ],
+            [
+              "全部角色结算完后，若只剩技术员一个角色，技术员损失 500 万（不足则扣到 0），不拿奖励或分赃，剩余赃款回储备。只要还有其他角色存活，技术员正常参与平分。",
+              "After all roles resolve, if Tech is the only survivor, lose $5M, capped at available cash, and receive no bonus or loot; the remaining pot returns to the reserve. With another surviving role, Tech shares normally."
+            ]
+          ]
+        },
+        {
+          "id": "role-acrobat",
+          "title": ["飞贼：先拿 500 万", "Acrobat: take $5M first"],
+          "paragraphs": [
+            [
+              "唯一且未被技术员淘汰的飞贼，先从中央奖池拿 500 万（$5M），随后照常参与余款平分。不是从其他玩家处收钱，也不是拿完就离场。",
+              "A unique Acrobat not eliminated by Tech takes $5M from the central pot, then still shares the remainder. This is not money taken from other players, and the Acrobat does not leave after taking it."
+            ]
+          ]
+        },
+        {
+          "id": "role-brute",
+          "title": ["暴徒：出局仍拿 200 万", "Brute: take $2M even if eliminated"],
+          "paragraphs": [
+            [
+              "每个未主动退出的暴徒都从中央奖池拿 200 万（$2M），包括重复撞车或被技术员淘汰的暴徒。这是角色取款，不是另退一笔保证金。只有唯一且未被淘汰的暴徒继续参与平分、可能被读心者偷钱，并计入司机人数和角色奖励；出局暴徒只拿上述款项。退出的暴徒只拿回保证金，不再取款。",
+              "EVERY non-withdrawn Brute takes $2M from the central pot, even if duplicated or eliminated by Tech. This ability is not a separate ante refund. Only a unique, surviving Brute shares later, can be targeted by Mentalist, and counts for Driver and role bonuses. An eliminated Brute only gets the ability payout. A withdrawn Brute recovers its ante but gets no ability payout."
+            ]
+          ]
+        },
+        {
+          "id": "role-mentalist",
+          "title": ["读心者：选择一名在场目标", "Mentalist: choose one participating target"],
+          "paragraphs": [
+            [
+              "存活的读心者从仍在场的暴徒、技术员或飞贼中选择一个角色，向其所属玩家偷取 200 万（$2M），最多拿到对方现金为 0。不是每种角色都偷一次，也不是从中央拿钱；退出或被淘汰者不能选。没有合法目标就不偷，之后仍参与平分。",
+              "A surviving Mentalist chooses ONE participating Brute, Tech or Acrobat and steals $2M from that role's owner, capped at their available cash. This is not one theft per role type or a central-pot payout. Withdrawn and eliminated roles are ineligible. With no legal target, there is no theft; Mentalist still joins the equal split."
+            ]
+          ]
+        },
+        {
+          "id": "role-brain",
+          "title": ["谋士：再加入一份牌面赃款", "Brain: add the printed loot again"],
+          "paragraphs": [
+            [
+              "存活的谋士从储备向中央再加入本轮赃款牌上标明的金额。比如牌面 900 万就再加 900 万；不是翻倍当前奖池，也不重复加入保证金、角色取款或奖励，更不是谋士独拿这笔钱。之后照常参与平分。",
+              "A surviving Brain adds the loot card's printed value from the reserve to the center again: a $9M card adds another $9M. It does not double the current pot or repeat antes, ability payouts or bonuses, and the money is not a personal payment. Brain then shares normally."
+            ]
+          ]
+        },
+        {
+          "id": "role-driver",
+          "title": ["司机：按存活角色从中央取款", "Driver: take from the pot per surviving role"],
+          "paragraphs": [
+            [
+              "存活的司机按此时仍在抢劫中的角色数，每个角色从中央拿 100 万（$1M），包括司机自己。按角色而非玩家计数，不计退出或被淘汰者；不是向其他玩家收费。取款后司机仍参与余款平分。",
+              "A surviving Driver takes $1M from the central pot for EVERY role still participating at this point, including the Driver itself. Count roles, not players, and exclude withdrawn or eliminated roles. Other players do not pay fares. Driver still shares the remaining pot afterward."
+            ]
+          ]
+        },
+        {
+          "id": "split",
+          "title": ["奖励与余款平分", "Bonuses & the final split"],
+          "paragraphs": [
+            [
+              "六种角色按顺序结算后，先检查技术员独存例外。否则，每个存活且符合本轮奖励的角色，都使储备向中央增加 100 万（$1M）；奖励是全体一起分的钱，不是该角色的个人奖金。再按所有存活角色数平分剩余奖池，每份向上取整到 100 万，储备补足差额。暴徒只要存活也占一份；无人存活则余款回储备。",
+              "After the six roles resolve, check the lone-Tech exception first. Otherwise, each surviving role matching this round's bonus adds $1M from the reserve to the CENTRAL pot, not to its owner's pocket. Divide the remaining pot among ALL surviving roles, rounding each share UP to whole $1M; the reserve covers the difference. A surviving Brute gets a share too. If nobody survives, return the remaining pot to the reserve."
+            ],
+            [
+              "例如奖励加入后中央剩 1000 万，三个角色存活，则每个角色分 400 万，储备补 200 万。先前的角色取款、偷钱、谈判款和保证金收支都计入玩家最终现金，再检查 5000 万门槛或第 5 轮胜负。",
+              "For example, $10M left after bonuses with three survivors gives $4M per role, with $2M supplied by the reserve. Earlier ability payouts, thefts, deals and ante movements all count toward final cash before checking the $50M threshold or the round-5 winner."
+            ]
+          ]
+        },
+        {
+          "id": "three-player",
+          "title": ["三人局：每人两个不同角色", "Three players: two different roles each"],
+          "paragraphs": [
+            [
+              "使用技术员、飞贼、暴徒、读心者、司机。每人秘密选两个不同角色，各缴 200 万，共用个人现金；六张角色牌混洗后公开五张、藏一张。每个角色独立谈判和退出，可以退一个、两个都退或都留下，分别退保证金。声明两个角色，但投票仍每人一票。",
+              "Use Tech, Acrobat, Brute, Mentalist and Driver. Secretly choose two different roles each and pay $2M per role from one personal balance. Shuffle the six cards, reveal five and hide one. Negotiate and withdraw each role separately: withdraw one, both or neither, refunding each ante independently. Declare both roles but cast only one vote per player."
+            ],
+            [
+              "按存活角色数分赃，两角都存活就拿两份，司机也按角色计数。读心者若偷到自己的另一个角色，内部抵消，个人现金不变；司机仍从中央取款，不在自己的角色之间收费。胜利和最穷带头人都按玩家总现金判断。",
+              "Shares and Driver's count are per surviving role: keeping both roles earns two shares. Mentalist stealing from your own other role cancels internally without changing your cash. Driver still takes from the center, not from your own roles. Victory and the poorest-player leadership rule use each player's total cash."
+            ]
+          ]
+        },
+        {
+          "id": "club",
+          "title": ["本馆设置", "Club settings"],
+          "paragraphs": [
+            [
+              "本馆沿用2016模式的赃款数值与奖励配置。每轮随机赃款为 800、900、1000、1100 或 1200 万（$8M-$12M），奖励沿用旧版对应人数的角色候选或无奖励，匹配时每角加 100 万到中央。旧角色对应为告密者 → 技术员、恶棍 → 读心者、谋士 → 新版谋士；司机和暴徒不变，不另加飞贼奖励。没有对应存活角色就不加奖励。2024 保证金始终每角 200 万，不沿用旧版浮动保证金。",
+              "This club retains the 2016 mode's loot values and bonus configuration. Each round randomly uses $8M, $9M, $10M, $11M or $12M. Bonuses use the old player-count-based role pool or none, adding $1M to the center per surviving match. Map Snitch to Tech, Crook to Mentalist and Mastermind to Brain; Driver and Brute stay unchanged, with no added Acrobat bonus. No surviving match means no bonus. The 2024 ante is always $2M per role, not the old variable ante."
+            ],
+            [
+              "现金始终不为负：偷钱或罚款最多扣现有现金；角色从中央取款最多拿当前剩余奖池。保证金不足由储备补足、退出全额退回，最终平分的向上取整差额也由储备补足。",
+              "Cash never goes negative: thefts and fines are capped at available cash, and ability payouts from the center are capped at the remaining pot. The reserve funds ante shortfalls with full refunds on withdrawal, and also covers rounding up the final split."
+            ],
+            [
+              "2024 模式没有威胁卡，不使用「角色不能连选」或「暴徒不分赃」变体。下一轮可以再次选择相同角色，存活暴徒正常参与平分。这些新版规则不改变独立的 2016 模式。",
+              "The 2024 mode has no intimidation cards, no no-repeat variant and no Brute-does-not-share option. Roles may be chosen again next round, and a surviving Brute shares normally. These rules do not change the separate 2016 mode."
+            ]
+          ]
+        },
+        room
+      ],
+      "sources": [
+        ["Grail Games 官方 2024 产品页 / Official 2024 publisher page", "https://www.grailgames.games/our-games/millions-of-dollars"],
+        ["Grail Games 官方说明书（英文） / Official rulebook (English)", "https://www.grailgames.games/s/RulesRole-S_MoD_EN.pdf"]
       ]
     },
     truth: {

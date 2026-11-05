@@ -26,6 +26,23 @@ async function main() {
       const page = await context.newPage(); page.on("pageerror", e => errors.push(e.message)); await page.goto(base + "/million.html"); await page.waitForFunction(() => document.getElementById("connection").textContent.includes("Connected")); await page.fill("#playerName", name); pages.push(page);
     }
     const page = pages[0];
+    async function checkBruteHelp(p, container, screenshot) {
+      const help = p.locator(`${container} [data-rules-section="brute-sharing"]`);
+      const before = await p.evaluate(() => ({ sent: millionSent.length, state: JSON.stringify(window.millionState || null), checks: [...document.querySelectorAll('#bruteShares,[data-setting="bruteShares"]')].map(e => e.checked) }));
+      assert.equal(await help.evaluate(el => Boolean(el.closest("label"))), false, "help must not toggle its checkbox");
+      assert.equal(await help.locator("svg").count(), 1);
+      await help.focus(); await p.keyboard.press("Enter");
+      await p.locator("#gameRulesDialog").waitFor({ state: "visible" });
+      const section = p.locator('[data-rule-section="brute-sharing"]');
+      assert.match(await section.innerText(), /勾选（默认，旧版规则）/); assert.match(await section.innerText(), /取消勾选/);
+      assert.match(await section.innerText(), /Checked \(default, 2016 rules\)/); assert.match(await section.innerText(), /Unchecked/);
+      assert(await section.locator("h3").evaluate(el => { const b = el.getBoundingClientRect(), body = el.closest(".bg-rules-body").getBoundingClientRect(); return b.top >= body.top - 1 && b.top - body.top < 40 && b.bottom <= body.bottom + 1; }));
+      if (screenshot) await p.screenshot({ path: path.join(out, screenshot) });
+      await p.keyboard.press("Escape");
+      assert(await help.evaluate(el => document.activeElement === el));
+      await help.click(); await p.locator("#gameRulesDialog .dialog-heading button").click();
+      assert.deepEqual(await p.evaluate(() => ({ sent: millionSent.length, state: JSON.stringify(window.millionState || null), checks: [...document.querySelectorAll('#bruteShares,[data-setting="bruteShares"]')].map(e => e.checked) })), before, "opening help changes neither settings nor gameplay");
+    }
     const colors = await page.locator("#roleGallery .role-card").evaluateAll(els => els.map(el => getComputedStyle(el).borderTopColor));
     assert.deepEqual(colors, ["rgb(92, 207, 127)", "rgb(239, 107, 107)", "rgb(79, 179, 232)", "rgb(180, 142, 242)", "rgb(230, 180, 80)"]);
     const reference = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -50,6 +67,12 @@ async function main() {
       assert(await page.evaluate(() => document.getElementById("setup").getBoundingClientRect().top < document.querySelector(".heist-table").getBoundingClientRect().top));
       await page.screenshot({ path: path.join(out, `million-entry-${width}.png`), fullPage: true });
     }
+    for (const width of [1440, 390, 320, 740]) {
+      await page.setViewportSize({ width, height: width === 740 ? 390 : 900 });
+      await page.locator("#bruteShares").setChecked(width !== 390);
+      await checkBruteHelp(page, "#createSettings", `million-brute-help-${width}.png`);
+    }
+    await page.check("#bruteShares");
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.click("#rulesBtn"); await page.locator("#gameRulesDialog").waitFor({ state: "visible" }); assert.match(await page.locator("#gameRulesDialog").innerText(), /Millions of Dollars/); await page.keyboard.press("Escape");
     for (const width of [1440, 390, 320, 740]) {
@@ -65,9 +88,16 @@ async function main() {
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.click("#createBtn"); await page.waitForFunction(() => window.millionState?.code);
+    await checkBruteHelp(page, "#roomSettings");
+    await page.uncheck('[data-setting="bruteShares"]'); await page.waitForFunction(() => !millionState.settings.bruteShares);
+    await checkBruteHelp(page, "#roomSettings");
+    await page.check('[data-setting="bruteShares"]'); await page.waitForFunction(() => millionState.settings.bruteShares);
     const code = await page.evaluate(() => window.millionState.code);
     for (const other of pages.slice(1)) { await other.fill("#roomInput", code); await other.click("#joinForm button"); await other.waitForFunction(() => window.millionState?.code); }
-    await page.waitForFunction(() => window.millionState?.seats.length === 4); await page.click("#startBtn"); await page.waitForFunction(() => window.millionState?.game?.phase === "planning");
+    await page.waitForFunction(() => window.millionState?.seats.length === 4);
+    await checkBruteHelp(pages[1], "#roomSettings");
+    await page.click("#startBtn"); await page.waitForFunction(() => window.millionState?.game?.phase === "planning");
+    await checkBruteHelp(page, "#roomSettings");
     const roles = ["driver", "driver", "crook", "brute"];
     for (let i = 0; i < 4; i++) { await pages[i].click(`[data-pick="${roles[i]}"]`); await pages[i].click("#lockRoles"); await pages[i].waitForFunction(() => window.millionState.game.players[window.millionState.you].locked); }
     await page.waitForFunction(() => window.millionState.game.phase === "negotiation");

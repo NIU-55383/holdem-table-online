@@ -614,22 +614,29 @@ test("bot decisions and all observer snapshots are invariant to inaccessible sec
   assert.equal(JSON.stringify(g), before);
 });
 
-test("bots handle offers and use only allowed planning and Snitch choices", () => {
+test("bots value a safe role instead of accepting every minimum offer", () => {
   const g = fixture(["driver", "brute", "crook", "crook"]);
   act(g, 0, { type: "offer", payer: 0, quitter: 1, slot: 0, amount: 100 });
-  assert.deepEqual(chooseBotAction(g, 1, zero), { type: "respond", offerId: g.offers[0].id, accept: true });
+  assert.deepEqual(chooseBotAction(g, 1, zero), { type: "respond", offerId: g.offers[0].id, accept: false });
   act(g, 1, chooseBotAction(g, 1, zero));
+  act(g, 0, { type: "offer", payer: 0, quitter: 1, slot: 0, amount: g.players[0].cash });
+  const accepted = chooseBotAction(g, 1, zero);
+  assert.equal(accepted.accept, true); act(g, 1, accepted);
   assert.equal(chooseBotAction(g, 1, zero), null);
 });
 
 test("UMD browser data and engine expose the same standalone API", () => {
   const context = vm.createContext({ crypto: require("node:crypto").webcrypto, Uint32Array });
   vm.runInContext(fs.readFileSync(require.resolve("./million-data"), "utf8"), context);
+  vm.runInContext(fs.readFileSync(require.resolve("./million-2024"), "utf8"), context);
+  vm.runInContext(fs.readFileSync(require.resolve("./million-bot"), "utf8"), context);
   vm.runInContext(fs.readFileSync(require.resolve("./million-engine"), "utf8"), context);
   assert.deepEqual(Object.keys(context.MillionEngine), Object.keys(Engine));
   const g = context.MillionEngine.createGame(names(4), {}, zero);
   context.MillionEngine.act(g, 0, { type: "choose", roles: ["driver"] });
   assert.equal(context.MillionEngine.publicGame(g, 1).players[0].slots[0].role, null);
+  const modern = context.MillionEngine.createGame(names(9), { edition: "2024" }, zero);
+  assert.equal(context.MillionEngine.chooseBotAction(modern, 0, zero).type, "choose");
 });
 
 test("360 seeded complete simulations terminate, conserve cash, and keep all views private", () => {

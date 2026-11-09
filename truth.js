@@ -31,6 +31,9 @@
   const localSaveButton = document.createElement("button"); localSaveButton.type = "button"; localSaveButton.id = "localSaveButton";
   localSaveButton.innerHTML = '<i data-lucide="save"></i>保存并退出 / Save & leave';
   localSaveButton.onclick = () => archives.saveLocal(); $("roomPanel").querySelector(".room-heading").append(localSaveButton);
+  const localExportButton = document.createElement("button"); localExportButton.type = "button"; localExportButton.id = "localExportButton";
+  localExportButton.innerHTML = '<i data-lucide="download"></i>保存 / Save'; localExportButton.onclick = () => archives.saveLocal(false);
+  localSaveButton.before(localExportButton);
   function icons(){window.lucide?.createIcons();}
   function error(message=""){ $("error").textContent=message; }
   function soundButton(){ $("soundBtn").innerHTML=`<i data-lucide="${audio.muted?"volume-x":"volume-2"}"></i>`;$("soundBtn").setAttribute("aria-pressed",String(!audio.muted));$("soundBtn").title=audio.muted?"开启音效 / Enable sound":"关闭音效 / Mute";icons(); }
@@ -103,6 +106,7 @@
   }
   function render(){
     localSaveButton.hidden = online() || !state?.game;
+    localExportButton.hidden = localSaveButton.hidden;
     const g=state?.game, active=g?.phase==="playing", over=g?.phase==="over", me=state?.you, current=state?.seats[g?.current], together=g?.selection==="together", mine=!online()||(g&&E.requiredActors(g).includes(me));
     const editor=active&&(!online()||E.canEdit(g,me))&&E.canEdit(g,g.asker)&&live()&&!state?.control?.paused&&!busy&&!rolling;
     const legacy=g?.version===2;

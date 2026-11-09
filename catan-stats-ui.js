@@ -11,6 +11,7 @@
   const resources = [
     ["木材", "Lumber", "#30885c"], ["砖块", "Brick", "#c66b4b"],
     ["羊毛", "Wool", "#8fb349"], ["麦子", "Grain", "#ccab36"], ["矿石", "Ore", "#859da2"],
+    ["纸", "Paper", "#decd95"], ["布", "Cloth", "#b07aa3"], ["币", "Coin", "#d9a645"],
   ];
   const buildings = [["村庄", "Settlements", "#4f9a91"], ["城市升级", "City upgrades", "#c58a4a"], ["道路", "Roads", "#7c8b9b"], ["船只", "Ships", "#559fc8"]];
   const dash = ["", "9 3", "3 3", "12 3 3 3", "6 3", "2 4"];
@@ -126,20 +127,21 @@
         const number = i + 2, chance = (6 - Math.abs(7 - number)) / 36, scale = Math.max(max, total / 6);
         return `<div class="stats-dice-column" title="${number}: ${n} 次 / rolls; ${(chance * 100).toFixed(1)}% 理论概率 / expected probability"><strong>${n}</strong><div class="stats-dice-track"><span class="stats-dice-bar ${number === 7 ? "is-seven" : ""}" style="height:${n / scale * 100}%"></span><i style="bottom:${total * chance / scale * 100}%"></i></div><b>${number}</b></div>`;
       }).join("")}</div><p class="stats-note stats-footnote">${bilingual("仅统计回合的两颗骰子，不含进攻要塞的单骰。理论次数 = 掷骰总次数 × 该点数的理论概率。", "Only the two turn dice count, not fortress combat dice. Expected count = total rolls × theoretical probability.")}</p>${total ? "" : `<p class="stats-note">${bilingual("本局尚未掷骰。", "No dice were rolled in this match.")}</p>`}${dataTable(["点数 / Sum", "次数 / Rolls", "占比 / Actual %", "理论概率 / Expected %"], counts.map((n, i) => [i + 2, n, total ? `${(n / total * 100).toFixed(1)}%` : "0%", `${((6 - Math.abs(5 - i)) / 36 * 100).toFixed(1)}%`]))}`;
+      if(game.citiesKnights) body.insertAdjacentHTML("afterbegin", `<p class="stats-note">${bilingual("包含炼金术指定的点数，因此本图不单独用于判断随机骰子的公平性。", "Includes dice set by Alchemy, so this chart alone cannot assess random-dice fairness.")}</p>`);
     }
 
     function renderBars(production) {
-      const keys = production ? resources : buildings;
+      const keys = production ? resources.slice(0, game.citiesKnights ? 8 : 5) : buildings.map((entry,i)=>game.citiesKnights && i===1 ? ["城市建造","City builds",entry[2]] : entry);
       const values = game.statistics.players.map(p => production ? p.production.map((n, i) => n + p.gold[i]) : [p.built.settlement, p.built.city, p.built.road, p.built.ship]);
       const max = Math.max(1, ...values.map(sum));
       body.innerHTML = `<p class="stats-note">${production
-        ? bilingual("生产与金矿实际领到的资源", "Resource cards received from production and gold")
+        ? game.citiesKnights ? bilingual("生产实际领到的资源与商品", "Resources and commodities received from production") : bilingual("生产与金矿实际领到的资源", "Resource cards received from production and gold")
         : bilingual("累计建造，含初始建筑与免费道路", "Cumulative builds, including starting pieces and free roads")}</p>
         <div class="stats-bar-legend">${keys.map(([zh, en, color]) => `<span><i class="stats-swatch" style="--swatch:${color}"></i>${bilingual(zh, en)}</span>`).join("")}</div>
         <div class="stats-bars">${values.map((row, id) => `<div class="stats-bar-row"><div class="stats-bar-person">${badge(id)}<strong>${playerName(id)}</strong><b>${sum(row)} <small>${production ? "张 / cards" : "次 / builds"}</small></b></div><div class="stats-bar-track" role="img" aria-label="${playerName(id)}: ${keys.map(([zh, en], i) => `${zh} / ${en} ${row[i]}`).join(", ")}">${row.map((n, i) => n ? `<span style="width:${n / max * 100}%;--segment:${keys[i][2]}" title="${keys[i][0]} / ${keys[i][1]}: ${n}"></span>` : "").join("")}</div><p>${keys.map(([zh, en], i) => `<span>${zh} / ${en} <b>${row[i]}</b></span>`).join("")}</p>${production && game.board.islands ? `<small class="stats-gold">含金矿 ${sum(game.statistics.players[id].gold)} 张 / Includes ${sum(game.statistics.players[id].gold)} gold cards</small>` : ""}</div>`).join("")}</div>
         <p class="stats-note stats-footnote">${production
-          ? bilingual("不含开局赠送、交易、偷取、发展卡或布匹；银行缺货时只计实领数量。", "Excludes starting cards, trades, theft, development cards and cloth; shortages count only cards received.")
-          : bilingual("城市记升级次数；移船、战舰改装、收复要塞不算新建；被拆除或摧毁的不扣回。", "Cities count upgrades. Ship moves, warship conversions and fortress recovery are excluded; removed or destroyed pieces stay counted.")}</p>
+          ? game.citiesKnights ? bilingual("不含开局赠送、交易、偷取、进步卡或水渠；银行缺货时只计实领数量。", "Excludes starting cards, trades, theft, progress cards and Aqueduct; shortages count only cards received.") : bilingual("不含开局赠送、交易、偷取、发展卡或布匹；银行缺货时只计实领数量。", "Excludes starting cards, trades, theft, development cards and cloth; shortages count only cards received.")
+          : game.citiesKnights ? bilingual("城市包括开局城市和后续升级；被摧毁的不扣回，重建再计一次。", "Cities include starting cities and later upgrades. Destroyed cities remain counted; rebuilding counts again.") : bilingual("城市记升级次数；移船、战舰改装、收复要塞不算新建；被拆除或摧毁的不扣回。", "Cities count upgrades. Ship moves, warship conversions and fortress recovery are excluded; removed or destroyed pieces stay counted.")}</p>
         ${dataTable(["玩家 / Player", ...keys.map(([zh, en]) => `${zh} / ${en}`), "合计 / Total"], values.map((row, id) => [playerName(id), ...row, sum(row)]))}`;
     }
 

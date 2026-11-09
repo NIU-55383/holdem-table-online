@@ -23,6 +23,42 @@
     if (type === "development") return { title: ["礼物：免费发展卡", "Gift: free development card"], icon: "development", paragraphs: [arrival, ["免费获得事先背面朝下放置的 1 张发展卡，领取前不公开卡面。行动卡从下一个自己的回合起才能使用，每回合最多一张；胜利点卡立即计分。", "Receive one pre-dealt face-down development card for free. Its identity is private until collected. Action cards are playable on a later turn of your own, at most one per turn; VP cards count immediately."]] };
     return null;
   }
+  function seafarerInfo(type, details = {}) {
+    if (type === "cloth" || type === "cloth-village") {
+      const number=Number(details.number),stock=Number(details.cloth),village=type==="cloth-village"&&Number.isInteger(number)&&number>=2&&number<=12&&Number.isInteger(stock)&&stock>=0;
+      return { title: village ? [`布匹村落 · ${number}`, `Cloth village · ${number}`] : ["布匹", "Cloth"], scenarioArt:"cloth", paragraphs:[
+        ...(village?[[`数字 ${number} 是供货骰点，下方 ${stock} 是村落剩余布匹。`,`The village supplies cloth on a roll of ${number}; ${stock} below is its remaining stock.`]]:[]),
+        ["从自己的村庄或城市用连续船只连到部落村落，建立贸易关系，立即领 1 布匹（村落须有库存）。之后掷出该村落的数字，每名已连接玩家各领 1 布匹；同次发放不足的部分由公共库存补足。村落已无布时，不再触发供货。","Connect your settlement or city to a tribal village with a continuous shipping route. On first connection, take 1 cloth if the village has stock. Later, whenever its number is rolled, each connected player takes 1 cloth; the common supply covers a shortfall during that distribution. An already empty village produces no cloth."],
+        ["每 2 布匹计 1 分。布匹公开，不能用于交易或掷七弃牌；海盗可按本图规则偷取布匹。连接部落的航线不能移动。","Every 2 cloth score 1 VP. Cloth is public and cannot be traded or discarded on seven; the pirate can steal cloth under this scenario's rules. Ships in a route connecting a village cannot be moved."],
+        ["自己的回合达 14 分获胜；或有布村落仅剩 3 个时结束，分高者胜，同分比布匹。","Win with 14 VP on your turn. Alternatively, the game ends when only 3 villages still have cloth: highest VP wins, with cloth breaking ties."]
+      ] };
+    }
+    if (type === "cloth-island") return {title:["部落岛屿","Tribal islands"],icon:"desert",paragraphs:[
+      ["中间岛屿不生产普通资源，也不能建造自己的村庄或城市。用船连到带数字的部落村落即可领取布匹；数字属于村落，不是地块产出。","The central islands produce no normal resources and cannot be settled. Connect ships to a numbered tribal village to collect cloth; the numbers belong to the villages, not the terrain."],
+      ["强盗只能放在外围生产资源的岛屿，不能封锁这些布匹村落。","The robber stays on the outer resource-producing islands and cannot block these cloth villages."]
+    ]};
+    if (type === "gold") return {title:["金矿","Gold fields"],icon:"gold",paragraphs:[
+      ["掷中数字时，相邻村庄任选 1 张普通资源，城市任选 2 张；由当前玩家起顺时针选择，受银行库存限制。","When its number is rolled, an adjacent settlement chooses 1 normal resource, a city 2. Choose clockwise from the current player, subject to bank supply."],
+      ["金矿被强盗占据时不产出；没有单独的黄金资源卡。","A robber on the gold field blocks production. There is no separate gold resource card."]
+    ]};
+    if (type === "fog") return {title:["未知海域","Unexplored waters"],icon:"fog",paragraphs:[
+      ["道路或船到达未知格旁的交叉点时，立即翻开地形。若是陆地，再放数字并领取 1 张对应资源；金矿任选 1 张，海洋不领奖励。","When a road or ship reaches an intersection bordering a hidden hex, reveal it. Land also receives a number token and gives 1 matching resource; choose 1 for gold, while sea gives nothing."],
+      ["未知格揭开前不能产资源，也不能在其上初始建村。未知海域剧本没有登岛奖励分。","Unrevealed hexes produce nothing and are unavailable for initial settlements. The Fog Islands scenario has no island-bonus VP."]
+    ]};
+    if (type === "port") {
+      const resource=Number(details.resource);if(!Number.isInteger(resource)||resource < -1||resource > 4)return null;
+      const rate=resource<0?3:2,label=resource<0?["通用","Generic"]:resourceNames[resource].split(" / ");
+      return {title:[`${label[0]}海港 · ${rate}:1`,`${label[1]} harbor · ${rate}:1`],icon:resource<0?"trade":root.CatanBoard.RES[resource],paragraphs:[
+        ["在港口两条栈桥连接的任一交叉点拥有村庄或城市，就可以使用此港口；只有船连到这里还不算。","Use this harbor when you own a settlement or city on either intersection linked by its piers. A ship alone does not grant access."],
+        [resource<0?"在自己的交易阶段，3 张同种资源换银行 1 张自选资源。":"在自己的交易阶段，2 张此图标对应的资源换银行 1 张自选资源。",resource<0?"During your trading phase, exchange 3 identical resources for 1 resource of your choice from the bank.":"During your trading phase, exchange 2 of the pictured resource for 1 resource of your choice from the bank."]
+      ]};
+    }
+    if (type === "cloth-pirate") return {title:["海盗 · 布匹贸易","Pirate · Cloth for Catan"],icon:"pirate",paragraphs:[
+      ["至少与一个部落村落建立贸易后，才可选择移动海盗。海盗所在海洋格的边缘不能造船，也不能移动已有船只。","You may move the pirate only after establishing trade with at least one tribal village. Ships on the pirate hex's edges cannot be built or moved."],
+      ["移到对手船只旁时，从其中一名船主偷 1 张随机资源，或改为偷 1 布匹，不能两者都拿。海盗不封锁村落的布匹供货。","After moving beside an opponent's ship, steal either 1 random resource or 1 cloth from one eligible owner, not both. The pirate does not block a village's cloth production."]
+    ]};
+    return null;
+  }
   function wonderInfo(type) {
     if (type === "wonder-warning") return { title: ["感叹号：初始村庄禁放点", "Exclamation mark: no starting settlement"], paragraphs: [
       ["初始布置时，第一座和第二座村庄都不能放在感叹号位置。", "Neither of your two starting settlements may be placed at an exclamation mark."],
@@ -134,7 +170,7 @@
       }).join("") || `<p class="scenario-muted">${s.harborDraft ? "等待当前玩家放置 / Waiting for harbor placement" : "暂无待放港口 / No harbors waiting"}</p>`}</div>`;
     }
     if (s.kind === "cloth") {
-      panel = `<h2>${art("cloth")}布匹 <small>Cloth</small><span>${s.clothBank ?? 0} 库存 / Supply</span></h2><div class="scenario-public-counts">${g.players.map(p => `<span style="--player:${root.CatanBoard.COLORS[p.id]}"><i class="player-color"></i><span>${esc(p.name)}</span><b>${p.cloth || 0}</b></span>`).join("")}</div>`;
+      panel = `<h2><button type="button" class="scenario-info-button" data-scenario-info="cloth" title="布匹说明 / About cloth" aria-label="布匹说明 / About cloth">${art("cloth")}</button>布匹 <small>Cloth</small><span>${s.clothBank ?? 0} 库存 / Supply</span></h2><div class="scenario-public-counts">${g.players.map(p => `<span style="--player:${root.CatanBoard.COLORS[p.id]}"><i class="player-color"></i><span>${esc(p.name)}</span><b>${p.cloth || 0}</b></span>`).join("")}</div>`;
       if (g.phase === "steal") {
         const choices = (l.steal || []).filter(v => victim == null || v.victim === victim);
         if (choices.length) panel += `<div class="scenario-loot">${choices.map(v => `<div><strong>${esc(g.players[v.victim]?.name)}</strong><div>${v.loot.map(loot => `<button type="button" class="secondary" data-loot="${loot}" data-loot-victim="${v.victim}" ${blocked ? "disabled" : ""}>${loot === "cloth" ? art("cloth") : icon("resource-back")}<span>${loot === "cloth" ? "1 布匹<small>1 Cloth</small>" : "1 资源<small>1 Resource</small>"}</span></button>`).join("")}</div></div>`).join("")}${victim != null ? '<button type="button" class="scenario-back" data-loot-back>其他玩家 / Other players</button>' : ""}</div>`;
@@ -175,5 +211,5 @@
     }
     return { panel, wonders };
   }
-  root.CatanScenarioUI = { art, phases, playerRange, target, kind, devName, choice, render, tribeInfo, wonderInfo, pirateInfo, battleReport };
+  root.CatanScenarioUI = { art, phases, playerRange, target, kind, devName, choice, render, tribeInfo, seafarerInfo, wonderInfo, pirateInfo, battleReport };
 })(typeof globalThis === "object" ? globalThis : this);

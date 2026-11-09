@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#10648b">
   <title>卡坦岛 CATAN · 桌游小馆</title>
   <link rel="stylesheet" href="catan.css">
+  <link rel="stylesheet" href="catan-cities.css">
   <link rel="stylesheet" href="game-ui.css">
   <link rel="stylesheet" href="game-rules.css">
   <link rel="stylesheet" href="catan-stats.css">
@@ -68,7 +69,7 @@
       <div class="setup-island"><div class="setup-title"><span class="eyebrow">BOARD GAME 02</span><h1 id="editionTitle">卡坦岛 <small>CATAN</small></h1><p id="mapSummary">3–6 玩家 / Players <span>10 分 / Victory Points</span></p></div><div id="previewBoard"></div></div>
       <div class="setup-form">
         <div class="setup-heading"><h2>一起登岛 <small>Join the island</small></h2><div id="baseSetup"><button class="quiet" id="baseRules" title="基础版规则 / Base Game Rules">基础规则 / Rules</button></div></div>
-        <div class="segments" id="editionChoice"><button class="selected" data-edition="base">基础版 / Base</button><button data-edition="seafarers">航海家 / Seafarers</button></div>
+        <div class="segments" id="editionChoice"><button class="selected" data-edition="base">基础版 / Base</button><button data-edition="seafarers">航海家 / Seafarers</button><button data-edition="cities">城市与骑士 / Cities &amp; Knights</button></div>
         <div id="seafarerSetup" hidden><label>地图 / Map<select id="mapChoice"></select></label><div class="segments map-layout" id="layoutChoice" role="group" aria-label="地图布局 / Map layout"><button type="button" data-layout="default" class="selected" aria-pressed="true">默认地图<small>Default</small></button><button type="button" data-layout="random" aria-pressed="false">随机地图<small>Random</small></button></div><div class="map-rule-links"><button class="quiet" id="seafarerRules">航海规则 / Sailing Rules</button><button class="quiet" id="mapRules">本图规则 / Map Rules</button></div></div>
         <fieldset id="scenarioSetup" hidden><legend>棋子规则 / Playing Pieces</legend><div class="segments scenario-thieves" id="thiefChoice" role="group" aria-label="强盗与海盗 / Robber and pirate"><button type="button" data-thieves="both" class="selected" aria-pressed="true">两者<small>Both</small></button><button type="button" data-thieves="robber" aria-pressed="false">强盗<small>Robber</small></button><button type="button" data-thieves="pirate" aria-pressed="false">海盗<small>Pirate</small></button></div></fieldset>
         <div class="player-profile-fields"><label>你的名字 / Your name<input id="name" maxlength="18" autocomplete="nickname" placeholder="Player" required></label><div id="catanAvatarPicker"></div></div>
@@ -143,6 +144,10 @@
       <div class="audio-setting"><label class="audio-check"><input id="sfxEnabled" type="checkbox"><span>游戏音效<small>Sound effects</small></span></label><div class="audio-slider"><label for="sfxVolume">音量 / Volume</label><output id="sfxVolumeValue" for="sfxVolume"></output><input id="sfxVolume" type="range" min="0" max="100" step="1" aria-label="游戏音效音量 / Sound effects volume"></div></div>
     </div>
     <button class="primary wide" data-close="audioSettingsDialog">完成 / Done</button>
+  </dialog>
+  <dialog id="scoreInfoDialog" aria-labelledby="scoreInfoTitle">
+    <div class="dialog-heading"><h2 id="scoreInfoTitle">加分说明<small>Bonus points</small></h2><button class="icon-button" data-close="scoreInfoDialog" aria-label="关闭 / Close">×</button></div>
+    <div id="scoreInfoContent" class="rules-content" tabindex="0" role="region" aria-label="得分明细 / Score breakdown"></div>
   </dialog>
   <dialog id="scenarioInfoDialog" aria-labelledby="scenarioInfoTitle" data-rules-dialog>
     <div class="dialog-heading"><h2 id="scenarioInfoTitle"></h2><button class="icon-button" data-close="scenarioInfoDialog" aria-label="关闭 / Close">×</button></div>
@@ -262,6 +267,6 @@
     <div id="statisticsTabs" class="stats-tabs" role="tablist" aria-label="统计图 / Charts"></div>
     <div id="statisticsBody" role="tabpanel" tabindex="0"></div>
   </dialog>
-  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-audio.js"></script><script src="game-ui.js"></script><script src="game-archives.js"></script><script src="game-rules.js"></script><script src="catan-scenario-maps.js"></script><script src="catan-maps.js"></script><script src="catan-board.js"></script><script src="catan-audio.js"></script><script src="catan-music.js"></script><script src="catan-scenario-ui.js"></script><script src="catan-stats-ui.js"></script><script src="catan.js"></script>
+  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-audio.js"></script><script src="game-ui.js"></script><script src="game-archives.js"></script><script src="game-rules.js"></script><script src="catan-scenario-maps.js"></script><script src="catan-maps.js"></script><script src="catan-board.js"></script><script src="catan-audio.js"></script><script src="catan-music.js"></script><script src="catan-scenario-ui.js"></script><script src="catan-stats-ui.js"></script><script src="catan-cities-data.js"></script><script src="catan-cities-ui.js"></script><script src="catan.js"></script>
 </body>
 </html>

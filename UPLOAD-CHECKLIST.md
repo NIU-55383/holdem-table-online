@@ -1,10 +1,14 @@
 # 网站部署检查表
 
-当前仓库包含七款游戏：德州扑克、卡坦岛（基础版及航海家十三张地图）、桥牌、五子棋、中国象棋、真心话大冒险、百万美金。代码直接维护在本 GitHub 仓库，不再通过解压上传包更新。
+当前仓库包含七款游戏：德州扑克、卡坦岛（基础版、航海家十三张地图、城市与骑士）、桥牌、五子棋、中国象棋、真心话大冒险、百万美金。代码直接维护在本 GitHub 仓库，不再通过解压上传包更新。
 
 大富翁的入口、联机服务、程序、图片、专用库、研究资料和测试已移除。
 
 ## 上传步骤
+
+独立保存与城市骑士更新：房间管理同时有「保存」和「保存并退出」。前者仅下载，不冻结房间、清空座位或中断 AI；后者保留原有下载后确认退出流程。同步上传 `room-archive.js`、`game-archives.js`、`game-ui.js`、`game-rules.js`、`truth.js`、`duel.js` 及存档测试。
+
+城市与骑士为独立 3–4 人模式，依据 CATAN 官网 2025 年说明书及 FAQ，不与航海家或 5–6 人扩展混用。同步上传全部 `catan-cities*` 文件、`catan-engine.js`、`catan-server.js`、`catan.js/html`、`catan-stats.js`、`catan-music.js`、`room-archive.js`，以及 `audio/peritune-strategy.mp3` 和 `audio/CREDITS.md`。新局选择城市与骑士，旧局规则不变。测试初始城市、三种商品、骑士、城墙、都会、蛮族、54 张进步卡和所有选择阶段的存档恢复；核对手机和桌面棋盘标记、规则阅读器与音乐切换。部署重启前先保存现有房间。
 
 百万美金 2024 与 2016 共用 `million.html`、`million.js/css` 和共享规则阅读器，不另建新版页面。同步部署 `million-2024.js`、`million-bot.js`、`million-data.js`、`million-engine.js`、`million-server.js`、`room-archive.js`、规则数据、`package.json` 及相关测试。检查版本切换后人数上限（旧版 8、新版 9）、角色列表、规则入口和角色详情均对应所选版本；新版不显示旧版威胁卡、禁止连选或暴徒不分赃选项，旧版问号帮助仍可用。
 

@@ -257,12 +257,13 @@ function validateProgress(kind, g, count, config) {
   fail(integer(g.revision, 0, 10000000));
   if (kind === "catan") {
     const Maps = require("./catan-maps");
-    fail(config.mapId === "base" || Maps.get(config.mapId));
+    fail(config.mapId === "base" || config.mapId === "cities" || Maps.get(config.mapId));
     fail(g.mapId === config.mapId && ["default", "random"].includes(config.layout) && integer(config.maxPlayers, count, config.mapId === "base" ? 6 : 4));
-    fail(["setupSettlement", "setupRoad", "scenarioChoice", "roll", "main", "discard", "robber", "steal", "gold", "plenty", "monopoly", "freeRoads", "over"].includes(g.phase));
+    fail(["setupSettlement", "setupRoad", "scenarioChoice", "ckChoice", "roll", "main", "discard", "robber", "steal", "gold", "plenty", "monopoly", "freeRoads", "over"].includes(g.phase));
     fail(Array.isArray(g.players) && g.players.length === count && integer(g.current, 0, count - 1));
-    fail(Array.isArray(g.bank) && g.bank.length === 5 && Array.isArray(g.deck) && g.deck.length <= 34);
-    fail(g.players.every(p => Array.isArray(p.resources) && p.resources.length === 5 && p.resources.every(v => integer(v, 0, 24)) && Array.isArray(p.development)));
+    const resourceCount = config.mapId === "cities" ? 8 : 5;
+    fail(Array.isArray(g.bank) && g.bank.length === resourceCount && Array.isArray(g.deck) && g.deck.length <= 34);
+    fail(g.players.every(p => Array.isArray(p.resources) && p.resources.length === resourceCount && p.resources.every(v => integer(v, 0, 24)) && Array.isArray(p.development)));
     const b = g.board;
     fail(b && Array.isArray(b.tiles) && b.tiles.length <= 100 && Array.isArray(b.vertices) && b.vertices.length <= 300 && Array.isArray(b.edges) && b.edges.length <= 450 && Array.isArray(b.ports));
     const refs = (a, n, max) => Array.isArray(a) && a.length <= max && a.every(v => integer(v, 0, n - 1));
@@ -270,6 +271,8 @@ function validateProgress(kind, g, count, config) {
     b.vertices.forEach((v, i) => fail(v.id === i && refs(v.tiles, b.tiles.length, 3) && refs(v.edges, b.edges.length, 3) && refs(v.neighbors, b.vertices.length, 3) && integer(v.owner, -1, count - 1)));
     b.edges.forEach((e, i) => fail(e.id === i && integer(e.a, 0, b.vertices.length - 1) && integer(e.b, 0, b.vertices.length - 1) && e.a !== e.b && integer(e.owner, -1, count - 1)));
     for (let i = 0; i < count; i++) fail(b.edges.filter(e => e.owner === i).length <= 30);
+    if(config.mapId === "cities") require("./catan-cities").validate(g);
+    else fail(!g.cities && g.phase !== "ckChoice");
     g.trade = null;
   } else if (kind === "bridge") {
     fail([4, 8, 16].includes(config.boards) && integer(g.board, 1, config.boards) && Array.isArray(config.scores) && config.scores.length <= config.boards);
@@ -396,6 +399,10 @@ function createRoomArchive(options) {
       fail(r.archiveRestoring && !r.archiveFreeze && seats(r).every(p => !p.vacant), "请先补齐所有座位 / Fill all seats first");
       r.archiveRestoring = false; r.negotiationUntil = Date.now() + 5000; r.resultsUntil = Date.now() + 5000;
       broadcast(r); sync(r); return true;
+    }
+    if (type === "archiveExport") {
+      fail(started(r) && !r.archiveFreeze, "尚未开局或正在保存 / Not started or already saving");
+      send(connection, { type: "archiveExported", archive: encode(kindOf(r), r) }); return true;
     }
     if (type === "archivePrepare") {
       fail(started(r) && !r.archiveFreeze, "尚未开局或正在保存 / Not started or already saving");

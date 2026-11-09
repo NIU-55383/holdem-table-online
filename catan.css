@@ -84,6 +84,18 @@
 .summary-identity strong {display: block; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
 .summary-meta {display: flex; align-items: center; gap: 3px; font-size: 9px; font-weight: 500; color: #315c6a;}
 .summary-meta b {font-size: 13px; color: #195b46; white-space: nowrap;}
+.score-info-button {display: inline-grid; place-items: center; flex: 0 0 24px; width: 24px; height: 28px; padding: 3px; border: 0; border-radius: 4px; background: transparent; color: #527f8b; cursor: help;}
+.score-info-button svg {width: 16px; height: 16px; pointer-events: none;}
+.score-info-button:hover {background: #8bbac233;}
+.score-info-button:focus-visible {outline: 2px solid #d1a23b; outline-offset: 1px;}
+@media (max-width: 420px) {
+  .player-summary:has(.score-info-button) .summary-identity {display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 4px;}
+  .player-summary:has(.score-info-button) .summary-person {display: contents;}
+  .player-summary:has(.score-info-button) .numbered-avatar {grid-column: 1; grid-row: 1 / span 2;}
+  .player-summary:has(.score-info-button) .summary-person > strong {grid-column: 2; grid-row: 1;}
+  .player-summary:has(.score-info-button) .summary-person > small {grid-column: 2; grid-row: 2;}
+  .player-summary:has(.score-info-button) .summary-meta {grid-column: 1 / -1; grid-row: 3; flex-wrap: wrap;}
+}
 .player-color {width: 7px; height: 7px; border-radius: 50%; background: var(--player);}
 .summary-identity small {display: block; font-size: 9px; font-weight: 500; color: #577682;}
 .summary-player td > span {display: inline-flex; align-items: center; justify-content: center; gap: 3px;}
@@ -247,14 +259,20 @@
   .action-grid button {flex-direction: row; text-align: left; min-height: 44px; padding: 5px; gap: 4px; font-size: 11px;}
   .action-grid button svg {width: 22px; height: 24px;}
   .action-grid button small {font-size: 9px;}
-  .action-grid .action-cost, .action-grid [data-action="help"] {display: none;}
+  .action-grid .action-cost {display: none;}
   .action-grid button.turn-action {grid-column: auto; min-height: 44px; font-size: 11px; gap: 4px;}
-  #game[data-phase^="setup"] .action-grid, #game[data-phase="robber"] .action-grid,
-  #game:has(.special-actions:not([hidden])) .action-grid {display: none;}
+  #game:not([data-seafarers="true"]) .action-grid button.turn-action {grid-column: 1 / -1;}
+  #game[data-phase^="setup"] .action-grid button:not([data-action="help"]), #game[data-phase="robber"] .action-grid button:not([data-action="help"]),
+  #game:has(.special-actions:not([hidden])) .action-grid button:not([data-action="help"]) {display: none;}
+  #game[data-phase^="setup"] .action-grid [data-action="help"], #game[data-phase="robber"] .action-grid [data-action="help"],
+  #game:has(.special-actions:not([hidden])) .action-grid [data-action="help"] {grid-column: 1 / -1;}
   #game[data-seafarers="true"][data-phase="setupRoad"] .action-grid,
   #game[data-seafarers="true"][data-phase="freeRoads"] .action-grid {display:grid;grid-template-columns:1fr 1fr;}
-  #game[data-seafarers="true"][data-phase="setupRoad"] .action-grid button:not([data-action="road"]):not([data-action="ship"]),
-  #game[data-seafarers="true"][data-phase="freeRoads"] .action-grid button:not([data-action="road"]):not([data-action="ship"]) {display:none;}
+  #game[data-seafarers="true"][data-phase="setupRoad"] .action-grid button:is([data-action="road"],[data-action="ship"]),
+  #game[data-seafarers="true"][data-phase="freeRoads"] .action-grid button:is([data-action="road"],[data-action="ship"]) {display:flex;}
+  #game[data-seafarers="true"][data-phase="setupRoad"] .action-grid button:not([data-action="road"]):not([data-action="ship"]):not([data-action="help"]),
+  #game[data-seafarers="true"][data-phase="freeRoads"] .action-grid button:not([data-action="road"]):not([data-action="ship"]):not([data-action="help"]) {display:none;}
+  #game[data-seafarers="true"][data-phase="freeRoads"] .action-grid [data-action="help"] {grid-column: 1 / -1;}
   #game[data-seafarers="true"] .board-section .board-viewport {max-width:100%;}
   .special-actions, .trade-offer {padding: 8px 0; gap: 6px;}
   .selection {padding: 4px 6px;}
@@ -455,7 +473,7 @@
 #islandRoadDescription small {display: block; margin-top: 10px;}
 .island-road-actions {display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px;}
 .island-road-actions button {min-height: 44px; white-space: normal;}
-#helpDialog[open], #sailingDialog[open], #scenarioInfoDialog[open] {
+#helpDialog[open], #sailingDialog[open], #scenarioInfoDialog[open], #scoreInfoDialog[open] {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -467,14 +485,19 @@
   padding: 22px;
   overflow: hidden;
 }
-#helpDialog .dialog-heading, #sailingDialog .dialog-heading, #scenarioInfoDialog .dialog-heading {flex: 0 0 auto; min-width: 0; margin: 0;}
-#helpDialog .dialog-heading h2, #sailingDialog .dialog-heading h2, #scenarioInfoDialog .dialog-heading h2 {min-width: 0; overflow-wrap: anywhere;}
-#helpDialog .dialog-heading .icon-button, #sailingDialog .dialog-heading .icon-button, #scenarioInfoDialog .dialog-heading .icon-button {width: 44px; height: 44px; flex: 0 0 44px;}
-#helpContent, #sailingContent, #scenarioInfoContent {flex: 1 1 auto; min-width: 0; min-height: 0; max-height: none; margin-bottom: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-right: 8px; overflow-wrap: anywhere;}
+#scoreInfoDialog[open] {width: 480px;}
+#helpDialog .dialog-heading, #sailingDialog .dialog-heading, #scenarioInfoDialog .dialog-heading, #scoreInfoDialog .dialog-heading {flex: 0 0 auto; min-width: 0; margin: 0;}
+#helpDialog .dialog-heading h2, #sailingDialog .dialog-heading h2, #scenarioInfoDialog .dialog-heading h2, #scoreInfoDialog .dialog-heading h2 {min-width: 0; overflow-wrap: anywhere;}
+#helpDialog .dialog-heading .icon-button, #sailingDialog .dialog-heading .icon-button, #scenarioInfoDialog .dialog-heading .icon-button, #scoreInfoDialog .dialog-heading .icon-button {width: 44px; height: 44px; flex: 0 0 44px;}
+#helpContent, #sailingContent, #scenarioInfoContent, #scoreInfoContent {flex: 1 1 auto; min-width: 0; min-height: 0; max-height: none; margin-bottom: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-right: 8px; overflow-wrap: anywhere;}
 #helpAcknowledge, #sailingAcknowledge, #scenarioInfoDialog > .primary {flex: 0 0 auto; margin-bottom: 3px;}
 .scenario-info-symbol {margin-bottom: 12px;}
 .scenario-info-symbol svg {width: 44px; height: 44px; color: inherit;}
 [data-scenario-info] {cursor: help;}
+.scenario-info-button {display:inline-flex;align-items:center;justify-content:center;flex:none;width:30px;min-height:30px;padding:3px;border:0;border-radius:4px;background:transparent;color:inherit;cursor:help;}
+.scenario-info-button svg {width:24px;height:24px;}
+.scenario-info-button:hover {background:#8bbac233;}
+[data-scenario-info]:focus-visible {outline:3px solid #ffe17a;outline-offset:2px;}
 [data-scenario-info]:hover .gift-badge, [data-scenario-info]:focus-visible .gift-badge {stroke: #215b70; stroke-width: 3;}
 .gift-coast, .gift-connector {pointer-events: none;}
 .rule-section {padding: 16px 0; border-bottom: 1px solid #c1d8db;}
@@ -485,8 +508,8 @@
 #helpContent > .rules-link {display: inline-block; margin-top: 16px;}
 #helpContent > p {margin-top: 16px;}
 #buildingCosts {margin: 0 0 12px; border: 0; padding: 0; gap: 9px;}
-#buildingCosts .cost-row {display: grid; grid-template-columns: minmax(100px, 1fr) minmax(0, 1.4fr); gap: 8px;}
-#buildingCosts .cost-row > span {width: auto;}
+.building-costs .cost-row {display: grid; grid-template-columns: minmax(100px, 1fr) minmax(0, 1.4fr); gap: 8px;}
+.building-costs .cost-row > span {width: auto;}
 .cost-resources {display: flex; flex-wrap: wrap; gap: 4px;}
 .cost-resources svg {width: 26px; height: 28px;}
 .rules-development {margin: 0 0 16px;}

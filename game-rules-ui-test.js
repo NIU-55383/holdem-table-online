@@ -29,6 +29,7 @@ async function main() {
       { game: "xiangqi", url: "/duel.html?game=xiangqi", button: "#rulesBtn", dialog: "#gameRulesDialog", title: "Xiangqi Rules" },
       { game: "bridge", url: "/bridge.html", button: "#rulesBtn", dialog: "#rulesDialog", title: "Bridge Rules" },
       { game: "catan", url: "/catan.html", button: "#helpButton", dialog: "#helpDialog", title: "Base Game Rules" },
+      { game: "cities", url: "/catan.html?edition=cities", button: "#baseRules", dialog: "#citiesRules", title: "Cities & Knights" },
       { game: "seafarers", url: "/catan.html?edition=seafarers", button: "#seafarerRules", dialog: "#sailingDialog", title: "Seafarers" },
       { game: "map", url: "/catan.html?edition=seafarers", button: "#mapRules", dialog: "#sailingDialog", title: "" }
     ];

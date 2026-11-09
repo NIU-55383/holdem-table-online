@@ -33,7 +33,7 @@ window.CatanBoard = (() => {
         const robbable = !preview && ["robber", "pirate"].includes(mode) && legal[mode]?.includes(t.id);
         const chosen = robbable && selected?.kind === "tile" && selected.id === t.id;
         const rolled = dice.length && dice[0] + dice[1] === t.number && t.id !== board.robber;
-        return `<g ${robbable ? `${accessible("tile", t.id, mode === "pirate" ? "移动海盗 / Move pirate" : "移动强盗 / Move robber")} aria-pressed="${chosen}"` : foreign ? info("foreign", "外岛，不产资源，不能建村 / Foreign island, no production or settlements") : ""} class="hex-tile ${foreign ? "foreign-island" : ""} ${clothIsland ? "cloth-island" : ""} ${r === 8 ? "fog-tile" : ""} ${robbable ? "target-tile" : ""} ${chosen ? "chosen-tile" : ""} ${rolled ? "producing" : ""}">
+        return `<g ${robbable ? `${accessible("tile", t.id, mode === "pirate" ? "移动海盗 / Move pirate" : "移动强盗 / Move robber")} aria-pressed="${chosen}"` : foreign ? info("foreign", "外岛，不产资源，不能建村 / Foreign island, no production or settlements") : clothIsland ? info("cloth-island", "部落岛屿 / Tribal islands") : r===7 ? info("gold",names[r]) : r===8 ? info("fog",names[r]) : ""} class="hex-tile ${foreign ? "foreign-island" : ""} ${clothIsland ? "cloth-island" : ""} ${r === 8 ? "fog-tile" : ""} ${robbable ? "target-tile" : ""} ${chosen ? "chosen-tile" : ""} ${rolled ? "producing" : ""}">
           <title>${foreign ? "外岛 · 不产资源 · 不能建村 / Foreign island · No production or settlements" : names[r]}${t.number ? ` · ${t.number}` : ""}</title>
           <polygon points="${points(t)}" fill="${r === 8 ? "#b9d5d7" : r === 6 ? "#197c9e" : "#ebca80"}" stroke="${r >= 6 && r !== 7 ? "#51a1b2" : "#f6df9e"}" stroke-width="2"/>
           <polygon class="hex-land" points="${points(t, .88)}" fill="${FILL[r]}" stroke="#384b3f" stroke-opacity=".25" stroke-width="1.5"/>
@@ -58,7 +58,7 @@ window.CatanBoard = (() => {
         const land = p.land !== undefined ? board.tiles[p.land] : { x: 0, y: 0 };
         const direction = -dy * (x - land.x) + dx * (y - land.y) >= 0 ? 1 : -1;
         const px = x - dy / length * 36 * direction, py = y + dx / length * 36 * direction;
-        return `<g><path class="harbor-pier" d="M${a.x},${a.y} L${px},${py} L${b.x},${b.y}" stroke="#dbb369" stroke-width="5" fill="none"/><circle cx="${px}" cy="${py}" r="17" fill="#e9f2e8" stroke="#b5d6d7" stroke-width="2"/>${p.resource < 0 ? `<text x="${px}" y="${py+5}" text-anchor="middle" fill="#1d5573" font-size="14" font-weight="800">3:1</text>` : `${icon(RES[p.resource], px-9, py-14, 18)}<text x="${px}" y="${py+12}" text-anchor="middle" fill="#1d5573" font-size="10" font-weight="800">2:1</text>`}</g>`;
+        return `<g ${board.islands?`${info("port","海港 / Harbor")} data-resource="${p.resource}"`:""}><path class="harbor-pier" d="M${a.x},${a.y} L${px},${py} L${b.x},${b.y}" stroke="#dbb369" stroke-width="5" fill="none"/><circle cx="${px}" cy="${py}" r="17" fill="#e9f2e8" stroke="#b5d6d7" stroke-width="2"/>${p.resource < 0 ? `<text x="${px}" y="${py+5}" text-anchor="middle" fill="#1d5573" font-size="14" font-weight="800">3:1</text>` : `${icon(RES[p.resource], px-9, py-14, 18)}<text x="${px}" y="${py+12}" text-anchor="middle" fill="#1d5573" font-size="10" font-weight="800">2:1</text>`}</g>`;
       }).join("")}
       ${board.edges.filter((e) => e.owner >= 0).map((e) => {
         if (e.kind !== "ship") {
@@ -68,7 +68,7 @@ window.CatanBoard = (() => {
         }
         const x = (v[e.a].x + v[e.b].x) / 2, y = (v[e.a].y + v[e.b].y) / 2;
         const movable = mode === "moveShip" && legal.moveShips?.includes(e.id), victim = mode === "steal" && thief === "pirate" && (scenario.kind === "pirates" || e.tiles.includes(board.pirate)) && legal.victims?.includes(e.owner);
-        return `<g class="built-ship ${e.warship ? "built-warship" : ""} ${victim ? "steal-target" : movable ? "ship-move-target" : ""}" ${victim ? accessible("victim", e.owner, "偷取船主资源 / Steal from ship owner") : movable ? accessible("edge", e.id, "移动这艘船 / Move this ship") : ""}>${victim || movable ? `<circle cx="${x}" cy="${y}" r="23" fill="#ffea9480" stroke="#fff0b2" stroke-width="3"/>` : ""}<g filter="url(#${shadow})">${e.warship ? scenarioIcon("warship", x - 19, y - 23, 38, COLORS[e.owner]) : icon("ship", x - 19, y - 23, 38, COLORS[e.owner])}</g></g>`;
+        return `<g class="built-ship ${e.warship ? "built-warship" : ""} ${victim ? "steal-target" : movable ? "ship-move-target" : ""}" ${victim ? accessible("victim", e.owner, "偷取船主资源 / Steal from ship owner") : movable ? accessible("edge", e.id, "移动这艘船 / Move this ship") : e.warship?info("warship","战舰 / Warship"):""}>${victim || movable ? `<circle cx="${x}" cy="${y}" r="23" fill="#ffea9480" stroke="#fff0b2" stroke-width="3"/>` : ""}<g filter="url(#${shadow})">${e.warship ? scenarioIcon("warship", x - 19, y - 23, 38, COLORS[e.owner]) : icon("ship", x - 19, y - 23, 38, COLORS[e.owner])}</g></g>`;
       }).join("")}
       ${(scenario.gifts || []).filter((gift) => gift.claimedBy == null || gift.claimedBy < 0).map((gift) => {
         const edge = board.edges[gift.edge]; if (!edge) return "";
@@ -85,7 +85,7 @@ window.CatanBoard = (() => {
       }).join("")}
       ${(scenario.villages || []).map((village) => {
         const point = v[village.vertex]; if (!point) return "";
-        return `<g class="cloth-village" role="img" aria-label="${escape(`部落 ${village.number}，布匹 ${village.cloth} / Village ${village.number}, ${village.cloth} cloth`)}"><circle cx="${point.x}" cy="${point.y}" r="14" fill="#fff7df" stroke="#2f777d" stroke-width="2"/><text x="${point.x}" y="${point.y + 5}" text-anchor="middle" font-size="14" font-weight="800" fill="${[6, 8].includes(village.number) ? "#b53732" : "#254938"}">${village.number}</text><rect x="${point.x - 16}" y="${point.y + 13}" width="32" height="16" rx="4" fill="#e9f2e8" stroke="#6fa2a5"/>${scenarioIcon("cloth", point.x - 13, point.y + 14, 14)}<text x="${point.x + 8}" y="${point.y + 25}" text-anchor="middle" fill="#24566b" font-size="11" font-weight="800">${village.cloth}</text></g>`;
+        return `<g class="cloth-village" ${info("cloth-village",`部落 ${village.number}，布匹 ${village.cloth} / Village ${village.number}, ${village.cloth} cloth`)} data-number="${village.number}" data-cloth="${village.cloth}"><rect x="${point.x-18}" y="${point.y-16}" width="36" height="47" fill="transparent"/><circle cx="${point.x}" cy="${point.y}" r="14" fill="#fff7df" stroke="#2f777d" stroke-width="2"/><text x="${point.x}" y="${point.y + 5}" text-anchor="middle" font-size="14" font-weight="800" fill="${[6, 8].includes(village.number) ? "#b53732" : "#254938"}">${village.number}</text><rect x="${point.x - 16}" y="${point.y + 13}" width="32" height="16" rx="4" fill="#e9f2e8" stroke="#6fa2a5"/>${scenarioIcon("cloth", point.x - 13, point.y + 14, 14)}<text x="${point.x + 8}" y="${point.y + 25}" text-anchor="middle" fill="#24566b" font-size="11" font-weight="800">${village.cloth}</text></g>`;
       }).join("")}
       ${(scenario.pirateSeats || []).map((seat, i) => {
         const point = v[seat.landing]; if (!point || point.owner >= 0) return "";
@@ -127,7 +127,7 @@ window.CatanBoard = (() => {
       }).join("")}
       ${["settlement", "city"].includes(mode) ? (legal[mode === "city" ? "cities" : "settlements"] || []).map((id) => `<g ${accessible("vertex", id, mode === "city" ? "升级城市 / Upgrade city" : "建造村庄 / Build settlement")} class="board-target ${selected?.kind === "vertex" && selected.id === id ? "selected-target" : ""}"><circle cx="${v[id].x}" cy="${v[id].y}" r="19" fill="transparent"/><circle class="target-dot" cx="${v[id].x}" cy="${v[id].y}" r="10" fill="#fffbe5" stroke="#176787" stroke-width="3"/><path d="M${v[id].x-4} ${v[id].y}h8m-4-4v8" stroke="#176787" stroke-width="2"/></g>`).join("") : ""}
       ${!showPieces || !board.tiles[board.robber] ? "" : `<g class="robber-piece" role="img" aria-label="强盗 / Robber">${piece("robber", board.tiles[board.robber].x - 21, board.tiles[board.robber].y - 21, 42, board.skins)}</g>`}
-      ${!piratePosition ? "" : `<g class="pirate-piece" ${scenario.kind === "pirates" ? info("pirate-fleet", "海盗舰队规则 / Pirate fleet rules") : scenario.kind === "tribes" ? info("pirate", "海盗 / Pirate") : 'role="img" aria-label="海盗 / Pirate"'}>${piece("pirate", piratePosition.x - 23, piratePosition.y - 23, 46, board.skins)}</g>`}
+      ${!piratePosition ? "" : `<g class="pirate-piece" ${scenario.kind === "pirates" ? info("pirate-fleet", "海盗舰队规则 / Pirate fleet rules") : info(scenario.kind==="cloth"?"cloth-pirate":"pirate", "海盗 / Pirate")}>${piece("pirate", piratePosition.x - 23, piratePosition.y - 23, 46, board.skins)}</g>`}
     </svg>`;
   }
   return { render, icon, piece, escape, COLORS, RES };

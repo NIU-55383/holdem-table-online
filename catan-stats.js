@@ -12,7 +12,7 @@ function create(g, score) {
     history: [point(g, 0, null, null, score)],
     dice: Array(11).fill(0),
     players: g.players.map(p => ({
-      production: Array(5).fill(0), gold: Array(5).fill(0),
+      production: Array(g.cities ? 8 : 5).fill(0), gold: Array(g.cities ? 8 : 5).fill(0),
       robbed: { theft: 0, raid: 0 },
       built: {
         settlement: g.board.vertices.filter(v => v.owner === p.id && v.level === 1).length,
@@ -39,7 +39,8 @@ function record(g, before, id, action, score) {
   const stats = g.statistics;
   if (!stats) return;
   if (action.type === "roll") stats.dice[g.dice[0] + g.dice[1] - 2]++;
-  if (Object.hasOwn(stats.players[id].built, action.type)) stats.players[id].built[action.type]++;
+  const build = g.cities && action.type === "settlement" && !before.turn && g.board.vertices[action.vertex]?.level === 2 ? "city" : action.type;
+  if (Object.hasOwn(stats.players[id].built, build)) stats.players[id].built[build]++;
   // End-turn actions belong to the turn just completed, not the next player's turn.
   const next = point(g, before.turn, before.turn ? before.current : null, before.part, score);
   if (stats.history.at(-1).turn === before.turn) stats.history[stats.history.length - 1] = next;

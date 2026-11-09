@@ -105,7 +105,12 @@ test("seven adapters: save/cancel/export/evict/import/choose/resume, host checks
       const duel = ["gomoku", "xiangqi"].includes(kind);
       await a.request({ type: "create", name: "Host", kind, difficulty: "easy", side: 0, ai: duel, seats: 3, maxPlayers: 3, capacity: 3, boards: 4 });
       if (!duel) { await a.request({ type: "fillBots" }); await a.request({ type: "start" }); }
+      const liveBefore = a.messages.filter(m => m.type === "state").at(-1), exportOnly = await a.request({ type: "archiveExport" }, "archiveExported");
+      assert.equal(exportOnly.archive.game, kind);
+      assert.equal(a.messages.filter(m => m.type === "state").at(-1), liveBefore, `${kind}: saving must not broadcast or mutate room state`);
+      assert.ok(!a.messages.some(m => m.type === "left"));
       const first = await a.request({ type: "archivePrepare" }, "archiveReady");
+      assert.deepEqual(exportOnly.archive.progress, first.archive.progress);
       const frozen = a.messages.filter(m => m.type === "state").at(-1); assert.equal((frozen.room || frozen).control.archive.saving, true);
       const action = kind === "poker" ? { type: "action", action: "fold" } : duel ? { type: "move", to: 10 } : { type: "action", action: { type: "roll" } };
       assert.match((await a.request(action, "error")).message, /paused/);
@@ -132,6 +137,7 @@ test("seven adapters: save/cancel/export/evict/import/choose/resume, host checks
       assert.equal(seated.control.paused, true); assert.equal(seated.control.host, seated.control.you);
       const friend = await b.request({ type: "archiveClaim", seat: 1 }); assert.equal(friend.control.paused, true);
       assert.match((await b.request({ type: "archivePrepare" }, "error")).message, /host only/i);
+      assert.match((await b.request({ type: "archiveExport" }, "error")).message, /host only/i);
       assert.match((await b.request({ type: "archiveContinue" }, "error")).message, /host only/i);
       let current = seated;
       for (const s of seated.control.seats.filter(s => s.vacant && s.index !== 1)) current = await a.request({ type: "roomControl", action: "fillBot", target: s.id });

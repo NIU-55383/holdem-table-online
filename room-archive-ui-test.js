@@ -34,6 +34,12 @@ async function main() {
       if (!duel) { await send({ type: "fillBots" }); await page.waitForFunction(() => testState.control.seats.length >= 3); await send({ type: "start" }); }
       await page.waitForFunction(() => testState.control.started);
       for (let i = 0; i < 4; i++) { if (await page.locator("dialog[open]").count()) await page.keyboard.press("Escape"); }
+      const originalCode = await page.evaluate(() => testState.code), originalSeats = await page.evaluate(() => testState.control.seats.map(s => s.id));
+      await page.locator("[data-room-manage]").click(); await page.locator('[data-room-action="archiveExport"]').click();
+      const exportDownload = page.waitForEvent("download"); await page.locator('[data-archive="prepare"]').click(); await exportDownload;
+      await page.locator('.archive-dialog footer [data-archive="cancel"]').click();
+      assert.equal(await page.evaluate(() => testState.code), originalCode); assert.deepEqual(await page.evaluate(() => testState.control.seats.map(s => s.id)), originalSeats);
+      assert.equal(await page.evaluate(() => testState.control.paused), false);
       await page.locator("[data-room-manage]").click();
       await page.locator('[data-room-action="archiveSave"]').click();
       const downloaded = page.waitForEvent("download"); await page.locator('[data-archive="prepare"]').click();
@@ -67,6 +73,10 @@ async function main() {
     const local = await localContext.newPage(); local.on("pageerror", e => errors.push(`truth local: ${e.message}`));
     await local.goto(`http://127.0.0.1:${port}/truth.html`);
     await local.selectOption("#setupPlayers", "3"); await local.fill("#localNames", "Alice\nBob\nCarol"); await local.click("#createBtn");
+    const localBefore = await local.evaluate(() => sessionStorage.getItem("boardclub-truth-local"));
+    await local.click("#localExportButton"); const exportLocal = local.waitForEvent("download"); await local.click('[data-archive="prepare"]'); await exportLocal;
+    await local.locator('.archive-dialog footer [data-archive="cancel"]').click();
+    assert.equal(await local.evaluate(() => sessionStorage.getItem("boardclub-truth-local")), localBefore);
     await local.locator("#localSaveButton").click();
     const localDownload = local.waitForEvent("download"); await local.locator('[data-archive="prepare"]').click();
     const savedLocal = path.join(result, "archive-truth-local.json"); await (await localDownload).saveAs(savedLocal);

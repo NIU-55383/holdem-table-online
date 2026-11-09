@@ -110,6 +110,7 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
       if (await page.locator("#sailingDialog").isVisible()) await page.locator("#sailingAcknowledge").click();
     };
     const last = () => page.evaluate(() => window.sent.at(-1));
+    await emit({type:"welcome",token:"intro-test"});
     const introGame = create("pirates"), introRoom = { ...room(introGame), code: "INTRO", game: null, previewBoard: introGame.board };
     await emit(introRoom);
     assert.match(await page.locator("#sailingTitle").textContent(), /海盗巢穴.*The Pirate Islands/);
@@ -119,8 +120,9 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
     await emit({ ...introRoom, chat: [{ name: "Alice", text: "Hello" }] });
     assert.equal(await page.locator("#sailingContent").evaluate(el => el.scrollTop), introScroll, "Room updates do not reset reading position");
     await page.keyboard.press("Escape");
+    await page.locator('#sailingDialog').waitFor({state:'hidden'});
     await emit({ type: "welcome", token: "intro-test" }); await emit(introRoom);
-    assert.equal(await page.locator("dialog[open]").count(), 0, "Reconnect does not repeat the introduction");
+    assert.equal(await page.locator("dialog[open]").count(), 0, `Reconnect does not repeat the introduction: ${await page.locator('dialog[open]').evaluateAll(ds=>ds.map(d=>d.id).join(', '))}`);
     await emit({ ...room(introGame), code: "INTRO" });
     assert.equal(await page.locator("dialog[open]").count(), 0, "Starting the same room does not repeat the introduction");
     await page.locator("#audioSettings").click();
@@ -547,6 +549,33 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
     assert.equal(await page.locator("#scenarioInfoDialog").isVisible(), false);
     E.act(outpostGame, 0, (await last()).action); await show(outpostGame);
     assert.equal(await page.locator('#board .pirate-outpost[data-owner="0"]').count(), 0, "The settled outpost becomes a house");
+    // Inspection remains separate from building and moving pieces.
+    const helpCases=[
+      [fixtures.cloth,'#board [data-scenario-info="cloth-village"]',/remaining stock/,/村落剩余布匹/],
+      [fixtures.cloth,'#board [data-scenario-info="cloth-island"]',/central islands/,/不生产普通资源/],
+      [fixtures.cloth,'#scenarioPanel [data-scenario-info="cloth"]',/Every 2 cloth score 1 VP/,/每 2 布匹计 1 分/],
+      [fixtures.cloth,'#awards [data-scenario-info="cloth"]',/cannot be traded/,/不能用于交易/],
+      [fixtures.cloth,'#board [data-scenario-info="cloth-pirate"]',/1 random resource or 1 cloth/,/不封锁村落/],
+      [fixtures.pirates,'#board [data-scenario-info="gold"]',/city 2/,/任选 2 张/],
+      [fixtures.cloth,'#board [data-scenario-info="port"] circle',/A ship alone/,/只有船连到这里还不算/],
+      [setup(create('fog-1')),'#board [data-scenario-info="fog"]',/reveal it/,/立即翻开地形/]
+    ];
+    for(const width of [1440,390,320]){
+      await page.setViewportSize({width,height:900});
+      for(const [g,selector,en,zh] of helpCases){
+        await show(g);const target=page.locator(selector).first(),before=await actionCount();
+        assert.equal(await target.evaluate(el=>getComputedStyle(el).cursor),'help');
+        if(width===1440)await target.hover();await target.click();
+        assert.equal(await page.locator('#scenarioInfoDialog').isVisible(),true);
+        const text=await page.locator('#scenarioInfoContent').textContent();assert.match(text,en);assert.match(text,zh);
+        assert(await page.locator('#scenarioInfoContent').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+        if(selector.includes('cloth-village'))await page.screenshot({path:path.join(__dirname,`test-results/seafarers-cloth-help-${width}.png`)});
+        await page.keyboard.press('Escape');assert.equal(await actionCount(),before);
+      }
+    }
+    const goldMove=setup(create('shores-1'));goldMove.phase='robber';goldMove.thief='robber';
+    const goldSite=goldMove.board.tiles.find(t=>t.resource===5&&E.legal(goldMove,0).robber.includes(t.id));assert(goldSite);
+    await show(goldMove);const goldTarget=page.locator(`#board [data-tile="${goldSite.id}"]`);assert.equal(await goldTarget.getAttribute('data-scenario-info'),null);await goldTarget.click();assert.deepEqual((await last()).action,{type:'robber',tile:goldSite.id});assert.equal(await page.locator('#scenarioInfoDialog').isVisible(),false);
     // Gift inspection remains available and never plays a turn.
     await show(fixtures.tribes);
     assert.equal(await page.locator("#board .foreign-island text").count(), 0, "No labels on foreign island tiles");
@@ -664,7 +693,7 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
     E.act(world, 0, (await last()).action); await show(world);
     assert.match(await page.locator("#harborSetupPhase").textContent(), /放置道路或船/);
     assert.equal(await page.locator("#harborSetupDialog").isVisible(), false);
-    await emit({ type: "welcome", token: "reconnect-test" }); await show(world);
+    await emit({ type: "welcome", token: "intro-test" }); await show(world);
     assert.equal(await page.locator("#harborSetupDialog").isVisible(), false, "Reconnecting after acknowledgement does not repeat it");
     setup(world); await show(world);
     assert.equal(await page.locator("#harborSetupBanner").isVisible(), false);
@@ -870,7 +899,7 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
     await show(raid, 0, { chat: [{ name: "Bob", text: "hi" }] });
     assert.equal(await page.evaluate(() => window.battleNode === document.querySelector("#pirateBattle ol")), true, "Chat cannot restart battle feedback");
     assert.equal(await page.locator("#notice").isVisible(), false);
-    await emit({ type: "welcome", token: "test-token" }); await show(raid);
+    await emit({ type: "welcome", token: "intro-test" }); await show(raid);
     assert.equal(await battle.evaluate(n => n.classList.contains("battle-arrival")), false, "Reconnecting shows the report without replaying it");
     assert.equal(await page.locator("#notice").isVisible(), false);
     await battle.locator("summary").click(); await show(raid);
@@ -915,7 +944,7 @@ test("all remaining scenarios create for 3/4 players; choice controls and art fi
       await guide.screenshot({ path: path.join(__dirname, `test-results/warship-guide-${width}.png`) });
     }
     const sentBeforeHelp = await page.evaluate(() => window.sent.length);
-    await page.locator('[data-scenario-info="warship"]').click();
+    await page.locator('#scenarioPanel [data-scenario-info="warship"]').click();
     assert.match(await page.locator("#scenarioInfoContent").textContent(), /随机抽到骑士.*并不是每次购买/s);
     assert.match(await page.locator("#scenarioInfoContent").textContent(), /下一个自己的回合.*最靠近主岛.*没有普通船/s);
     assert.equal(await page.evaluate(() => window.sent.length), sentBeforeHelp, "Warship help does not send a game action");

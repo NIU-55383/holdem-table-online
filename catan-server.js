@@ -161,13 +161,13 @@ function attachCatan(server) {
         if (data.type === "create") {
           const name = clean(data.name); fail(name, "请输入名字 / Enter your name");
           const mapId = data.mapId || "base", map = Maps.get(mapId);
-          fail(mapId === "base" || map, "未知地图 / Unknown map");
+          fail(mapId === "base" || mapId === "cities" || map, "未知地图 / Unknown map");
           const layout = data.layout ?? "default";
           fail(["default", "random"].includes(layout), "未知地图模式 / Unknown map layout");
           const thieves = map?.family === "new-world" ? data.thieves ?? "both" : "both";
           fail(["both", "robber", "pirate"].includes(thieves), "请选择有效的强盗与海盗设置 / Invalid robber and pirate option");
           const requestedPlayers = data.seats == null ? 4 : Number(data.seats);
-          fail(Number.isInteger(requestedPlayers) && requestedPlayers >= 3 && requestedPlayers <= (map ? 4 : 6), "基础版可选 3–6 人；航海家最多 4 人 / Base: 3–6 players; Seafarers: up to 4");
+          fail(Number.isInteger(requestedPlayers) && requestedPlayers >= 3 && requestedPlayers <= (mapId === "base" ? 6 : 4), "基础版可选 3–6 人；扩展版最多 4 人 / Base: 3–6 players; expansions: up to 4");
           detach(session, true);
           const maxPlayers = map ? map.minPlayers === 3 ? requestedPlayers : map.players : requestedPlayers;
           const room = { code: roomCode(), mapId, layout, thieves, host: session.token, maxPlayers, seats: [], seatSwap: null, game: null, chat: [], updated: Date.now(), timer: null };
@@ -252,6 +252,8 @@ function attachCatan(server) {
   server.on("close", () => { archives.close(); control.close(); clearInterval(heartbeat); rooms.forEach((r) => clearTimeout(r.timer)); wss.clients.forEach((ws) => ws.terminate()); wss.close(); });
   const previews = new Map([["base", E.makeBoard()], ...Maps.maps.map((map) => [map.id, E.makeBoard(undefined, map.id)])]);
   previews.set("base:5-6", E.makeBoard(undefined, "base", "default", 6));
+  previews.set("cities", E.makeBoard(undefined,"cities"));
+  previews.set("cities:random", E.makeBoard(undefined,"cities","random"));
   Maps.maps.forEach((map) => previews.set(`${map.id}:random`, E.makeBoard(undefined, map.id, "random")));
   return { upgrade(request, socket, head) { wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request)); }, rooms, preview: previews.get("base"), previews };
 }

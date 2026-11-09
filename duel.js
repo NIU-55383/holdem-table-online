@@ -28,6 +28,8 @@
   const localSave = document.createElement("button"); localSave.id="localSaveButton";localSave.className="icon-button";
   localSave.title=localSave.ariaLabel="保存并退出 / Save & leave";localSave.innerHTML='<i data-lucide="save"></i>';localSave.onclick=()=>archives.saveLocal();
   document.querySelector("#roomPanel .room-heading").append(localSave);
+  const localExport = document.createElement("button"); localExport.id="localExportButton";localExport.className="icon-button";
+  localExport.title=localExport.ariaLabel="保存 / Save";localExport.innerHTML='<i data-lucide="download"></i>';localExport.onclick=()=>archives.saveLocal(false);localSave.before(localExport);
   function persistLocal(){try{if(state)sessionStorage.setItem(localKey,JSON.stringify(state));else sessionStorage.removeItem(localKey);}catch{}}
   function leaveLocal(){worker?.terminate();worker=null;state=null;busy=false;selected=-1;persistLocal();render();}
   function startLocal(seats, progress){
@@ -83,6 +85,7 @@
     management.sync();
     const g = state?.game, me = offline?0:state?.you ?? 0, other = 1-me;
     localSave.hidden=!offline||!g;localSave.disabled=busy;
+    localExport.hidden=localSave.hidden;localExport.disabled=busy;
     document.querySelector(".chat-section").hidden=offline;$("copyBtn").hidden=offline;
     document.querySelector(".duel-layout").classList.toggle("in-room",Boolean(state));
     $("setup").hidden = Boolean(state); $("roomPanel").hidden = !state; $("gameActions").hidden = !g;

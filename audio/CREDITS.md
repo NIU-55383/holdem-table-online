@@ -2,6 +2,11 @@
 
 Music by PeriTune / Sei Mutsuki. Copyright remains with the author.
 
+- Cities & Knights: **Strategy** (2015-08-01), `peritune-strategy.mp3`.
+  [Author's track page](https://peritune.com/blog/2015/08/01/strategy/).
+  Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+  Original MP3 unchanged; game playback loops it. License checked 2026-11-09.
+
 - Base CATAN: **Oceanfront** (2026-06-17), `peritune-oceanfront.mp3`.
   [Author's track page](https://peritune.com/blog/2026/06/17/oceanfront/)
   SHA-256: `C51B7D3707287047478E0D546C82B957125F29FFC3E7C9EDC564F9BEE793234B`

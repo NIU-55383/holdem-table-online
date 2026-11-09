@@ -6,7 +6,8 @@
 })(typeof window === "object" ? window : globalThis, function () {
   const tracks = Object.freeze({
     base: { title: "Oceanfront", artist: "PeriTune", src: "audio/peritune-oceanfront.mp3?v=1", source: "https://peritune.com/blog/2026/06/17/oceanfront/" },
-    seafarers: { title: "Harbor Morning", artist: "PeriTune", src: "audio/peritune-harbor-morning.mp3?v=1", source: "https://peritune.com/blog/2026/07/18/harbor_morning/" }
+    seafarers: { title: "Harbor Morning", artist: "PeriTune", src: "audio/peritune-harbor-morning.mp3?v=1", source: "https://peritune.com/blog/2026/07/18/harbor_morning/" },
+    cities: { title: "Strategy", artist: "PeriTune", src: "audio/peritune-strategy.mp3?v=1", source: "https://peritune.com/blog/2015/08/01/strategy/" }
   });
   function create(env = globalThis) {
     let edition = "base", enabled = true, volume = .25, unlocked = false, suspended = false;
@@ -53,7 +54,7 @@
       unlock() { unlocked = true; suspended = false; sync(); },
       sync,
       stop() { suspended = true; pause(); },
-      setEdition(value) { const next = value === "base" ? "base" : "seafarers"; if (next !== edition) { edition = next; sync(); changed(); } },
+      setEdition(value) { const next = value === "cities" ? "cities" : value === "base" ? "base" : "seafarers"; if (next !== edition) { edition = next; sync(); changed(); } },
       setEnabled(value) { enabled = Boolean(value); save("catan-music-enabled", enabled); sync(); changed(); },
       setVolume(value) { if (!Number.isFinite(value)) return; volume = Math.max(0, Math.min(1, value)); save("catan-music-volume", volume); sync(); changed(); },
       onChange(callback) { changed = callback; },

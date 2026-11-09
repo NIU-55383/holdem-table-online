@@ -1,0 +1,63 @@
+.cities-status{border-block:1px solid #a8c7c5;padding:14px 0;margin:12px 0;color:var(--ink,#20516a)}
+.cities-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:17px;margin:0 0 12px}
+#citiesFleet{display:block;width:100%;max-width:720px;margin:4px auto 12px;padding:10px 0 8px;border:0;border-block:1px solid #ffffff40;border-radius:0;background:transparent;color:#fff5d5;text-align:left;cursor:pointer}
+#citiesFleet:hover{background:#ffffff08}.cities-fleet-heading{display:grid;grid-template-columns:minmax(0,1fr) auto 20px;align-items:center;gap:12px;font-size:14px}
+.cities-fleet-heading small{display:block;font-size:11px;color:#bbdee5;font-weight:500}.cities-fleet-heading>svg{width:18px;height:18px;color:#bbdee5}
+.cities-fleet-state{text-align:right;min-width:0}.cities-fleet-state strong{color:#ffe29a}
+.cities-fleet-route{position:relative;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));height:48px;margin:6px 0 0;isolation:isolate}
+.cities-fleet-route:before{content:"";position:absolute;left:6.25%;right:6.25%;top:23px;border-top:2px solid #8bb5c0;z-index:-1}
+.cities-fleet-stop{display:grid;place-items:center;min-width:0}.cities-fleet-stop b{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1px solid #a7cbd2;background:var(--sea);font-size:11px;font-weight:600;color:#d4e8e9}
+.cities-fleet-stop.passed b{background:#99c7ce;color:#244d5e}.cities-fleet-stop:last-of-type b{border-color:#f2ce70;color:#ffe29a}.cities-fleet-stop.current b{visibility:hidden}
+.cities-fleet-ship{position:absolute;top:2px;left:calc((var(--fleet-position) + .5) * 12.5%);width:44px;height:44px;transform:translateX(-50%);filter:drop-shadow(0 2px 1px #13435b);transition:left .45s ease}
+.cities-fleet-ends{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#bbdee5}
+#citiesFleet[data-urgent="true"]{border-color:#f4c378;background:#78372730}#citiesFleet[data-urgent="true"] .cities-fleet-state strong{color:#ffda8b}#citiesFleet[data-resolving="true"] .cities-fleet-state strong{color:#ffd2b9}
+@media(max-width:740px){.cities-fleet-heading{font-size:12px;gap:6px;grid-template-columns:minmax(0,1fr) auto 18px}.cities-fleet-heading small{font-size:10px}.cities-fleet-ship{width:36px;height:36px;top:6px}}
+@media(prefers-reduced-motion:reduce){.cities-fleet-ship{transition:none}}
+.cities-event{font-weight:700}.cities-event small{display:block;font-weight:400}
+.cities-player{display:grid;grid-template-columns:minmax(80px,1fr) repeat(3,52px) 45px;gap:5px;border-top:1px solid #a8c7c577;padding:7px 0;font-size:13px;align-items:center}
+.cities-player>span:first-child{overflow-wrap:anywhere}.cities-level{display:flex;gap:2px;align-items:center;min-width:0}.cities-level svg{width:23px;height:23px;flex:none}
+.cities-level-value{display:grid;gap:1px;white-space:nowrap;line-height:1.15}.cities-level-value b{font-size:12px}.cities-level-value small{font-size:9px;color:#527f8b}
+.cities-controls{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.cities-controls button{min-height:42px;padding:7px 10px;display:flex;align-items:center;gap:5px;font-size:14px}
+.cities-controls button.selected{outline:2px solid #bd963e}.cities-controls svg{width:27px;height:27px}
+.cities-controls small{display:block}.cities-strength{display:flex;align-items:center;gap:3px}.cities-strength svg{width:23px;height:23px;flex:none}
+.cities-progress{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px}.cities-progress button{border:1px solid #9dbab8;border-left:5px solid var(--branch);border-radius:6px;padding:10px;text-align:left;background:#f7faf3;color:#20516a;min-height:67px;overflow-wrap:anywhere}.cities-progress small{display:block;font-size:12px;margin-top:4px}
+.cities-choice{margin:12px 0;border-left:4px solid #c29b3b;padding:10px 12px;background:#f9ecc4;color:#244d5e}.cities-choice h3{font-size:16px;margin:0 0 8px}.cities-choice-list{display:flex;flex-wrap:wrap;gap:7px}.cities-choice-list button{font-size:14px;padding:8px;max-width:100%;overflow-wrap:anywhere}.cities-choice-list:empty{display:none}
+.cities-board-target{cursor:pointer}.cities-board-target:focus{outline:none}.cities-board-target:focus circle,.cities-board-target:hover circle{stroke:#f1b542;stroke-width:5}
+.cities-dialog{max-width:min(650px,calc(100vw - 28px));width:650px}.cities-dialog p{line-height:1.65}.cities-dialog small{display:block;margin-top:5px;color:#63828c}.cities-dialog-actions{display:flex;justify-content:flex-end;gap:10px}.cities-rule-cards{display:grid;grid-template-columns:1fr;gap:8px}.cities-rule-cards h4{margin:0;font-size:16px}.cities-rule-cards section{border-left:4px solid var(--branch);padding:8px 12px}.cities-rule-cards p{margin:5px 0}
+.cities-knight-number{font-size:12px;font-weight:800;fill:#234d62}.cities-resource svg{width:36px;height:36px}
+.cities-info-button{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:28px;min-height:28px;padding:1px;border:0;border-radius:4px;background:transparent;color:inherit;cursor:pointer}
+.cities-info-button svg{width:24px;height:26px}.cities-info-button:hover{background:#8bbac233}
+.cities-level .cities-info-button,.cities-strength .cities-info-button{width:24px;min-height:32px;padding:0}
+[data-cities-info]{cursor:help}.cities-overlay [data-cities-info]:focus-visible{outline:3px solid #ffe17a}
+.cities-info-dialog[open]{display:flex;flex-direction:column;overflow:hidden;max-width:min(560px,calc(100vw - 24px))}
+.cities-info-dialog .dialog-heading{flex:none}.cities-info-body{min-height:0;overflow-y:auto;overscroll-behavior:contain}.cities-info-body p{margin:0}.cities-info-body p+p{margin-top:20px;padding-top:16px;border-top:1px solid #a8c7c5}.cities-info-body small{margin-top:12px}
+.cities-action-item{display:grid;grid-template-columns:36px minmax(0,1fr);min-width:0;border:1px solid #bcd1d2;border-radius:6px;background:#fffef6;overflow:hidden}
+.action-grid .cities-action-item>button{min-width:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.action-grid .cities-action-info{width:100%;height:100%;padding:4px;justify-content:center;opacity:1}
+.action-grid .cities-action-info svg{width:26px;height:30px}
+.cities-improvement-item{grid-template-columns:36px minmax(0,1fr) 28px}
+.action-grid .cities-action-help{width:100%;height:100%;padding:4px;justify-content:center;color:#527f8b;opacity:1}
+.action-grid .cities-action-help svg{width:18px;height:18px}
+.cities-action-item:has([data-action].selected){border-color:#bc9c3e;background:#fff0c0}
+#game[data-cities="true"] .action-grid button.turn-action{grid-column:auto}
+.cities-knight-move-target{animation:ship-glow 1.4s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){.cities-knight-move-target{animation:none}}
+@media(max-width:740px){
+  .cities-action-item{grid-template-columns:28px minmax(0,1fr)}
+  .cities-improvement-item{grid-template-columns:24px minmax(0,1fr) 22px}
+  .action-grid .cities-action-help{padding:2px}.action-grid .cities-action-help svg{width:16px;height:16px}
+  .action-grid .cities-action-item>[data-action]{padding:5px 3px 5px 0}
+  .action-grid .cities-action-info{padding:2px}.action-grid .cities-action-info svg{width:22px;height:24px}
+  #game[data-cities="true"] .action-grid button.turn-action{grid-column:span 2}
+  #game[data-phase^="setup"] .action-grid .cities-action-item,#game[data-phase="robber"] .action-grid .cities-action-item,#game:has(.special-actions:not([hidden])) .action-grid .cities-action-item{display:none}
+}
+#game[data-cities="true"] .die:first-child{background:#f2ce70}#game[data-cities="true"] .die:nth-child(2){background:#c9554e}#game[data-cities="true"] .die:nth-child(2) i{background:#fff6db}
+#game[data-cities="true"] .dice-pair{align-items:flex-start}
+.cities-event-die{display:grid;justify-items:center;gap:3px;flex:none;width:46px;padding:0;background:transparent;color:#fff5d5;border:0;border-radius:6px;cursor:help}
+#game[data-cities="true"] .cities-event-die .die{display:grid;grid-template:1fr/1fr;place-items:center;padding:2px;background:#fff7e2;color:#31546a;font-size:22px;font-weight:700}
+.cities-event-die .die svg{display:block;width:100%;height:100%}.cities-event-caption{font-size:10px;line-height:1.15;text-align:center}
+.cities-event-caption small{display:block;font-size:9px;color:#bbdee5;line-height:1.15;margin-top:1px}
+.cities-event-die:hover .die{outline:2px solid #ffe29a;outline-offset:2px}
+@media(max-width:740px){.cities-event-die{width:38px}.cities-event-caption{font-size:9px}.cities-event-caption small{font-size:8px}}
+#game[data-cities="true"] .bank-resources{flex-wrap:wrap}#editionChoice{flex-wrap:wrap}
+@media(max-width:740px){.cities-player{grid-template-columns:minmax(50px,1fr) repeat(3,50px) 34px;gap:4px;font-size:12px}.cities-controls{gap:6px}.cities-controls button{font-size:12px}.cities-progress{grid-template-columns:repeat(2,minmax(0,1fr))}}

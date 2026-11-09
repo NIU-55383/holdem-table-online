@@ -18,6 +18,7 @@
     const section = element("section"); section.dataset.ruleSection = "saves";
     section.append(bilingual("h3", ["保存与续局（小馆功能）", "Saving and resuming (club feature)"]));
     for (const pair of [
+      ["房主选择保存，会下载当前进度，所有人留在原房间继续玩，不暂停对局。", "The host can select Save to download the current progress. Everyone stays in the room and play continues without pausing."],
       ["房主在房间管理中选择保存并退出。先暂停并下载存档，再确认退出；所有玩家及机器人离开，进度、手牌、资产与座位顺序保留。未完成保存时可取消，原局继续。", "The host selects Save & leave in room management. Play pauses for the download; confirm afterwards to disconnect everyone. Progress, hands, assets and seat order are kept. Cancel to continue the original game."],
       ["下次在对应游戏页面导入文件，会生成新的房间码。每位玩家选择一个空位，继承该座位的进度，入座后不能再换座。第一位入座者为房主，可用机器人补齐空位；坐齐后由房主点击继续对局。", "Import the file on the same game's page to create a new room code. Each player claims one empty seat and its progress; seats cannot then be changed. The first player seated hosts and may fill empty seats with bots. The host resumes after every seat is filled."],
       ["存档保存在下载文件中，不是云存档。文件包含完整暗牌，勿交给不信任的人。聊天、头像、登录身份、托管设置及未完成的交易确认不保留。真心话、五子棋和象棋同设备局也可保存，导入后以在线房间续玩。", "The downloaded file is the save, not a cloud backup. It includes hidden cards; share it only with trusted people. Chat, avatars, login identities, auto-play settings and pending trade consent are not saved. Truth or Dare, Gomoku and Xiangqi pass-and-play saves resume as online rooms."]

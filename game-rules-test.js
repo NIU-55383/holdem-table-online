@@ -90,3 +90,23 @@ test("truth or dare rules cover direct pairs, together, allowances and consent",
   assert.match(read("truth.html"), /data-rules-game="truth"/);
   assert.match(read("index.html"), /class="club-game truth-game" href="truth.html"/);
 });
+
+test("Cities & Knights uses the shared bilingual reader and all 54 official progress cards", () => {
+  const cities = require('./catan-cities-data');
+  assert.equal(Object.keys(cities.cards).length,25);
+  assert.equal(Object.values(cities.cards).reduce((n,c)=>n+c[1],0),54);
+  for(const [title,zh,en] of cities.rules) { assert(title.includes('/')); assert(zh.length>20); assert(en.length>20); }
+  for(const card of Object.values(cities.cards)) { assert(card[2]);assert(card[3]);assert(card[4]);assert(card[5]); }
+  assert.match(cities.source,/www\.catan\.com.*2025/);
+  assert.match(read('catan-cities-ui.js'),/BoardGameRules.prepare/);
+  assert.match(read('catan.html'),/catan-cities-data\.js/);
+  assert.match(read('game-rules.js'),/play continues without pausing/);
+});
+
+test("metropolis rules explain the marker, bonus points and retained city in both languages", () => {
+  const rules = require('./catan-cities-data').rules.find(([title])=>title.startsWith('城市改良与都会'));
+  for (const text of [rules.slice(1).join(' '), read('catan-cities-ui.js')]) {
+    for (const detail of ['同一项改良升到五级', '都会标记和额外 2 分', '你的城市仍归你', '之后升到五级也抢不走', 'same branch before you', '2 bonus VP from you', 'Your city remains yours', 'even when others later reach level 5']) assert(text.includes(detail),detail);
+    assert(!text.includes('别人先到五级可夺走并保有'));
+  }
+});

@@ -10,7 +10,7 @@
     button.type = "button"; button.className = "archive-import";
     button.innerHTML = '<i data-lucide="folder-open"></i>导入存档 / Load save';
     anchor.append(button, input); document.body.append(dialog);
-    let ticket = null, lobby = null, mode = "", ownerKey = "", downloaded = false;
+    let ticket = null, lobby = null, mode = "", ownerKey = "", downloaded = false, leaveAfterSave = true;
     const key = c => `${c?.code}:${c?.host}:${c?.you}`;
     function show(title, body, actions) {
       dialog.innerHTML = `<header><h2>${title}</h2><button type="button" data-archive="cancel" aria-label="关闭 / Close">×</button></header><div class="archive-body">${body}<p data-archive-error role="alert"></p></div><footer>${actions}</footer>`;
@@ -24,9 +24,13 @@
       if (lobby) send({ type: "archiveCancelJoin" });
       close();
     }
-    function requestSave() {
+    function requestSave(leave = true) {
       const c = view(); if (!c?.started || c.host !== c.you || c.archive?.saving) return;
-      ownerKey = key(c); mode = "confirm";
+      ownerKey = key(c); mode = "confirm"; leaveAfterSave = leave;
+      if (!leave) {
+        show("保存 / Save", "<p>下载当前进度，所有人继续留在本局。<small>Download the current position and keep playing with everyone in this room.</small></p><p>存档包含暗牌，请交给可信任的朋友。<small>The file contains hidden cards. Share it only with trusted friends.</small></p>", '<button data-archive="cancel">取消 / Cancel</button><button data-archive="prepare"><i data-lucide="download"></i>下载存档 / Download save</button>');
+        return;
+      }
       show("保存并退出 / Save & leave", `<p>保留当前进度和各座位的手牌、资产。文件下载后再确认退出，所有玩家和机器人都将离开。<small>Keep progress, hands and assets. After downloading, confirm to remove all players and bots.</small></p>${c.seats ? `<p>本次退出 / Leaving: ${c.seats.filter(s => s && !s.vacant).map(s => esc(s.name)).join("、")}</p>` : ""}<p>存档包含暗牌，请交给可信任的朋友。<small>The file contains hidden cards. Share it only with trusted friends.</small></p>`, '<button data-archive="cancel">取消 / Cancel</button><button data-archive="prepare"><i data-lucide="download"></i>下载存档 / Download save</button>');
     }
     function download(archive) {
@@ -39,6 +43,12 @@
       try { download(data.archive); } catch (error) { if (ticket !== "local") send({ type: "archiveCancel", ticket }); close(); return; }
       mode = "downloaded";
       show("确认文件已下载 / Check your download", "<p>确认下载列表里已有存档，再结束本次连接。<small>Check that the save is in your downloads before ending this session.</small></p><p>确定后，所有人退出，原房间关闭。下次导入文件会创建新房间码。<small>Everyone leaves and this room closes. Importing creates a new room code.</small></p>", '<button data-archive="cancel">继续本局 / Keep playing</button><button data-archive="commit"><i data-lucide="save"></i>已拿到文件，保存退出 / File received, save & leave</button>');
+    }
+    function exported(archive) {
+      try {
+        download(archive); mode = "saved";
+        show("存档已生成 / Save created", "<p>存档已发起下载，本局继续。<small>The download has started. Your game continues.</small></p>", '<button data-archive="cancel">继续 / Continue</button>');
+      } catch { mode = "error"; show("下载失败 / Download failed", "<p>请重试。本局没有退出。<small>Please retry. Your game is still open.</small></p>", '<button data-archive="cancel">关闭 / Close</button>'); }
     }
     function drawLobby() {
       mode = "lobby";
@@ -72,6 +82,13 @@
       if (action === "cancel") cancel();
       if (action === "prepare") {
         if (ownerKey !== key(view())) { close(); return; }
+        if (!leaveAfterSave) {
+          if (local?.active()) { exported(local.snapshot()); return; }
+          mode = "exporting";
+          if (send({ type: "archiveExport" })) e.target.closest("button").disabled = true;
+          else { mode = "confirm"; dialog.querySelector("[data-archive-error]").textContent = "连接尚未恢复，请稍后重试 / Not connected. Reconnect and try again."; }
+          return;
+        }
         if (local?.active()) { ready({ ticket: "local", archive: local.snapshot() }); return; }
         mode = "preparing"; if (send({ type: "archivePrepare" })) e.target.closest("button").disabled = true;
       }
@@ -80,9 +97,13 @@
       }
       if (action === "copy" && lobby) { try { await navigator.clipboard.writeText(lobby.code); } catch {} }
     });
-    window.addEventListener("board-archive-save", requestSave);
+    window.addEventListener("board-archive-save", event => requestSave(event.detail?.leave !== false));
     window.lucide?.createIcons();
     return { saveLocal: requestSave, receive(data) {
+      if (data.type === "archiveExported") {
+        if (mode === "exporting" && ownerKey === key(view())) exported(data.archive);
+        return true;
+      }
       if (data.type === "archiveReady") {
         if (mode !== "preparing") { send({ type: "archiveCancel", ticket: data.ticket }); return true; }
         ready(data); return true;

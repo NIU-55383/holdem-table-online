@@ -73,6 +73,9 @@ async function main(){
       await move();await move();const initial=await game();await q.reload();await q.locator("#undoBtn:not([disabled])").waitFor();assert.deepEqual((await game()).board,initial.board);
       await q.context().setOffline(true);await move();await q.click("#undoBtn");await q.click("#confirmYes");await q.waitForFunction(k=>JSON.parse(sessionStorage.getItem(k)).game.moves.length===2,key);
       assert.equal(await q.locator("#you .presence-dot").evaluate(e=>getComputedStyle(e).backgroundColor),"rgb(36, 151, 107)");await q.click("#flipBtn");await layout(q,`${kind}-local`);
+      const savedBefore=await q.evaluate(k=>sessionStorage.getItem(k),key);
+      await q.click('#localExportButton');const exported=q.waitForEvent('download');await q.click('[data-archive="prepare"]');await exported;
+      await q.locator('footer [data-archive="cancel"]').click();assert.equal(await q.evaluate(k=>sessionStorage.getItem(k),key),savedBefore);assert.equal((await game()).phase,'playing');
       await q.click("#drawBtn");await q.click("#confirmYes");await q.waitForFunction(k=>JSON.parse(sessionStorage.getItem(k)).game.phase==="over",key);assert.match(await q.locator("#status").textContent(),/Draw/);
       await q.context().setOffline(false);await q.click("#rematchBtn");await q.click("#confirmYes");await q.waitForFunction(k=>JSON.parse(sessionStorage.getItem(k)).game.phase==="playing",key);assert.equal((await game()).moves.length,0);
       await move();await q.click("#resignBtn");await q.click("#confirmYes");await q.waitForFunction(k=>JSON.parse(sessionStorage.getItem(k)).game.phase==="over",key);assert.match(await q.locator("#status").textContent(),/South.*wins/);

@@ -37,6 +37,8 @@ test("music loads only after a gesture, selects the edition and never stacks pla
   assert.equal(audio.plays, 1); assert.equal(audio.currentTime, 15);
   p.setEdition("pirates"); await tick(); assert.equal(audio.src, Music.tracks.seafarers.src);
   p.setEdition("new-world"); p.setEdition("cloth"); assert.equal(audio.plays, 2);
+  p.setEdition("cities"); await tick(); assert.equal(audio.src, Music.tracks.cities.src); assert.equal(p.track.title, "Strategy");
+  p.setEdition("cities"); p.sync(); assert.equal(audio.plays, 3);
   p.setEdition("base"); await tick(); assert.equal(audio.src, Music.tracks.base.src); assert.equal(f.media.length, 1);
 });
 
@@ -80,9 +82,10 @@ test("pending playback, interrupted contexts, failures and missing APIs are hand
 
 const files = [
   ["peritune-oceanfront.mp3", 6643131, "c51b7d3707287047478e0d546c82b957125f29ffc3e7c9edc564f9bee793234b"],
-  ["peritune-harbor-morning.mp3", 1909334, "2235cec10fd715fbc1fb17a3c850fe66f208b04372e5207b9897621711e96e69"]
+  ["peritune-harbor-morning.mp3", 1909334, "2235cec10fd715fbc1fb17a3c850fe66f208b04372e5207b9897621711e96e69"],
+  ["peritune-strategy.mp3", 5543391, "37cdc17f0cebb81ac9d5f48e9d0798388a409d0ecad7a831b5a1bd4cee8d7e7e"]
 ];
-test("both bundled tracks match the original author downloads and include credits", () => {
+test("all three bundled tracks match the original author downloads and include credits", () => {
   for (const [name, size, hash] of files) {
     const bytes = fs.readFileSync(path.join(__dirname, "audio", name));
     assert.equal(bytes.length, size); assert.equal(createHash("sha256").update(bytes).digest("hex"), hash);
@@ -197,6 +200,10 @@ test("real mobile and desktop audio controls, playback, loop, edition changes an
     }
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('#audioSettingsDialog > [data-close]').click();
+    await page.locator('[data-edition="cities"]').tap();
+    await page.waitForFunction(() => testMedia[0].src.includes("strategy") && testMedia[0].currentTime > .05 && !testMedia[0].paused);
+    assert.equal(await page.evaluate(() => testMusic.track.title), "Strategy");
+    assert.equal(await page.evaluate(() => testMedia.length), 1);
     await page.locator('[data-edition="seafarers"]').tap();
     await page.waitForFunction(() => testMedia[0].src.includes("harbor-morning") && testMedia[0].currentTime > .05 && !testMedia[0].paused);
     assert.ok(Math.abs(await page.evaluate(() => testMedia[0].duration) - 59) < 2);

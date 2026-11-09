@@ -3,6 +3,7 @@
 ## Portable Game Saves
 
 - Every multiplayer game uses `room-archive.js` and `game-archives.js`, integrated with shared room management. Saves are downloaded files, not cloud storage. Keep the format versioned and never export login tokens, sockets, public social IDs, avatars or auto-play state.
+- Keep separate Save and Save & leave entries. Save exports a snapshot without freezing the room, cancelling jobs, changing membership or closing the game. Save & leave retains the freeze, download and explicit exit confirmation flow. Local single-device games expose both actions as well.
 - Only the authenticated host can freeze/export/finish a room. Download first, then explicitly confirm removing all occupants. Cancellation and expiry resume the original state; old AI jobs must not execute during the freeze.
 - Imports create a new paused room with vacant seats. Joining people choose one seat before receiving its private state. The first claimant hosts; gameplay and AI resume only after all seats are filled and the host confirms. Preserve seat assets and turn indices, never restore prior identity permissions.
 - Treat imported JSON as untrusted: bound size, validate game/version/structure, reject dangerous object keys, rebuild class-based engines from legal history and use existing private snapshots. Preserve hidden cards in the file but never in the seat-selection preview; disclose this in both languages.

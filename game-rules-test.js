@@ -83,7 +83,7 @@ test("Millions editions keep separate rule entries and six modern role anchors i
 test("truth or dare rules cover direct pairs, together, allowances and consent", () => {
   assert.deepEqual(data.truth.title, ["真心话大冒险规则", "Truth or Dare Rules"]);
   const rules = JSON.stringify(data.truth);
-  for (const text of ["2–8", "Pass & play", "Online", "Truth only", "Dare only", "Mixed", "Chill", "Heat", "Wild", "Unmasked", "Showdown", "30 Truth and 20 Dare prompts", "no question limit", "no fixed endpoint", "Random pairs", "Respondent asks next", "Answer together", "two replacements per round", "240 characters", "without using anyone's skips", "consent", "no alcohol", "only skip", "five minutes", "final 20 seconds", "skips for the entire game"]) assert(rules.includes(text), text);
+  for (const text of ["2–8", "Pass & play", "Online", "Truth only", "Dare only", "Mixed", "no intensity levels", "tracked per respondent", "including replaced or skipped prompts", "bank is not recycled", "200 Truth and 100 Dare prompts", "no question limit", "no fixed endpoint", "Random pairs", "Respondent asks next", "Answer together", "two replacements per round", "240 characters", "without using anyone's skips", "consent", "no alcohol", "only skip", "five minutes", "final 20 seconds", "skips for the entire game"]) assert(rules.includes(text), text);
   assert(!rules.includes("highest score wins"));assert(!rules.includes("3, 5 or 8 total rounds"));
   assert(!rules.includes("1–2 means Truth"), "dice no longer choose prompt category");
   assert.equal(data.truth.sources.length, 0, "original club variant has no external official ruleset");
@@ -109,4 +109,14 @@ test("metropolis rules explain the marker, bonus points and retained city in bot
     for (const detail of ['同一项改良升到五级', '都会标记和额外 2 分', '你的城市仍归你', '之后升到五级也抢不走', 'same branch before you', '2 bonus VP from you', 'Your city remains yours', 'even when others later reach level 5']) assert(text.includes(detail),detail);
     assert(!text.includes('别人先到五级可夺走并保有'));
   }
+});
+
+test("knight help and rules explain blocked roads and exclusive building sites", () => {
+  const cities = require('./catan-cities-data');
+  const rules = cities.rules.find(([title])=>title==='骑士 / Knights');
+  assert.equal(cities.knightPlacement.length,2);
+  for (const [zh,en] of cities.knightPlacement) { assert(rules[1].includes(zh)); assert(rules[2].includes(en)); }
+  const text = cities.knightPlacement.flat().join(' ');
+  for (const detail of ['骑士未激活也一样', '另一端已经连着', '不能跳过骑士凭空新起一段路', '即使都是自己的也不行', '下一个自己的回合', 'even if the knight is inactive', 'already connects', 'cannot share an intersection', 'wait until your next turn']) assert(text.includes(detail),detail);
+  assert.match(read('catan-cities-ui.js'), /if\(name==="knight"\)paragraphs\.push\(\.\.\.D\.knightPlacement\)/);
 });

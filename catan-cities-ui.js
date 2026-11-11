@@ -41,6 +41,7 @@ window.CatanCitiesUI = (() => {
     let dialog=document.getElementById("citiesInfoDialog");
     if(!dialog){dialog=document.createElement("dialog");dialog.id="citiesInfoDialog";dialog.className="cities-dialog cities-info-dialog";dialog.setAttribute("aria-labelledby","citiesInfoTitle");dialog.innerHTML='<div class="dialog-heading"><h2 id="citiesInfoTitle"></h2><button class="icon-button" data-close aria-label="关闭 / Close">×</button></div><div class="cities-info-body" tabindex="0"></div>';document.body.append(dialog);dialog.querySelector("[data-close]").onclick=()=>dialog.close();}
     const paragraphs=[entry.slice(1)];
+    if(name==="knight")paragraphs.push(...D.knightPlacement);
     if(name==="barbarians")paragraphs.push(D.rules.find(([title])=>title==="蛮族入侵 / Barbarian Attack").slice(1));
     dialog.querySelector("h2").textContent=entry[0];dialog.querySelector(".cities-info-body").innerHTML=paragraphs.map(([zh,en])=>`<p>${esc(zh)}<small>${esc(en)}</small></p>`).join("");
     if(!dialog.open)dialog.showModal();dialog.querySelector(".cities-info-body").scrollTop=0;
@@ -107,7 +108,7 @@ window.CatanCitiesUI = (() => {
       e.preventDefault();e.stopImmediatePropagation();const o=available().find(x=>x.key===target.dataset.ckChoice);
       if(!o)return;
       if(o.group==="move")moveSource=o.position.vertex;
-      if(["wall","recruit","activate","promote","move"].includes(o.group) || ["engineering","pillage","smithing","moveKnight","relocate"].includes(room.game.citiesKnights.choice?.kind))send({type:"ck",choice:o.key});
+      if(["wall","recruit","activate","promote","move"].includes(o.group) || ["engineering","pillage","smithing","moveKnight","relocate","merchant"].includes(room.game.citiesKnights.choice?.kind))send({type:"ck",choice:o.key});
       else confirm(o);
     }
     document.getElementById("board").addEventListener("click",boardClick,true);document.getElementById("board").addEventListener("keydown",boardClick,true);
@@ -135,7 +136,7 @@ window.CatanCitiesUI = (() => {
         return `<div class="cities-player"><span style="border-left:3px solid ${B.COLORS[i]};padding-left:6px">${esc(g.players[i].name)}${p.defenders?` · +${p.defenders} VP`:""}</span>${levels}<span class="cities-strength" title="已激活骑士强度 / Active knight strength" aria-label="已激活骑士强度 / Active knight strength: ${p.strength}">${infoButton("knight")}<b>${p.strength}</b></span></div>`;
       }).join("");
       panel.innerHTML=`<div class="cities-status"><h3 class="cities-heading">城市与骑士 <small>Cities &amp; Knights</small><button class="icon-button" data-cities-rules title="规则 / Rules" aria-label="规则 / Rules"><i data-lucide="book-open" aria-hidden="true"></i></button></h3><div class="cities-event">${iconEvent}<small>${c.attacked?"强盗已入场 / Robber active":"首次入侵前无强盗 / Robber waits for first attack"}</small></div>${players}</div>
-        <div class="cities-progress">${c.players[r.you].cards.map(card=>{const d=D.cards[card.key],o=all.find(x=>x.key===`play:${card.id}`);return `<button data-card="${card.key}" data-choice="${o?.key||""}" style="--branch:${D.branches[d[0]][3]}" ${disabled?"disabled":""}>${esc(d[2])}<small>${esc(d[3])}${o?" · 可用 / Ready":""}</small></button>`;}).join("")}</div>
+        <div class="cities-progress">${c.players[r.you].cards.filter(card=>card.key!=="merchant").map(card=>{const d=D.cards[card.key],o=all.find(x=>x.key===`play:${card.id}`);return `<button data-card="${card.key}" data-choice="${o?.key||""}" style="--branch:${D.branches[d[0]][3]}" ${disabled?"disabled":""}>${esc(d[2])}<small>${esc(d[3])}${o?" · 可用 / Ready":""}</small></button>`;}).join("")}</div>
         <div class="cities-controls">${Object.entries(groups).filter(([key])=>!["wall","recruit","activate","promote","improvement","move"].includes(key)&&all.some(o=>o.group===key)).map(([key,n])=>`<button data-group="${key}" class="secondary ${group===key?"selected":""}" ${disabled?"disabled":""}>${art(n[2])}<span>${n[0]}<small>${n[1]}</small></span></button>`).join("")}</div>
         ${heading?`<div class="cities-choice" aria-live="polite"><h3>${esc(heading.join(" / "))}${q?` · ${esc(g.players[q.player].name)}`:""}</h3><div class="cities-choice-list">${opts.filter(o=>!o.position).map(o=>`<button data-choice="${esc(o.key)}" ${disabled?"disabled":""}>${esc(o.label)}</button>`).join("")}</div></div>`:""}`;
       window.lucide?.createIcons();
@@ -148,7 +149,9 @@ window.CatanCitiesUI = (() => {
       const pieces=g.board.vertices.filter(v=>v.knight||v.wall||v.metropolis!=null).map(v=>{
         const k=v.knight;
         if(k)return `<g><circle cx="${v.x}" cy="${v.y-4}" r="18" fill="${k.active?"#fff0ad":"#b4c6c8"}" stroke="${B.COLORS[k.owner]}" stroke-width="3"/><use href="catan-cities-art.svg#knight" x="${v.x-16}" y="${v.y-25}" width="32" height="32" style="color:${B.COLORS[k.owner]}"/><text class="cities-knight-number" x="${v.x}" y="${v.y+13}" text-anchor="middle">${k.rank}</text><title>${k.rank} · ${k.active?"已激活 / Active":"未激活 / Inactive"}</title></g>`;
-        return `${v.wall?`<path d="M${v.x-17} ${v.y+4}h34" stroke="#f7e4a0" stroke-width="8"/><path d="M${v.x-17} ${v.y+4}h34" stroke="#658c9d" stroke-width="4"/>`:""}${v.metropolis!=null?`<use href="catan-cities-art.svg#metropolis" x="${v.x-19}" y="${v.y-30}" width="38" height="38" style="color:${B.COLORS[v.owner]}"/>`:""}`;
+        const metropolis=v.metropolis!=null?`<use href="catan-cities-art.svg#metropolis" x="${v.x-19}" y="${v.y-30}" width="38" height="38" style="color:${B.COLORS[v.owner]}"/>`:"";
+        const wall=v.wall?`<g class="cities-map-wall" data-wall-vertex="${v.id}" data-cities-info="wall" role="button" tabindex="0" aria-label="${info.wall[0]} · 说明 / Info"><title>${info.wall[0]}</title><rect x="${v.x-22}" y="${v.y-5}" width="44" height="22" fill="transparent"/><use href="catan-cities-art.svg#wall-map" x="${v.x-21}" y="${v.y-4}" width="42" height="19.25"/></g>`:"";
+        return metropolis+wall;
       }).join("");
       const merchant=c.merchant?(()=>{const t=g.board.tiles[c.merchant.tile];return `<g data-cities-info="merchant" role="button" tabindex="0" aria-label="商人说明 / About the merchant"><circle cx="${t.x+23}" cy="${t.y-22}" r="18" fill="transparent"/><circle cx="${t.x+23}" cy="${t.y-22}" r="14" fill="${B.COLORS[c.merchant.owner]}" stroke="#2d5365" stroke-width="2"/><use href="catan-cities-art.svg#merchant" x="${t.x+10}" y="${t.y-35}" width="26" height="26"/></g>`;})():"";
       const targets=opts.filter(o=>o.position).map(o=>{
@@ -158,14 +161,8 @@ window.CatanCitiesUI = (() => {
       const source=q?.kind==="moveKnight"&&q.player===room.you&&moveSource!=null&&opts.some(o=>o.key==="cancel")?g.board.vertices[moveSource]:null;
       const cancel=source?`<g class="cities-board-target cities-knight-selected" data-ck-choice="cancel" role="button" tabindex="0" aria-label="取消移动 / Cancel move"><circle cx="${source.x}" cy="${source.y-4}" r="22" fill="transparent" stroke="#ffe17a" stroke-width="4"/><title>取消移动 / Cancel move</title></g>`:"";
       svg.insertAdjacentHTML("beforeend",`<g class="cities-overlay">${pieces}${merchant}${targets}${cancel}</g>`);
-      svg.querySelectorAll('.cities-overlay use[href$="#knight"],.cities-overlay use[href$="#metropolis"],.cities-overlay > path').forEach(el=>{
-        const name=el.tagName.toLowerCase()==="path"?"wall":el.getAttribute("href").split("#")[1];let target=name==="knight"?el.parentElement:el;
-        if(name==="wall"){
-          if(el.getAttribute("stroke-width")!=="8")return;
-          const line=el.nextElementSibling,bounds=el.getBBox(),hit=document.createElementNS("http://www.w3.org/2000/svg","rect");
-          hit.setAttribute("x",bounds.x-2);hit.setAttribute("y",bounds.y-10);hit.setAttribute("width",bounds.width+4);hit.setAttribute("height","20");hit.setAttribute("fill","transparent");
-          target=document.createElementNS("http://www.w3.org/2000/svg","g");el.before(target);target.append(hit,el,line);
-        }
+      svg.querySelectorAll('.cities-overlay use[href$="#knight"],.cities-overlay use[href$="#metropolis"]').forEach(el=>{
+        const name=el.getAttribute("href").split("#")[1],target=name==="knight"?el.parentElement:el;
         target.dataset.citiesInfo=name;target.setAttribute("role","button");target.setAttribute("tabindex","0");target.setAttribute("aria-label",`${info[name][0]} · 说明 / Info`);
       });
     }

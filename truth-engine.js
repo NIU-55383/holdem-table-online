@@ -7,7 +7,8 @@
   }
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Data, cryptoSource) {
   if (!Data) throw Error("先加载题库 / Load truth-data.js first");
-  const LEVELS = Data.LEVELS;
+  // Accept old clients and saves, but never use their former intensity setting.
+  const validLegacyLevel = value => value === undefined || ["chill", "heat", "wild", "unmasked", "showdown"].includes(value);
   const KINDS = ["truth", "dare"];
   const MODES = Object.freeze(["truth", "dare", "mixed"]);
   const SELECTIONS = Object.freeze(["random", "chain", "together"]);
@@ -15,9 +16,31 @@
   const HISTORY_LIMIT = 12;
   const requireRule = (condition, message) => { if (!condition) throw Error(message); };
   const clone = value => JSON.parse(JSON.stringify(value));
-  const pools = Object.fromEntries(LEVELS.flatMap(level =>
-    KINDS.map(kind => [level + "/" + kind, Data.PROMPTS.filter(prompt => prompt.level === level && prompt.kind === kind)])
-  ));
+  const pools = Object.fromEntries(KINDS.map(kind => [kind, Data.PROMPTS.filter(prompt => prompt.kind === kind)]));
+  const promptIds = new Set(Data.PROMPTS.map(prompt => prompt.id));
+  const respondents = game => game.selection === "together" ? [0, 1] : [game.target];
+
+  function migratePrompts(game) {
+    if (!game.seenPrompts) {
+      // Older saves only recorded a shared pool, so exclude those IDs for every seat.
+      const old = Object.values(game.used || {}).flat().filter(id => promptIds.has(id));
+      game.seenPrompts = Array.from({ length: game.playerCount }, () => [...new Set(old)]);
+      for (const entry of game.history || []) {
+        const target = entry.target ?? entry.actor;
+        if (game.seenPrompts[target] && promptIds.has(entry.prompt?.id)) game.seenPrompts[target].push(entry.prompt.id);
+      }
+      if (promptIds.has(game.prompt?.id)) for (const target of respondents(game)) game.seenPrompts[target]?.push(game.prompt.id);
+      game.seenPrompts = game.seenPrompts.map(ids => [...new Set(ids)]);
+    }
+    delete game.level;
+    delete game.used;
+    return game;
+  }
+  function availablePrompts(game, kind = game.kind) {
+    const seen = new Set(respondents(game).flatMap(i => game.seenPrompts?.[i] || []));
+    return (pools[kind] || []).filter(prompt => !seen.has(prompt.id));
+  }
+  function hasPrompts(game, kind = game.kind) { return availablePrompts(game, kind).length > 0; }
 
   function validateRng(rng) {
     requireRule(rng === undefined || typeof rng === "function", "随机源无效 / Invalid random source");
@@ -48,24 +71,23 @@
       "设置无效 / Invalid options");
     requireRule(Object.keys(options).every(key => ["level", "rounds", "mode", "selection", "skipLimit"].includes(key)),
       "未知设置 / Unknown option");
-    const level = options.level === undefined ? "heat" : options.level;
     const rounds = options.selection === "dice" ? options.rounds ?? 3 : 0;
     const mode = options.mode === undefined ? "mixed" : options.mode;
     const selection = options.selection ?? "random", skipLimit = options.skipLimit ?? 3;
     requireRule(SELECTIONS.includes(selection) || selection === "dice", "选人方式无效 / Invalid turn order");
     requireRule(selection !== "together" || (playerCount === 2 && mode === "truth"), "共同回答仅限两人真心话 / Answer together requires two players and Truth mode");
     requireRule(Number.isInteger(skipLimit) && skipLimit >= -1 && skipLimit <= 10, "跳过次数须为 0–10 或不限 / Choose 0–10 skips or unlimited");
-    requireRule(LEVELS.includes(level), "请选择有效的刺激等级 / Invalid intensity");
+    requireRule(validLegacyLevel(options.level), "旧版设置无效 / Invalid legacy setting");
     requireRule(MODES.includes(mode), "请选择真心话、大冒险或混合模式 / Invalid mode");
     requireRule((selection !== "dice" && rounds === 0) || (Number.isInteger(rounds) && rounds >= 1 && rounds <= 10),
       "轮数须为 1 至 10 / Choose 1 to 10 rounds");
     validateRng(rng);
     const game = {
       type: "truth", version: selection === "dice" ? 2 : 3, playerCount, phase: "playing", stage: "roll",
-      current: 0, round: 1, rounds, level, mode, die: 0,
+      current: 0, round: 1, rounds, mode, die: 0,
       dice: Array(playerCount).fill(0), tie: null, tieHistory: [], asker: -1, target: -1,
       kind: null, prompt: null, scores: Array(playerCount).fill(0),
-      turns: 0, revision: 0, winners: [], history: [], used: {}
+      turns: 0, revision: 0, winners: [], history: [], seenPrompts: Array.from({ length: playerCount }, () => [])
     };
     if (game.version === 3) {
       Object.assign(game, { selection, skipLimit, skipsUsed: Array(playerCount).fill(0), replacements: 0, responses: Array(playerCount).fill(null) });
@@ -86,6 +108,7 @@
   }
   // Earlier V3 saves had a round cap. Keep their progress and allowances when resuming.
   function resumeEndless(game, rng) {
+    migratePrompts(game);
     if (game.version !== 3) return game;
     game.rounds = 0; game.round = game.turns + 1; game.winners = [];
     if (game.phase === "over") {
@@ -104,20 +127,13 @@
   }
 
   function draw(game, kind, rng) {
-    const key = game.level + "/" + kind, pool = pools[key];
-    requireRule(pool && pool.length, "题库为空 / Prompt pool is empty");
-    let used = Array.isArray(game.used[key]) ? game.used[key].slice() : [];
-    let candidates = pool.filter(prompt => !used.includes(prompt.id));
-    if (!candidates.length) {
-      used = [];
-      candidates = pool.filter(prompt => pool.length < 2 || prompt.id !== game.prompt?.id);
-    }
-    const selected = candidates[randomIndex(candidates.length, rng)];
-    game.used[key] = used.concat(selected.id);
-    game.prompt = { id: selected.id, zh: selected.zh, en: selected.en };
+    const candidates = availablePrompts(game, kind);
+    const selected = candidates.length ? candidates[randomIndex(candidates.length, rng)] : null;
+    if (selected) for (const target of respondents(game)) game.seenPrompts[target].push(selected.id);
+    game.prompt = selected ? { id: selected.id, zh: selected.zh, en: selected.en } : null;
     game.kind = kind;
-    game.stage = game.selection === "together" ? "challenge" : "prepare";
-    game.current = game.selection === "together" ? 0 : game.asker;
+    game.stage = selected && game.selection === "together" ? "challenge" : "prepare";
+    game.current = game.stage === "challenge" ? 0 : game.asker;
   }
 
   function tiedSeats(dice, candidates, role) {
@@ -261,6 +277,7 @@
         requireRule(canEdit(next, actor),
           "仅提问者可在确认前换题 / Only the asker can replace an unconfirmed question");
         requireRule(next.version === 2 || next.replacements < 2, "本轮两次换题已用完 / Both prompt replacements have been used");
+        requireRule(hasPrompts(next), "这位玩家已抽完此类题目，请自己出题 / No unseen prompts left for this respondent; write your own");
         draw(next, next.kind, rng);
         if (next.version === 3) next.replacements++;
         break;
@@ -276,6 +293,7 @@
             "题目包含无效字符 / Prompt contains invalid characters");
           next.prompt = { id: "custom-" + next.round + "-" + (next.revision + 1), zh: text, en: "Custom prompt from the asker." };
         }
+        requireRule(next.prompt, "这位玩家已抽完此类题目，请自己出题 / No unseen prompts left for this respondent; write your own");
         next.stage = "challenge";
         next.current = next.selection === "together" ? 0 : next.target;
         break;
@@ -289,10 +307,12 @@
         break;
     }
     next.revision++;
+    delete game.level;
+    delete game.used;
     Object.assign(game, next);
     return game;
   }
 
-  function snapshot(game) { return clone(game); }
-  return Object.freeze({ LEVELS, MODES, SELECTIONS, requireRule, createGame, act, snapshot, requiredActors, canSkip, canEdit, resumeEndless });
+  function snapshot(game) { return migratePrompts(clone(game)); }
+  return Object.freeze({ MODES, SELECTIONS, validLegacyLevel, requireRule, createGame, act, snapshot, requiredActors, canSkip, canEdit, hasPrompts, resumeEndless });
 });

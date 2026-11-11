@@ -43,11 +43,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Remove-RetiredFiles.ps1
 
 桥牌教学已完整移除，只保留中英双语规则页。提交 `bridge.html`、`bridge.js`、`bridge-server.js`、`package.json`、`retired-files.json` 和对应测试的修改，并一起提交 `bridge-lesson.js`、`bridge-lesson-ui.js`、`bridge-lesson.css`、`bridge-lesson-test.js`、`bridge-lesson-ui-test.js` 的删除记录。旧教学文件已列入停用清单，即使旧部署遗留文件也不再提供访问。部署后确认入座页没有教学入口，开局前和对局中均可查看完整规则，机器人自动行动、明手操作、计分、下一副及重连正常。须重启后端，先结束已有对局；运行 `npm run test:bridge`、`npm run test:bridge-ui` 和 `npm run test:rules-ui`。
 
+桥牌将牌显示与 AI 升级需同时更新 `bridge.html`、`bridge.css`、`bridge.js`、`bridge-bot.js`、`bridge-server.js`，以及新增的 `bridge-bot-worker.js`。桌面中央应持续显示将牌或无将 NT，定约应在叫牌栏目上方，320px 手机下不遮挡出牌。确认机器人能后台思考、空位暂停后不执行旧任务、补位后继续；部署后端前先保存或结束现有对局。运行 `npm run test:bridge`、`npm run test:bridge-ui`；`bridge-ai-benchmark.js` 可额外传入旧版机器人文件进行同牌换边比较。
+
+桥牌计分明细需要新增 `bridge-score.js`，并更新 `bridge.html`、`bridge.js`、`bridge.css`、`bridge-score-test.js`、`bridge-ui-test.js` 和 `package.json`。结算页及历史计分表的分数应能点开双语明细；检查 120 分、超墩、加倍、满贯、宕约、全不叫和重连后的历史分数。手机竖屏与横屏弹窗可滚动，关闭键始终可见；查看明细不会推进对局。该功能没有后端协议或存档格式变更。
+
 若用 GitHub 网页上传，同样需要按清单删除旧文件。即使遗漏删除，新版服务器也会拒绝访问清单中的旧文件，且不再注册其联机接口。
 
 真心话大冒险需要同时提交新增的 `truth.html`、`truth.css`、`truth.js`、`truth-data.js`、`truth-engine.js`、`truth-server.js`、`truth-test.js`、`truth-network-test.js`、`truth-ui-test.js`，以及修改后的 `server.js`、`index.html`、`club.css`、`game-rules-data.js`、`game-rules-test.js`、`game-rules-ui-test.js`、`package.json` 与相关共享回归测试。保留共用头像、互动、音效、规则和房间管理全部资源。新协议为 `/truth-ws`，仅更新网页无法联机，须部署并重启服务器。
 
-五档题库更新须同时部署 `truth-data.js`、`truth-engine.js`、`truth-server.js`、`truth.html`、`truth.css`、`truth.js` 和规则数据。检查失守／摊牌两档可以同屏及联机开局，且真心话、大冒险、混合模式都能正常抽题；每档 30 道真心话、20 道大冒险，原题 ID 保持不变。
+真心话题库共 200 道真心话、100 道大冒险，均含中英文，已取消全部分级。部署 truth-data.js、truth-engine.js、truth-server.js、truth.js、truth.html、truth.css、room-archive.js 和 game-rules-data.js。验证同一回答者本局不会重复抽到题目，换掉或跳过也计入；共同回答同时记录两人，题库用完后只能自定义，不循环洗牌。刷新、重连、下载存档及恢复须保留 seenPrompts；旧分级存档仍能恢复，旧共享抽题记录对所有座位生效。运行 npm run test:truth、npm run test:truth-ui 和存档回归。部署前先保存现有房间，再重启服务器；仅刷新网页不会更新旧服务器的题库。
 
 真心话不限题数更新：同步部署 `truth-engine.js`、`truth-server.js`、`truth.js`、`truth.html`、`room-archive.js`、规则数据与测试。开局不再有轮数选择，联机和单设备连续玩过 3／5／8 题后都应继续下一题，不出现胜负结算；完成数字仅作记录。确认双人共同回答仍须两人回应后换题，换题额度每题重置，跳过额度不重置；旧 V3 存档（包括已结算的存档）恢复后可继续，V2 骰子旧存档保留原规则。测试主动退出、本地清除、存档及手机布局。先保存原房间再重启服务器，不要只更新前端。运行 `npm run test:truth`、`npm run test:truth-ui`、`npm run test:archives` 和 `npm run test:rules-ui`。
 

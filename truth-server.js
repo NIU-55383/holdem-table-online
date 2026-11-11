@@ -29,7 +29,7 @@ function attachTruth(server) {
     return {
       type: "state", code: r.code, you: r.seats.indexOf(viewer),
       host: r.seats.findIndex((p) => p.token === r.host),
-      level: r.level, mode: r.mode, rounds: r.rounds, maxPlayers: r.maxPlayers, selection: r.selection, skipLimit: r.skipLimit,
+      mode: r.mode, rounds: r.rounds, maxPlayers: r.maxPlayers, selection: r.selection, skipLimit: r.skipLimit,
       seats: r.seats.map((p) => ({
         name: p.name, socialId: Social.publicId(p), avatar: p.avatar || null,
         position: p.position, bot: Boolean(p.bot), connected: !p.vacant && Boolean(p.bot || online(p)),
@@ -54,7 +54,7 @@ function attachTruth(server) {
     const automatic = player && !player.vacant && (player.bot || (player.auto && online(player)));
     if (!game || game.phase !== "playing" || control.paused(r) || !automatic ||
         !r.seats.some((p) => !p.bot && !p.vacant && online(p))) { stop(r); return; }
-    if (game.stage === "challenge" && !E.canSkip(game, actor)) { stop(r); return; }
+    if ((game.stage === "prepare" && !game.prompt) || (game.stage === "challenge" && !E.canSkip(game, actor))) { stop(r); return; }
     const key = [game.revision, actor, game.stage, player.token].join(":");
     if (r.timer && r.timerKey === key) return;
     stop(r); r.timerKey = key;
@@ -136,18 +136,18 @@ function attachTruth(server) {
         session.updated = Date.now();
         if (archives.handle(session, ws, d)) return;
         if (d.type === "create") {
-          const name = clean(d.name), level = d.level ?? "heat", mode = d.mode ?? "mixed", maxPlayers = d.maxPlayers ?? 4;
+          const name = clean(d.name), mode = d.mode ?? "mixed", maxPlayers = d.maxPlayers ?? 4;
           const selection = d.selection ?? "random", skipLimit = d.skipLimit ?? 3;
           const rounds = selection === "dice" ? d.rounds ?? 3 : 0;
           fail(name, "请输入名字 / Enter your name");
-          fail(E.LEVELS.includes(level), "请选择挑战强度 / Choose a challenge level");
+          fail(E.validLegacyLevel(d.level), "旧版设置无效 / Invalid legacy setting");
           fail(["truth", "dare", "mixed"].includes(mode), "请选择真心话、大冒险或混合 / Choose truth, dare or mixed mode");
           fail(selection !== "dice" || [3, 5, 8].includes(rounds), "请选择 3、5 或 8 轮 / Choose 3, 5 or 8 rounds");
           fail(Number.isInteger(maxPlayers) && maxPlayers >= 2 && maxPlayers <= 8, "房间人数为 2–8 人 / Rooms hold 2–8 players");
-          E.createGame(maxPlayers, { level, mode, rounds, selection, skipLimit });
+          E.createGame(maxPlayers, { mode, rounds, selection, skipLimit });
           detach(session, true);
           let code; do { code = "T" + crypto.randomBytes(3).toString("hex").slice(0, 5).toUpperCase(); } while (rooms.has(code));
-          const r = { code, host: session.token, level, mode, rounds, maxPlayers, selection, skipLimit, game: null, chat: [], updated: Date.now(),
+          const r = { code, host: session.token, mode, rounds, maxPlayers, selection, skipLimit, game: null, chat: [], updated: Date.now(),
             seats: [{ token: session.token, name, avatar: avatar === undefined ? session.avatar || null : avatar,
               position: 0, bot: false, ready: true, auto: false, ws }] };
           rooms.set(code, r); session.room = code; broadcast(r); return;
@@ -207,7 +207,7 @@ function attachTruth(server) {
             "请等待所有玩家上线并准备 / Wait for everyone to connect and ready up");
           const before = [...r.seats]; r.seats.sort((a, b) => a.position - b.position); remapChat(r, before);
           r.seats.forEach((seat, i) => { seat.position = i; });
-          r.game = E.createGame(r.seats.length, { level: r.level, rounds: r.rounds, mode: r.mode, selection: r.selection, skipLimit: r.skipLimit });
+          r.game = E.createGame(r.seats.length, { rounds: r.rounds, mode: r.mode, selection: r.selection, skipLimit: r.skipLimit });
           r.game.revision = (r.lastRevision ?? -1) + 1;
         } else if (d.type === "restart" || d.type === "rematch") {
           host(); fail(r.game?.phase === "over", "本局尚未结束 / Finish this game first");

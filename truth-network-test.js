@@ -387,9 +387,9 @@ test("Truth adapter rejects an unknown mode or level before creating a room", as
 
 
 for (const level of ["unmasked", "showdown"]) for (const mode of ["truth", "mixed"]) {
-  test("Truth adapter: " + level + " accepts " + mode + ", draws its own pool and preserves stale-action guards", async (t) => {
+  test("Truth adapter: " + level + " accepts " + mode + ", ignores legacy tiers and preserves stale-action guards", async (t) => {
     const { a, b, room } = await twoPlayers(t, {}, { level, mode, rounds: 3 }), clients = [a, b];
-    assert.equal(a.state.level, level); assert.equal(room.game.level, level);
+    assert.equal(a.state.level, undefined); assert.equal(room.game.level, undefined);
     await networkRolls(clients, room);
     const asker = clients[room.game.asker], target = clients[room.game.target];
     const kind = mode === "mixed" ? "dare" : "truth";
@@ -398,11 +398,11 @@ for (const level of ["unmasked", "showdown"]) for (const mode of ["truth", "mixe
       await networkAction(asker, room, "choose", { kind });
     }
     assert.equal(room.game.stage, "prepare"); assert.equal(room.game.kind, kind);
-    assert.match(room.game.prompt.id, new RegExp("^" + level + "-" + kind + "-"));
+    assert.equal(require("./truth-data").PROMPTS.find(p => p.id === room.game.prompt.id).kind, kind);
     const staleRevision = room.game.revision, originalPrompt = room.game.prompt.id;
     await networkAction(asker, room, "reroll");
     assert.notEqual(room.game.prompt.id, originalPrompt);
-    assert.match(room.game.prompt.id, new RegExp("^" + level + "-" + kind + "-"));
+    assert.equal(require("./truth-data").PROMPTS.find(p => p.id === room.game.prompt.id).kind, kind);
     const unchanged = JSON.stringify(room.game);
     await asker.request({ type: "action", action: "ask", revision: staleRevision }, error);
     await networkAction(target, room, "ask", {}, error);
@@ -417,6 +417,6 @@ for (const level of ["unmasked", "showdown"]) for (const mode of ["truth", "mixe
     }
     assert.equal(room.game.phase, "over"); assert.equal(room.game.turns, 3);
     await a.request({ type: "restart" }); await b.request({ type: "ready", ready: true }); await a.request({ type: "start" });
-    assert.equal(a.state.level, level); assert.equal(a.state.game.level, level); assert.equal(a.state.game.mode, mode);
+    assert.equal(a.state.level, undefined); assert.equal(a.state.game.level, undefined); assert.equal(a.state.game.mode, mode);
   });
 }

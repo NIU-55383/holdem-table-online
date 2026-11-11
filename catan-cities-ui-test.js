@@ -3,7 +3,8 @@ const assert=require('node:assert/strict'),path=require('node:path'),fs=require(
 let pw;try{pw=require('playwright');}catch{pw=require(path.resolve(path.dirname(process.execPath),'../node_modules/playwright'));}
 const E=require('./catan-engine'),A=require('./room-archive'),D=require('./catan-cities-data');
 function fixture(finished=false,pillage=false,{event='science',rolled=true}={}){
- const g=E.createGame(['Human','Bot A','Bot B'],undefined,'cities');while(g.phase.startsWith('setup'))E.act(g,g.current,E.chooseBotAction(g,g.current));g.phase='main';
+ let seed=47;const random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
+ const g=E.createGame(['Human','Bot A','Bot B'],random,'cities');while(g.phase.startsWith('setup'))E.act(g,g.current,E.chooseBotAction(g,g.current,random),random);g.phase='main';
  for(let r=0;r<8;r++){const n=3-g.players[0].resources[r];g.players[0].resources[r]+=n;g.bank[r]-=n;}
  g.cities.players[0].levels=[2,3,3];g.cities.ship=4;g.cities.event=event;g.dice=rolled?[3,2]:[];g.rolled=rolled;if(!rolled)g.phase='roll';
  g.board.vertices.find(v=>v.owner===0&&v.level===1).level=2;
@@ -11,7 +12,7 @@ function fixture(finished=false,pillage=false,{event='science',rolled=true}={}){
  const extension=v=>v.edges.map(i=>g.board.edges[i]).find(e=>e.owner<0&&g.board.vertices[e.a===v.id?e.b:e.a].owner<0);
  const v=g.board.vertices.find(v=>v.owner<0&&v.edges.some(e=>g.board.edges[e].owner===0)&&extension(v));v.knight={owner:0,rank:2,active:true,activated:0,promoted:-1};extension(v).owner=0;
  g.cities.merchant={owner:0,tile:g.board.tiles.find(t=>t.resource>=0&&t.vertices.some(i=>g.board.vertices[i].owner===0)).id};
- const metropolis=g.board.vertices.find(v=>v.owner===1&&v.level===2);metropolis.metropolis=0;g.cities.players[1].levels[0]=4;
+ const metropolis=g.board.vertices.find(v=>v.owner===1&&v.level===2);metropolis.metropolis=0;metropolis.wall=true;g.cities.players[1].levels[0]=4;
  if(pillage){g.phase='ckChoice';g.cities.ship=0;g.cities.attacked=true;g.cities.queue=[{kind:'pillage',player:0}];g.board.vertices.filter(v=>v.knight).forEach(v=>v.knight.active=false);g.board.vertices.filter(v=>v.owner===0&&v.level===2).forEach(v=>v.wall=true);}
  if(finished){g.cities.players[0].defenders=10;g.statistics.players[0].production[5]=2;g.statistics.players[0].production[6]=1;g.statistics.players[0].production[7]=3;E.act(g,0,{type:'bankTrade',give:6,get:0});assert.equal(g.phase,'over');return E.publicGame(g,0);}
  return A.encode('catan',{mapId:'cities',layout:'default',thieves:'both',maxPlayers:3,seats:g.players.map((p,i)=>({name:p.name,position:i})),game:g});
@@ -32,6 +33,7 @@ function costFixture(mapId,phase){
  return A.encode('catan',{mapId,layout:'default',thieves:'both',maxPlayers:3,seats:g.players.map((p,i)=>({name:p.name,position:i})),game:g});
 }
 async function checkCosts(page,cities,ship){
+ await checkActionIconStates(page);
  const button=page.locator('#actions [data-action="help"]');assert(await button.isVisible());assert(await button.isEnabled());assert(await button.evaluate(b=>b.scrollWidth<=b.clientWidth+1));
  const before=await page.evaluate(()=>[room.game.revision,actionRequests.length]);await button.click();
  const dialog=page.locator(cities?'#citiesRules':'#helpDialog');await dialog.waitFor({state:'visible'});const costs=dialog.locator(cities?'#citiesBuildingCosts':'#buildingCosts');
@@ -85,6 +87,55 @@ async function checkEventDie(page,event){
  const before=await page.evaluate(()=>[JSON.stringify(room),actionRequests.length]);if(page.viewportSize().width===1440)await button.press('Enter');else await button.click();
  const dialog=page.locator('#citiesInfoDialog[open]');await dialog.waitFor();const text=await dialog.textContent();assert.match(text,event==='ship'?/7 advances/:event?/red die/:/three faces|Three faces/);assert.match(text,event==='ship'?/蛮族/:event?/红骰/:/事件骰/);assert.equal(await dialog.locator('[data-play]').count(),0);assert(await dialog.evaluate(d=>d.scrollWidth<=d.clientWidth+1));await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>[JSON.stringify(room),actionRequests.length]),before);
 }
+async function checkActionIconStates(page){
+ const states=await page.locator('#actions [data-action]').evaluateAll(buttons=>buttons.flatMap(button=>{
+  const item=button.closest('.cities-action-item'),icon=item?.querySelector('.cities-action-info svg')||button.querySelector('svg');
+  if(!icon)return [];
+  const unavailable=button.disabled||button.classList.contains('build-unavailable'),style=getComputedStyle(icon),info=item?.querySelector('.cities-action-info'),help=item?.querySelector('.cities-action-help');
+  return [{action:button.dataset.action,unavailable,filter:style.filter,opacity:style.opacity,separate:!!item,infoEnabled:!info?.disabled,helpEnabled:!help?.disabled,helpOpacity:help?getComputedStyle(help).opacity:'1'}];
+ }));
+ for(const state of states){
+  assert.equal(state.filter,state.unavailable?'grayscale(1)':'none',`${state.action}: icon follows action availability`);
+  if(state.separate){assert.equal(Number(state.opacity),state.unavailable ? 0.4 : 1);assert(state.infoEnabled);assert(state.helpEnabled);assert.equal(Number(state.helpOpacity),1);}
+ }
+}
+async function checkKnightHelp(page){
+ const before=await page.evaluate(()=>[room.game.revision,actionRequests.length]);
+ await page.locator('#board [data-cities-info="knight"]').first().click();
+ const dialog=page.locator('#citiesInfoDialog[open]');await dialog.waitFor();
+ const body=dialog.locator('.cities-info-body');assert.equal(await body.locator('p').count(),3);
+ const text=await body.textContent();
+ for(const detail of ['另一端已经连着','不能跳过骑士凭空新起一段路','即使都是自己的也不行','already connects','cannot share an intersection'])assert(text.includes(detail),detail);
+ assert(await dialog.evaluate(d=>d.scrollWidth<=d.clientWidth+1));
+ await body.evaluate(el=>el.scrollTop=el.scrollHeight);
+ assert(await body.locator('p').last().evaluate(el=>{const r=el.getBoundingClientRect(),b=el.parentElement.getBoundingClientRect();return r.bottom<=b.bottom+1;}));
+ await page.screenshot({path:path.join(__dirname,`test-results/catan-knight-help-${page.viewportSize().width}.png`)});
+ await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>[room.game.revision,actionRequests.length]),before);
+}
+async function checkMapWalls(page){
+ const walls=await page.evaluate(()=>room.game.board.vertices.filter(v=>v.wall).map(v=>v.id));
+ assert.equal(await page.locator('#board .cities-map-wall').count(),walls.length);
+ for(const id of walls){
+  const wall=page.locator(`#board [data-wall-vertex="${id}"]`);
+  assert.equal(await wall.getAttribute('data-cities-info'),'wall');assert.equal(await wall.getAttribute('tabindex'),'0');
+  assert.equal(await wall.locator('use').getAttribute('href'),'catan-cities-art.svg#wall-map');
+  assert.equal(await wall.locator('rect').getAttribute('fill'),'transparent');
+ }
+ const metropolis=page.locator('#board [data-cities-info="metropolis"]');
+ assert(await metropolis.evaluate(el=>el.nextElementSibling.matches('.cities-map-wall')));
+ const wall=page.locator('#board .cities-map-wall').first();
+ await wall.evaluate(el=>el.scrollIntoView({block:'center',inline:'center',behavior:'instant'}));
+ const clip=await wall.evaluate(el=>{
+  const r=el.getBoundingClientRect(),scale=r.width/44;
+  const x=Math.max(0,Math.floor(r.x-48*scale)),y=Math.max(0,Math.floor(r.y-65*scale));
+  return {x,y,width:Math.min(innerWidth-x,140*scale),height:Math.min(innerHeight-y,120*scale)};
+ });
+ await page.screenshot({path:path.join(__dirname,`test-results/catan-map-wall-${page.viewportSize().width}.png`),clip});
+ const before=await page.evaluate(()=>[room.game.revision,actionRequests.length]);
+ await wall.press('Enter');await page.locator('#citiesInfoDialog[open]').waitFor();
+ assert.match(await page.locator('#citiesInfoDialog').textContent(),/City wall/);await page.keyboard.press('Escape');
+ assert.deepEqual(await page.evaluate(()=>[room.game.revision,actionRequests.length]),before);
+}
 async function checkImprovementIcons(page){
  const rows=page.locator('.cities-player'),levels=await page.evaluate(()=>room.game.citiesKnights.players.map(p=>p.levels));
  for(const [b,name] of ['science','trade','politics'].entries()){
@@ -121,12 +172,13 @@ async function main(){
   await page.locator('#previewBoard svg').waitFor();assert.equal(await page.locator('[data-edition="cities"]').getAttribute('class'),'selected');assert(await page.locator('[data-seats="6"]').isHidden());
   await page.click('#baseRules');await page.locator('#citiesRules[open]').waitFor();assert.equal(await page.locator('#citiesRules .cities-rule-cards section').count(),Object.keys(D.cards).length);assert(await page.locator('#citiesRules').evaluate(d=>d.classList.contains('bg-rules-dialog')));await page.keyboard.press('Escape');
   await importRoom(page,fixture());
-  await page.locator('#citiesPanel').waitFor();assert.equal(await page.locator('.cities-progress button').count(),5);assert.equal(await page.locator('#bank .bank-item').count(),8);assert(await page.locator('[data-action="buyDevelopment"]').count()===0);
+  await page.locator('#citiesPanel').waitFor();assert.equal(await page.locator('.cities-progress button').count(),4);assert.equal(await page.locator('#bank .bank-item').count(),8);assert(await page.locator('[data-action="buyDevelopment"]').count()===0);
   assert.match(await page.locator('#players tr').first().locator('.development-count').getAttribute('aria-label'),/Progress cards: 5/);
   assert.match(await page.locator('#players tr').first().locator('.knight-count').textContent(),/2/);
-  assert.deepEqual(await page.locator('#actions [data-action]').evaluateAll(bs=>bs.slice(0,12).map(b=>b.dataset.action)),['road','settlement','city','wall','recruitKnight','activateKnight','promoteKnight','moveKnight','improve0','improve1','improve2','trade']);
+  assert.deepEqual(await page.locator('#actions [data-action]').evaluateAll(bs=>bs.slice(0,13).map(b=>b.dataset.action)),['road','settlement','city','wall','recruitKnight','activateKnight','promoteKnight','moveKnight','improve0','improve1','improve2','merchant','trade']);
   assert.equal(await page.locator('#citiesPanel [data-group="recruit"],#citiesPanel [data-group="activate"],#citiesPanel [data-group="promote"],#citiesPanel [data-group="improvement"],#citiesPanel [data-group="move"]').count(),0);
   const wall=page.locator('#actions [data-action="wall"]');assert(await wall.isEnabled());assert.match(await wall.getAttribute('title'),/2 砖/);assert.equal(await page.locator('#actions [data-cities-info="wall"] use').getAttribute('href'),'catan-cities-art.svg#wall');assert.equal(await page.locator('#citiesPanel [data-group="wall"]').count(),0);
+  await checkActionIconStates(page);
   await wall.click();assert.equal(await page.locator('[data-ck-choice^="wall:"]').count(),2);assert.match(await wall.getAttribute('class'),/selected/);
   await page.click('[data-action="road"]');assert.equal(await page.locator('[data-ck-choice]').count(),0);assert(!/selected/.test(await wall.getAttribute('class')));
   await wall.click();assert.equal(await page.locator('#actions .selected').count(),1);
@@ -134,6 +186,7 @@ async function main(){
   await page.locator('[data-ck-choice^="wall:"]').first().evaluate(el=>{el.dispatchEvent(new MouseEvent('click',{bubbles:true}));el.dispatchEvent(new MouseEvent('click',{bubbles:true}));});
   await page.waitForFunction(()=>room.game.board.vertices.filter(v=>v.owner===0&&v.wall).length===1);
   assert.equal(await page.evaluate(()=>actionRequests.length),beforeWall+1);assert.equal(await page.evaluate(()=>room.game.players[0].resources[1]),1);assert.equal(await page.locator('.cities-dialog[open]').count(),0);assert(await wall.isDisabled());assert.equal(await page.locator('[data-ck-choice]').count(),0);assert(!/selected/.test(await wall.getAttribute('class')));
+  await checkActionIconStates(page);
   await page.click('[data-action="improve0"]');await page.locator('.cities-dialog [data-play]').click();await page.waitForFunction(()=>room.game.citiesKnights.players[0].levels[0]===3);
   await page.click('[data-card="engineering"]');assert.match(await page.locator('.cities-dialog p').textContent(),/wall/);await page.locator('.cities-dialog [data-play]').click();await page.waitForFunction(()=>room.game.phase==='ckChoice');assert.equal(await page.locator('[data-ck-choice]').count(),1);await page.locator('[data-ck-choice]').first().press('Enter');await page.waitForFunction(()=>room.game.board.vertices.filter(v=>v.owner===0&&v.wall).length===2);assert.equal(await page.locator('.cities-dialog[open]').count(),0);assert.equal(await page.evaluate(()=>room.game.players[0].resources[1]),1);
   await page.click('[data-action="moveKnight"]');assert.match(await page.locator('#turnPrompt').textContent(),/Choose a highlighted knight/);
@@ -170,10 +223,10 @@ async function main(){
     const target=page.locator(`${['merchant','wall','metropolis'].includes(name)?'#board':['paper','cloth','coin'].includes(name)?'#bank':'#actions'} [data-cities-info="${name}"]`).first();assert.equal(await target.evaluate(el=>getComputedStyle(el).cursor),'help');if(['merchant','wall','metropolis'].includes(name))await target.click();else await target.press('Enter');
     const dialog=page.locator('#citiesInfoDialog[open]');await dialog.waitFor();assert.match(await dialog.textContent(),new RegExp(text));assert.equal(await dialog.locator('[data-play]').count(),0);assert(await dialog.evaluate(d=>d.scrollWidth<=d.clientWidth+1));await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>[room.game.revision,actionRequests.length]),before);
    }
-   assert.equal(await page.locator('#actions .cities-action-help svg').count(),3);
+   assert.equal(await page.locator('#actions .cities-action-help svg').count(),4);
    assert(await page.locator('#actions .cities-improvement-item [data-action]').evaluateAll(bs=>bs.every(b=>b.scrollWidth<=b.clientWidth+1)));
    await page.locator('#actions').screenshot({path:path.join(__dirname,`test-results/catan-improvement-help-${width}.png`)});
-   await checkImprovementIcons(page);
+   await checkImprovementIcons(page);await checkMapWalls(page);await checkKnightHelp(page);
    for(const selector of ['#board [data-cities-info="knight"]','#resources [data-cities-info="cloth"]','#bank [data-cities-info="coin"]','#citiesPanel [data-cities-info="science"]','#actions [data-cities-info="wall"]']){
     const before=await page.evaluate(()=>[room.game.revision,actionRequests.length]);await page.locator(selector).first().click();await page.locator('#citiesInfoDialog[open]').waitFor();assert(await page.locator('#citiesInfoDialog').evaluate(d=>{const r=d.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight+1;}));await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>[room.game.revision,actionRequests.length]),before);
    }
@@ -192,7 +245,7 @@ async function main(){
   const raid=await context.newPage();raid.on('pageerror',e=>errors.push(e.message));await raid.goto(`http://127.0.0.1:${port}/catan.html?edition=cities`);await raid.waitForFunction(()=>window.sock?.readyState===1);await importRoom(raid,fixture(false,true));
   assert.equal(await raid.locator('[data-ck-choice]').count(),2);assert(await raid.locator('[data-action="wall"]').isDisabled());assert.equal(await raid.locator('#citiesFleet').getAttribute('data-position'),'7');assert.match(await raid.locator('#citiesFleet').textContent(),/resolving/);
   const target=raid.locator('[data-ck-choice]').first();assert.equal(await target.getAttribute('aria-label'),'降为村庄 / Downgrade');const choice=await target.getAttribute('data-ck-choice');const site=Number(choice.split(':')[1]);const resources=await raid.evaluate(()=>room.game.players[0].resources);
-  await target.click();await raid.waitForFunction(site=>room.game.board.vertices[site].level===1,site);assert.equal(await raid.locator('.cities-dialog[open]').count(),0);assert.equal(await raid.evaluate(()=>actionRequests.length),1);assert.equal(await raid.evaluate(site=>!!room.game.board.vertices[site].wall,site),false);assert.deepEqual(await raid.evaluate(()=>room.game.players[0].resources),resources);assert.equal(await raid.evaluate(()=>room.game.phase),'main');assert.equal(await raid.evaluate(()=>window.serverError||''),'');await raid.close();
+  await target.click();await raid.waitForFunction(site=>room.game.board.vertices[site].level===1,site);assert.equal(await raid.locator('.cities-dialog[open]').count(),0);assert.equal(await raid.evaluate(()=>actionRequests.length),1);assert.equal(await raid.evaluate(site=>!!room.game.board.vertices[site].wall,site),false);assert.equal(await raid.locator(`[data-wall-vertex="${site}"]`).count(),0);assert.deepEqual(await raid.evaluate(()=>room.game.players[0].resources),resources);assert.equal(await raid.evaluate(()=>room.game.phase),'main');assert.equal(await raid.evaluate(()=>window.serverError||''),'');await raid.close();
   for(const mapId of ['base','shores-1'])for(const phase of ['setupSettlement','setupRoad','main','robber','freeRoads']){
    const costsPage=await context.newPage();costsPage.on('pageerror',e=>errors.push(e.message));await costsPage.goto(`http://127.0.0.1:${port}/catan.html`);await costsPage.waitForFunction(()=>window.sock?.readyState===1);await importRoom(costsPage,costFixture(mapId,phase));
    for(const width of [1440,390,320]){await costsPage.setViewportSize({width,height:900});await checkCosts(costsPage,false,mapId!=='base');if(mapId!=='base'&&['setupRoad','freeRoads'].includes(phase)){assert(await costsPage.locator('#actions [data-action="road"]').isVisible());assert(await costsPage.locator('#actions [data-action="ship"]').isVisible());}}
@@ -201,4 +254,5 @@ async function main(){
   assert.deepEqual(errors,[]);assert.equal(await page.evaluate(()=>window.serverError||''),'');assert.equal(backend,'');console.log('Cities & Knights: direct recruit/activate/promote, free promotion, walls and downgrade OK; all editions: desktop/mobile costs first, normal rules restored and no game mutations OK');
  }finally{await browser?.close();server.kill();await once(server,'exit');}
 }
-main().catch(e=>{console.error(e);process.exitCode=1;});
+if(require.main===module)main().catch(e=>{console.error(e);process.exitCode=1;});
+module.exports={fixture,importRoom};

@@ -30,12 +30,14 @@
 .cities-level .cities-info-button,.cities-strength .cities-info-button{width:24px;min-height:32px;padding:0}
 [data-cities-info]{cursor:help}.cities-overlay [data-cities-info]:focus-visible{outline:3px solid #ffe17a}
 .cities-info-dialog[open]{display:flex;flex-direction:column;overflow:hidden;max-width:min(560px,calc(100vw - 24px))}
+.cities-dialog::backdrop{backdrop-filter:none;-webkit-backdrop-filter:none}
 .cities-info-dialog .dialog-heading{flex:none}.cities-info-body{min-height:0;overflow-y:auto;overscroll-behavior:contain}.cities-info-body p{margin:0}.cities-info-body p+p{margin-top:20px;padding-top:16px;border-top:1px solid #a8c7c5}.cities-info-body small{margin-top:12px}
 .cities-action-item{display:grid;grid-template-columns:36px minmax(0,1fr);min-width:0;border:1px solid #bcd1d2;border-radius:6px;background:#fffef6;overflow:hidden}
 .action-grid .cities-action-item>button{min-width:0;border:0;border-radius:0;background:transparent;box-shadow:none}
 .action-grid .cities-action-info{width:100%;height:100%;padding:4px;justify-content:center;opacity:1}
 .action-grid .cities-action-info svg{width:26px;height:30px}
-.cities-improvement-item{grid-template-columns:36px minmax(0,1fr) 28px}
+.action-grid .cities-action-item:has(> [data-action]:is(:disabled,.build-unavailable)) > .cities-action-info svg{filter:grayscale(1);opacity:.4}
+.cities-improvement-item,.cities-help-item{grid-template-columns:36px minmax(0,1fr) 28px}
 .action-grid .cities-action-help{width:100%;height:100%;padding:4px;justify-content:center;color:#527f8b;opacity:1}
 .action-grid .cities-action-help svg{width:18px;height:18px}
 .cities-action-item:has([data-action].selected){border-color:#bc9c3e;background:#fff0c0}
@@ -44,7 +46,7 @@
 @media(prefers-reduced-motion:reduce){.cities-knight-move-target{animation:none}}
 @media(max-width:740px){
   .cities-action-item{grid-template-columns:28px minmax(0,1fr)}
-  .cities-improvement-item{grid-template-columns:24px minmax(0,1fr) 22px}
+  .cities-improvement-item,.cities-help-item{grid-template-columns:24px minmax(0,1fr) 22px}
   .action-grid .cities-action-help{padding:2px}.action-grid .cities-action-help svg{width:16px;height:16px}
   .action-grid .cities-action-item>[data-action]{padding:5px 3px 5px 0}
   .action-grid .cities-action-info{padding:2px}.action-grid .cities-action-info svg{width:22px;height:24px}

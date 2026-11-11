@@ -685,8 +685,8 @@
               "Choose Truth only, Dare only or Mixed. The first two fix the category; in Mixed, the asker chooses Truth or Dare each round. With two players and Truth only, you can also select Answer together."
             ],
             [
-              "选择轻松 Chill、心跳 Heat、爆场 Wild、失守 Unmasked、摊牌 Showdown 五档题库，每档 30 道真心话、20 道大冒险。再设置每人整局可跳过的次数：0、1、2、3、5、10 或不限。设置开局后不变。",
-              "Choose Chill, Heat, Wild, Unmasked or Showdown; each level has 30 Truth and 20 Dare prompts. Set each player's skips for the entire game to 0, 1, 2, 3, 5, 10 or unlimited. Settings stay fixed once play starts."
+              "题库共有 200 道真心话、100 道大冒险，不分级。再设置每人整局可跳过的次数：0、1、2、3、5、10 或不限。设置开局后不变。",
+              "The bank contains 200 Truth and 100 Dare prompts, with no intensity levels. Set each player's skips for the entire game to 0, 1, 2, 3, 5, 10 or unlimited. Settings stay fixed once play starts."
             ]
           ]
         },
@@ -723,8 +723,8 @@
               "A prompt is drawn first. The asker has two replacements per round, without using anyone's skips; the allowance resets next question. A custom prompt of 1–240 characters does not use a replacement. Match the selected category; leave the custom box blank to use the drawn prompt."
             ],
             [
-              "普通问答中，提问者点击「就问这题」发出问题，然后由回答者确认，不能替对方点击完成。共同回答不需要等待发题。题库用完后重新抽取，可能再遇到之前的题目。",
-              "In paired play, the asker selects Ask this, then only the respondent confirms completion. The asker cannot confirm for them. Together mode needs no send step. Once a prompt pool is exhausted, earlier questions may appear again."
+              "普通问答中，提问者点击「就问这题」发出问题，然后由回答者确认，不能替对方点击完成。共同回答不需要等待发题。按回答者记录抽过的题：同一个人本局不会重复抽到，换掉或跳过也算抽过；不同人可以抽到相同题。共同回答给两人都记上。记录随刷新、重连和存档保留；题库用完后自己出题，不重新洗牌。旧存档没有逐人记录的题，会统一视为所有人已抽过。",
+              "In paired play, the asker selects Ask this, then only the respondent confirms completion. The asker cannot confirm for them. Together mode needs no send step. Draws are tracked per respondent: the same person never draws a prompt twice in one game, including replaced or skipped prompts. Different people may draw the same prompt; together mode records it for both. Records survive refreshes, reconnects and saves. After exhaustion, write custom prompts; the bank is not recycled. Prompts in older saves without individual records are treated as seen by everyone."
             ],
             [
               "完成后记一次；跳过不算完成，并消耗本人一次跳过机会。次数是每人整局总额，不会每题重置；刷新、重连、存档恢复或换人也不重置。用完后跳过按钮不可用，开局选「不限」则不限制。",

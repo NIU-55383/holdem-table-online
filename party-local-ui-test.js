@@ -15,11 +15,13 @@ async function main(){
     }
     async function layout(p,label){for(const width of [1440,390,320,740]){await p.setViewportSize({width,height:width===740?360:900});assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,`${label} overflow ${width}`);await p.screenshot({path:path.join(out,`${label}-${width}.png`),fullPage:true});}await p.setViewportSize({width:390,height:844});}
     const p=await page(),local=()=>p.evaluate(()=>JSON.parse(sessionStorage.getItem("boardclub-truth-local")));
+    assert.deepEqual(await p.evaluate(()=>["truth","dare"].map(kind=>TruthData.PROMPTS.filter(p=>p.kind===kind).length)),[200,100]);
+    assert.equal(await p.evaluate(()=>TruthData.PROMPTS.some(p=>"level" in p)),false);
     assert.equal(await p.locator(".prompt-preview,.bottom-note,.eyebrow,.title-row,.intro,.dice-legend,.table-corner,.edition,#levelDescription").count(),0);
     assert.equal(await p.locator("h1").textContent(),"真心话大冒险 Truth or Dare");
     assert.equal(await p.locator("#historySection h2").textContent(),"问题记录 Question History");
     assert.equal(await p.locator("#setupPlayers option").count(),7);
-    for(const level of ["chill","heat","wild","unmasked","showdown"]){await p.locator(`[data-level="${level}"]`).focus();await p.keyboard.press("Enter");assert.equal(await p.locator(`[data-level="${level}"]`).getAttribute("aria-pressed"),"true");}
+    assert.equal(await p.locator("[data-level],.levels").count(),0);
     await layout(p,"truth-new-setup");
     assert.equal(await p.locator("#rounds").count(),0);
     await p.selectOption("#setupPlayers","2");await p.fill("#localNames","Alice\nBob");await p.selectOption("#selection","chain");await p.selectOption("#skipLimit","1");await p.click("#createBtn");
@@ -44,6 +46,15 @@ async function main(){
     await p.click('[data-play="complete"][data-actor="1"]');assert.equal((await local()).game.round,1);assert(await p.locator('[data-play="complete"][data-actor="1"]').isDisabled());assert.equal(await p.locator('[data-play="reroll"]').count(),0);
     await p.click('[data-play="complete"][data-actor="0"]');assert.equal((await local()).game.round,2);await layout(p,"truth-together");
     const before=await local();await p.click("#rulesBtn");assert.match(await p.locator("#gameRulesDialog").textContent(),/two replacements per round/);await p.keyboard.press("Escape");assert.deepEqual(await local(),before);assert.equal(await p.evaluate(()=>testSent.length),0);
+    const exhausted=await p.evaluate(()=>{const s=JSON.parse(sessionStorage.getItem("boardclub-truth-local"));const ids=TruthData.PROMPTS.filter(p=>p.kind==="truth").map(p=>p.id);s.game.seenPrompts=[ids.slice(),ids.slice()];s.game.stage="prepare";s.game.prompt=null;s.game.current=s.game.asker;return s;});
+    await p.addInitScript(s=>sessionStorage.setItem("boardclub-truth-local",JSON.stringify(s)),exhausted);
+    await p.reload();assert.match(await p.locator("#promptZh").textContent(),/已抽完/);assert(await p.locator('[data-play="ask"]').isDisabled());assert(await p.locator('[data-play="reroll"]').isDisabled());
+    await layout(p,"truth-exhausted");
+    await p.fill("#customPrompt","A question beyond the bank");await p.click('[data-play="ask"]');assert.equal((await local()).game.stage,"challenge");
+    await layout(p,"truth-exhausted-custom");
+    const archiveBefore=await local();await p.click("#localExportButton");const download=p.waitForEvent("download");await p.click('[data-archive="prepare"]');const file=await download,filePath=path.join(out,"truth-no-repeat-save.json");await file.saveAs(filePath);
+    const archive=JSON.parse(fs.readFileSync(filePath));assert.deepEqual(archive.progress.seenPrompts,archiveBefore.game.seenPrompts);assert.equal("level" in archive.config,false);assert.equal("level" in archive.progress,false);
+    await p.locator('footer [data-archive="cancel"]').click();assert.deepEqual(await local(),archiveBefore);
     await p.context().close();console.log("Truth local: settings, custom/two replacements, skip budget, chain, together, refresh and layouts OK");
     for(const selection of ["random","chain","together"]){
       const a=await page(),b=await page(),players=[a,b];
@@ -52,6 +63,8 @@ async function main(){
       assert(await a.locator("#roomCode").isVisible());assert.equal(await a.locator("#roomCode").textContent(),await a.evaluate(()=>testState.code));
       await b.fill("#roomInput",await a.evaluate(()=>testState.code));await b.click("#joinForm button");await b.click("#readyBtn");await a.click("#startBtn:not([disabled])");for(const q of players)await q.waitForFunction(()=>window.testState?.game?.version===3);
       const g=await a.evaluate(()=>testState.game);
+      const {id,zh,en}=require("./truth-data").PROMPTS.find(p=>p.id===g.prompt.id);
+      assert.deepEqual(g.prompt,{id,zh,en},"online server must use the refreshed bilingual prompt bank");
       if(selection==="together"){assert.equal(await a.locator("#promptZh").textContent(),await b.locator("#promptZh").textContent());await b.click('[data-play="complete"]');await a.waitForFunction(()=>testState.game.responses[1]==="complete");assert(await b.locator('[data-play="complete"]').isDisabled());await a.click('[data-play="complete"]');}
       else{const asker=players[g.asker],answer=players[g.target];assert.equal(await answer.locator('#playActions button:not([disabled])').count(),0);await asker.fill("#customPrompt","An online question");await asker.click('[data-play="ask"]');await answer.click('[data-play="skip"]:not([disabled])');}
       await a.waitForFunction(()=>testState.game.round===2);if(selection==="chain")assert.equal(await a.evaluate(()=>testState.game.asker),g.target);

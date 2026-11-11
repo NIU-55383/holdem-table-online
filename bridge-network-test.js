@@ -47,6 +47,25 @@ test("Bridge has no teaching protocol; normal rooms and bots continue without le
   assert.equal(Object.hasOwn(a.state, "lesson"), false);
 });
 
+test("pausing while a bot thinks discards its old result and filling the vacancy resumes", async (t) => {
+  const { api, client } = await fixture(t), a = await client();
+  await a.request({ type: "create", name: "Alice", boards: 4 });
+  await a.request({ type: "fillBots" }); await a.request({ type: "start" });
+  const room = api.rooms.get(a.state.code);
+  for (const call of ["3NT", "P", "P", "P"]) E.act(room.game, E.controller(room.game), { type: "call", call });
+  process.env.BRIDGE_BOT_DELAY = "1"; api.broadcast(room);
+  await until(() => room.botJob, "A background search starts");
+  await a.request({ type: "roomControl", action: "kick", target: a.state.seats[1].socialId });
+  assert.equal(a.state.control.paused, true); assert.equal(room.botJob, null);
+  const revision = room.game.revision, hands = JSON.stringify(room.game.hands);
+  await a.request({ type: "chat", text: "chat still works" });
+  await sleep(800);
+  assert.equal(room.game.revision, revision); assert.equal(JSON.stringify(room.game.hands), hands);
+  await a.request({ type: "roomControl", action: "fillBot", target: a.state.seats[1].socialId });
+  await until(() => room.game.revision > revision, "A replacement bot resumes the game");
+  assert.equal(a.state.control.paused, false);
+});
+
 test("Bridge adapter: private hands, seat consent, host consent, vacancies, reconnection and reactions", { timeout: 20000 }, async (t) => {
   const { api, client } = await fixture(t), a = await client(), b = await client();
   await a.request({ type: "create", name: "Alice", boards: 4 }); const code = a.state.code;
@@ -126,14 +145,21 @@ test("Bridge adapter: four-board match records each result once and rematches fr
 });
 
 test("bot styles stay server-private, distinct and person-bound across swaps, reconnects and replacement", { timeout: 10000 }, async (t) => {
-  const { api, client } = await fixture(t), a = await client(), seen = new Map(), original = E.chooseBotAction;
-  t.after(() => { E.chooseBotAction = original; });
-  E.chooseBotAction = (g, actor, style) => {
-    const room = [...api.rooms.values()][0], token = room.seats[actor].token;
-    if (seen.has(token)) assert.equal(style, seen.get(token));
-    assert(Number.isInteger(style)); seen.set(token, style);
-    return { type: "call", call: "P" };
-  };
+  const Workers = require("./bridge-bot-worker"), original = Workers.createBotRunner, seen = new Map();
+  let api;
+  t.after(() => { Workers.createBotRunner = original; });
+  Workers.createBotRunner = () => ({
+    async run(code, view, actor, style) {
+      const room = api.rooms.get(code), token = room.seats[actor].token;
+      if (seen.has(token)) assert.equal(style, seen.get(token));
+      assert(Number.isInteger(style)); seen.set(token, style);
+      assert.equal(view.hands.filter(Boolean).length, 1); assert.equal(view.originalHands, null);
+      return { type: "call", call: "P" };
+    },
+    cancel() {}, close() {}
+  });
+  const f = await fixture(t); api = f.api;
+  const client = f.client, a = await client();
   await a.request({ type: "create", name: "Host", boards: 4 }); await a.request({ type: "fillBots" });
   const r = api.rooms.get(a.state.code), botTokens = r.seats.filter((p) => p.bot).map((p) => p.token);
   assert.doesNotMatch(JSON.stringify(a.state), /personality|botStyle|risk|margin|profile/);

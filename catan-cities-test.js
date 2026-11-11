@@ -21,6 +21,28 @@ test('every progress card resolves and its phase survives portable save',()=>{fo
 test('malformed city saves and mismatched edition are rejected',()=>{const g=setup();for(const mutate of [g=>g.cities.decks[0].push('crane'),g=>g.cities.players[0].levels[0]=99,g=>g.bank[5]=100,g=>{g.phase='ckChoice';g.cities.queue=[{kind:'relocate',player:0,sites:[999]}];}]){const bad=structuredClone(g);mutate(bad);assert.throws(()=>archive(bad));}});
 test('seeded bots finish three and four player games with round trips and conservation',()=>{for(const n of [3,4]){const random=rng(39+n),g=E.createGame(Array.from({length:n},(_,i)=>`Bot ${i}`),random,'cities');for(let step=0;step<3500&&g.phase!=='over';step++){const id=E.requiredActors(g)[0],a=E.chooseBotAction(g,id,random);assert(a,`${g.phase} ${JSON.stringify(g.cities.queue)}`);E.act(g,id,a,random);if(step%25===0)archive(g);C.validate(g);}assert.equal(g.phase,'over');assert(E.score(g,g.winner)>=13);}});
 
+test('knights block roads through their site, not roads arriving from an independently connected end',()=>{
+  const g=setup();g.phase='main';
+  g.board.vertices.forEach(v=>{v.owner=-1;v.level=0;});g.board.edges.forEach(e=>e.owner=-1);
+  const center=g.board.vertices.find(v=>v.edges.length===3);
+  const [entry,candidate]=center.edges.map(i=>g.board.edges[i]);
+  const far=g.board.vertices[candidate.a===center.id?candidate.b:candidate.a];
+  const other=far.edges.map(i=>g.board.edges[i]).find(e=>e.id!==candidate.id);
+  for(const active of [false,true]){
+    entry.owner=1;other.owner=-1;center.knight={owner:0,rank:1,active,activated:-1,promoted:-1};
+    assert(!E.roadSites(g,1).includes(candidate.id),'cannot extend through an opposing knight');
+    other.owner=1;
+    assert(E.roadSites(g,1).includes(candidate.id),'can approach from an existing road at the other end');
+    other.owner=-1;entry.owner=0;
+    assert(E.roadSites(g,0).includes(candidate.id),'own knight does not block own road');
+    assert(!E.settlementSites(g,0).includes(center.id),'cannot build on own knight');
+    entry.owner=1;
+    assert(!E.settlementSites(g,1).includes(center.id),'cannot build on an opponent knight');
+    delete center.knight;
+    assert(E.settlementSites(g,1).includes(center.id),'the empty site is otherwise legal');
+  }
+});
+
 test('knight move selects its source first, can cancel, displaces weaker knights and survives saving',()=>{
   const g=setup();g.phase='main';g.turn=4;
   g.board.vertices.forEach(v=>{v.owner=-1;v.level=0;});g.board.edges.forEach(e=>e.owner=-1);

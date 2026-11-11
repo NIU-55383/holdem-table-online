@@ -26,6 +26,11 @@
     const s = call.slice(1); return `<span class="${s === "H" || s === "D" ? "call-red" : ""}">${esc(call[0])}${symbols[s] || esc(s)}</span>`;
   }
   function contractHTML(c) { return !c ? "—" : c === "Passout" ? "全不叫 / Passed out" : `${c.level}${symbols[c.strain]}${c.redoubled ? " XX" : c.doubled ? " X" : ""}`; }
+  function trumpHTML(c) {
+    if (!c || c === "Passout") return "";
+    const name = c.strain === "NT" ? "无将 / No trump" : suitNames[["S", "H", "D", "C"].indexOf(c.strain)];
+    return `<div class="table-trump ${["H", "D"].includes(c.strain) ? "trump-red" : ""}" role="img" aria-label="本局将牌 / Trump: ${name}" title="${name}"><span class="table-trump-label"><span>${c.strain === "NT" ? "本局无将" : "本局将牌"}</span><span lang="en">${c.strain === "NT" ? "No trump" : "Trump"}</span></span><strong aria-hidden="true">${symbols[c.strain]}</strong></div>`;
+  }
   function cardHTML(id, playable = false, isSelected = false, tag = "button") {
     const suit = Math.floor(id / 13), rank = ranks[id % 13], symbol = ["♠", "♥", "♦", "♣"][suit];
     return `<${tag} class="playing-card ${suit === 1 || suit === 2 ? "red" : ""} ${playable ? "playable" : ""} ${isSelected ? "selected" : ""}" ${tag === "button" ? `data-card="${id}" ${!playable ? "disabled" : ""} aria-pressed="${isSelected}"` : ""} aria-label="${suitNames[suit]} ${rank}"><span class="rank">${rank}</span><span class="suit" aria-hidden="true">${symbol}</span></${tag}>`;
@@ -42,7 +47,10 @@
   function renderTable() {
     if (!state) return;
     const g = state.game;
-    $("#table").innerHTML = state.seats.map(seatHTML).join("") + `<div class="trick-center">${g?.trick.length ? g.trick.map((p) => `<div class="played played-${positionClass(p.seat)}">${cardHTML(p.card, false, false, "span")}</div>`).join("") : `<div class="center-label"><small>${g ? `第 ${g.board} 副 / Board ${g.board}` : "南北 × 东西 / NS × EW"}</small><strong>${g?.phase === "auction" ? "叫牌 / Auction" : g ? contractHTML(g.contract) : "BRIDGE"}</strong><small>${g?.phase === "play" ? "领出 / Lead" : g ? "" : "四人搭档 / Four players"}</small></div>`}</div>`;
+    const trump = trumpHTML(g?.contract);
+    const cards = (g?.trick || []).map((p) => `<div class="played played-${positionClass(p.seat)}">${cardHTML(p.card, false, false, "span")}</div>`).join("");
+    const center = trump || `<div class="center-label"><small>${g ? `第 ${g.board} 副 / Board ${g.board}` : "南北 × 东西 / NS × EW"}</small><strong>${g?.phase === "auction" ? "叫牌 / Auction" : g ? contractHTML(g.contract) : "BRIDGE"}</strong><small>${g ? "" : "四人搭档 / Four players"}</small></div>`;
+    $("#table").innerHTML = state.seats.map(seatHTML).join("") + `<div class="trick-center">${center}${cards}</div>`;
     if (!g) { $("#turnStatus").textContent = "选择座位，南北与东西分别搭档 / Choose seats: NS vs EW"; return; }
     $("#boardMeta").innerHTML = `<span>第 ${g.board} / ${state.boards} 副 · Board ${g.board} / ${state.boards}</span><span>发牌 / Dealer ${dirs[g.dealer]}</span><span class="${g.vulnerability !== "NvNv" ? "vulnerable" : ""}">${vulnerability(g)}</span>`;
     const name = esc(playerName(g.current)); let status;
@@ -94,6 +102,31 @@
       $("#contractPanel").innerHTML = `<div class="contract-title"><strong>${contractHTML(c)}</strong><small>定约 / Contract</small></div><p class="contract-note">庄家 / Declarer: <b>${esc(playerName(declarer))}</b><br>目标 / Target: <b>${c.level + 6} 墩 / tricks</b></p><div class="trick-totals"><span>南北 / NS <strong>${g.won[0]}</strong></span><span>东西 / EW <strong>${g.won[1]}</strong></span></div>${g.lastTrick ? `<button id="lastTrickBtn" class="review-button"><i data-lucide="history"></i>上一墩 / Last trick</button><div id="lastTrickCards" hidden>${g.lastTrick.cards.map((p) => `<span>${dirs[p.seat]} ${cardHTML(p.card, false, false, "span")}</span>`).join("")}<p>${esc(playerName(g.lastTrick.winner))} 赢墩 / won</p></div>` : ""}`;
     }
   }
+  const teamName = (team) => team === 0 ? "南北 / NS" : "东西 / EW";
+  function scoreButton(board, points, team) {
+    return `<button type="button" class="score-link" data-score-board="${board}" data-score-team="${team}" aria-label="第 ${board} 副 · ${teamName(team)} ${points} 分 · 计分明细 / Board ${board}: ${points} points, score breakdown" title="计分明细 / Score breakdown"><span>${points > 0 ? "+" : ""}${points}</span><i data-lucide="circle-help" aria-hidden="true"></i></button>`;
+  }
+  function showScore(board, team) {
+    const g = state?.game;
+    const record = state?.scores.find((s) => s.board === board) || (g?.phase === "over" && g.board === board ? { board, contract: g.contract, vulnerability: g.vulnerability, ...g.result } : null);
+    if (!record) return;
+    const d = BridgeScore.explain(record.contract, record.vulnerability, record.tricksTaken);
+    if (!d || d.nsScore !== record.score) { error("这副牌的计分明细暂不可用 / Score breakdown unavailable for this board"); return; }
+    const score = d.winner === team ? d.total : 0;
+    let body = `<p class="score-board">第 ${board} 副 / Board ${board}</p><h3 class="score-award">${teamName(team)} <strong>+${score}</strong><small>分 / points</small></h3>`;
+    if (d.passedOut) body += '<p>四人开头都不叫，本副没有定约，双方得 0 分。</p><p lang="en">All four players passed. There is no contract; both sides score 0.</p>';
+    else {
+      const doubling = d.multiplier === 4 ? "再加倍 / Redoubled" : d.multiplier === 2 ? "加倍 / Doubled" : "未加倍 / Undoubled";
+      body += `<dl class="score-facts"><div><dt>定约 / Contract</dt><dd>${contractHTML(record.contract)} · ${doubling}</dd></div><div><dt>庄家 / Declarer</dt><dd>${dirs[["N", "E", "S", "W"].indexOf(record.contract.declarer)]} · ${teamName(d.declaring)}</dd></div><div><dt>庄家方局况 / Vulnerability</dt><dd>${d.vulnerable ? "有局 / Vulnerable" : "无局 / Not vulnerable"}</dd></div><div><dt>庄家方赢墩 / Tricks taken</dt><dd>${d.tricksTaken} · 目标 / Target ${d.target} (6 + ${record.contract.level})</dd></div></dl>`;
+      body += d.difference < 0
+        ? `<p>庄家少拿 ${-d.difference} 墩，定约未完成。罚分计入防守方（${teamName(d.winner)}），庄家方得 0 分。</p><p lang="en">Down ${-d.difference}. Only the defenders (${d.winner === 0 ? "NS" : "EW"}) score the penalty; declarer's side scores 0.</p>`
+        : `<p>定约完成，${teamName(d.winner)}得分；防守方得 0 分。</p><p lang="en">Contract made: ${d.winner === 0 ? "NS" : "EW"} score; the defenders score 0.</p>`;
+      body += `<div class="score-breakdown">${d.rows.map((row) => `<div class="score-item" data-score-item="${row.id}"><div><strong>${row.zh}</strong><span lang="en">${row.en}</span>${row.noteZh ? `<p>${row.noteZh}<span lang="en">${row.noteEn}</span></p>` : ""}</div><div class="score-calculation">${row.formula === String(row.points) ? "+" : `${row.formula} = `}<b>${row.points}</b></div></div>`).join("")}</div><p class="score-sum">${teamName(d.winner)}<strong>${d.rows.map((row) => row.points).join(" + ")} = ${d.total}</strong></p>`;
+    }
+    $("#scoreDetails").innerHTML = body;
+    if (!$("#scoreDialog").open) $("#scoreDialog").showModal();
+    $("#scoreDetails").scrollTop = 0;
+  }
   function renderResult() {
     const g = state.game; $("#resultPanel").hidden = g?.phase !== "over";
     if (g?.phase !== "over") return;
@@ -102,7 +135,8 @@
     const winningNames = [winner, winner + 2].map(playerName).map(esc).join(" & ");
     const draw = (complete ? total : g.result.score) === 0;
     const outcome = g.result.result === 0 ? "完成 / Made" : g.result.result > 0 ? `超 ${g.result.result} 墩 / ${g.result.result} overtricks` : `宕 ${-g.result.result} 墩 / Down ${-g.result.result}`;
-    $("#resultPanel").innerHTML = `<h2>${draw ? "平局 / Draw" : `${winningNames}<br>胜利 / win${complete ? " the match" : " this board"}`}</h2><div class="result-score">${g.result.score >= 0 ? "+" : ""}${g.result.score}<small> NS</small></div><p>${contractHTML(g.contract)}${g.contract !== "Passout" ? ` · ${g.result.tricksTaken} 墩 / tricks · ${outcome}` : ""}</p><button id="reviewBtn" class="wide"><i data-lucide="eye"></i>四家手牌 / All hands</button>${state.host === state.you ? `<button id="nextBtn" class="primary wide" style="margin-top:8px" ${state.control.paused ? "disabled" : ""}><i data-lucide="${complete ? "rotate-cw" : "arrow-right"}"></i>${complete ? "再来一场 / New match" : "下一副 / Next board"}</button>` : "<p>等待房主继续 / Waiting for the host</p>"}`;
+    const scoringTeam = g.result.score < 0 ? 1 : 0;
+    $("#resultPanel").innerHTML = `<h2>${draw ? "平局 / Draw" : `${winningNames}<br>胜利 / win${complete ? " the match" : " this board"}`}</h2><div class="result-score"><small>本副得分 / Board score</small><div>${scoreButton(g.board, Math.abs(g.result.score), scoringTeam)}<small>${g.result.score === 0 ? "双方 / Both" : teamName(scoringTeam)}</small></div></div><p>${contractHTML(g.contract)}${g.contract !== "Passout" ? ` · ${g.result.tricksTaken} 墩 / tricks · ${outcome}` : ""}</p><button id="reviewBtn" class="wide"><i data-lucide="eye"></i>四家手牌 / All hands</button>${state.host === state.you ? `<button id="nextBtn" class="primary wide" style="margin-top:8px" ${state.control.paused ? "disabled" : ""}><i data-lucide="${complete ? "rotate-cw" : "arrow-right"}"></i>${complete ? "再来一场 / New match" : "下一副 / Next board"}</button>` : "<p>等待房主继续 / Waiting for the host</p>"}`;
   }
   function renderReview() {
     const g = state?.game; $("#reviewPanel").hidden = !review || !g?.originalHands;
@@ -111,6 +145,7 @@
   function render() {
     $("#setup").hidden = Boolean(state); $("#roomPanel").hidden = !state;
     if (!state) {
+      $("#scoreDialog").close();
       $("#table").innerHTML = '<img class="table-intro" src="bridge-art.svg" alt="桥牌牌桌 / Bridge table">';
       $("#boardMeta").innerHTML = '<span>四人定约桥牌 / Contract Bridge</span><span>南北 × 东西 / NS × EW</span>';
       $("#turnStatus").textContent = "等待入座 / Waiting for players"; $("#turnStatus").classList.remove("your-turn");
@@ -126,14 +161,14 @@
     }
     const totals = state.scores.reduce((s, b) => [s[0] + Math.max(b.score, 0), s[1] + Math.max(-b.score, 0)], [0, 0]);
     $("#totalScore").textContent = `NS ${totals[0]} : ${totals[1]} EW`;
-    $("#scores").innerHTML = `<table class="score-table"><thead><tr><th>副 / Board</th><th>定约 / Contract</th><th>NS</th><th>EW</th></tr></thead><tbody>${state.scores.map((s) => `<tr><td>${s.board}</td><td>${contractHTML(s.contract)}</td><td>${Math.max(s.score, 0)}</td><td>${Math.max(-s.score, 0)}</td></tr>`).join("")}</tbody></table>`;
+    $("#scores").innerHTML = `<table class="score-table"><thead><tr><th>副 / Board</th><th>定约 / Contract</th><th>NS</th><th>EW</th></tr></thead><tbody>${state.scores.map((s) => `<tr><td>${s.board}</td><td>${contractHTML(s.contract)}</td><td>${scoreButton(s.board, Math.max(s.score, 0), 0)}</td><td>${scoreButton(s.board, Math.max(-s.score, 0), 1)}</td></tr>`).join("")}</tbody></table>`;
     $("#messages").innerHTML = state.chat.map((m) => `<p><b>${esc(m.name)}</b>${esc(m.text)}</p>`).join(""); $("#messages").scrollTop = $("#messages").scrollHeight;
     social.sync(); management.sync(); icons();
   }
   function receive(next) {
     const old = state, g = next.game, key = g ? `${next.code}:${g.board}:${g.revision}` : "";
     const changed = key !== lastKey;
-    if (!old || old.code !== next.code || old.game?.board !== g?.board) { bubbles.clear(); review = false; }
+    if (!old || old.code !== next.code || old.game?.board !== g?.board) { bubbles.clear(); review = false; $("#scoreDialog").close(); }
     if (old?.code === next.code) {
       const seen = new Set(old.chat.map((m) => m.id));
       next.chat.filter((m) => !seen.has(m.id) && Date.now() - m.time < 6000).forEach((m) => { const p = next.seats[m.playerId]; if (p) bubbles.set(p.socialId, { text: m.text, until: Date.now() + 6000 }); });
@@ -186,6 +221,7 @@
   document.addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b || b.disabled) return;
     if (b.dataset.close) $("#" + b.dataset.close).close();
+    if (b.dataset.scoreBoard !== undefined) showScore(Number(b.dataset.scoreBoard), Number(b.dataset.scoreTeam));
     if (b.dataset.level) { level = Number(b.dataset.level); renderAuction(); $(`[data-level="${level}"]`)?.focus({ preventScroll: true }); }
     if (b.dataset.call) act({ type: "call", call: b.dataset.call });
     if (b.dataset.card !== undefined) { selected = Number(b.dataset.card); render(); $(".playing-card.selected")?.focus({ preventScroll: true }); }

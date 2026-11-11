@@ -8,5 +8,11 @@
  <symbol id="knight" viewBox="0 0 48 48"><path d="M13 20V13a11 11 0 0 1 22 0v7l-7 9H19z" fill="#bdced1" stroke="#31546a" stroke-width="2.5"/><path d="M14 15h20v8H14z" fill="#587584"/><path d="M20 16v6m7-6v6" stroke="#253f4c" stroke-width="2"/><path d="m24 3 3-3 6 2-4 3" fill="currentColor"/><path d="M9 29h29l-3 12H12z" fill="currentColor" stroke="#31546a" stroke-width="2.5"/><path d="M17 28v12m14-12v12" stroke="#ecf0dc" stroke-width="2"/></symbol>
  <symbol id="metropolis" viewBox="0 0 48 48"><path d="M5 40V15h9v9h6V8h9v16h6v-9h8v25z" fill="currentColor" stroke="#31546a" stroke-width="2.5"/><path d="m18 9 6-7 7 7M3 15l6-7 7 7m17 0 6-7 6 7" fill="#f4ce70" stroke="#31546a" stroke-width="2"/><path d="M20 40V29h9v11" fill="#31546a"/></symbol>
  <symbol id="wall" viewBox="0 0 48 48"><path d="M5 13h8v6h7v-6h8v6h7v-6h8v28H5z" fill="#a1b6b9" stroke="#31546a" stroke-width="2.5"/><path d="M5 28h38M14 20v8m18-8v8M22 28v12" stroke="#6a8a94" stroke-width="2"/></symbol>
+ <symbol id="wall-map" viewBox="0 0 48 22">
+  <path d="M2 20V3h8v5h4V3h8v5h4V3h8v5h4V3h8v17z" fill="#bdced1" stroke="#31546a" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M3 16h42v3H3z" fill="#8aa6ae"/>
+  <path d="M3 12h42M9 8v4m12-4v4m12-4v4M15 12v7m12-7v7m12-7v7" fill="none" stroke="#587d8b" stroke-width="1.6"/>
+  <path d="M4 5h4m8 0h4m8 0h4m8 0h4" stroke="#eef4e7" stroke-width="1.6"/>
+ </symbol>
  <symbol id="barbarians" viewBox="0 0 48 48"><path d="M24 4v29" stroke="#31546a" stroke-width="3"/><path d="M26 7h13l-2 20H26zM21 10 7 27h14z" fill="#cc6153" stroke="#31546a" stroke-width="2"/><path d="m32 12 4 3-4 6-4-6z" fill="#f8da7c"/><path d="M5 31h36l-7 9H13z" fill="#587584" stroke="#263f50" stroke-width="2.5"/><circle cx="16" cy="34" r="2.5" fill="#f8da7c"/><circle cx="25" cy="34" r="2.5" fill="#f8da7c"/><path d="M4 44q5-4 10 0t10 0t10 0t10 0" fill="none" stroke="#8fd4de" stroke-width="2"/></symbol>
 </svg>

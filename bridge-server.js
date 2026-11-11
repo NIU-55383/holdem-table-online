@@ -10,12 +10,13 @@ const { createRoomControl } = require("./room-control");
 function attachBridge(server) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 2200000 });
   const rooms = new Map(), sessions = new Map();
+  const botRunner = require("./bridge-bot-worker").createBotRunner();
   const personalities = new WeakMap(), styleCount = require("./bridge-bot").profileCount;
   const send = (ws, data) => { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); };
   const fail = (ok, message) => { if (!ok) throw new Error(message); };
   const clean = (v, n = 18) => String(v || "").trim().replace(/\s+/g, " ").slice(0, n);
   const online = (p) => p.ws?.readyState === WebSocket.OPEN;
-  const stop = (r) => { clearTimeout(r.timer); r.timer = null; r.timerKey = null; };
+  const stop = (r) => { clearTimeout(r.timer); r.timer = null; r.timerKey = null; botRunner.cancel(r.code); r.botJob = null; };
   const control = createRoomControl({ rooms, active: (r) => r.game && r.game.phase !== "over", started: (r) => Boolean(r.game),
     actors: (r) => E.requiredActors(r.game), turnKey: (r) => r.game && `${r.game.board}:${r.game.revision}`,
     stop, changed: broadcast, remove: (r, p) => { const s = sessions.get(p.token); if (s) s.room = ""; send(p.ws, { type: "left", reason: "房主已将你移出房间 / Removed by the host" }); } });
@@ -51,16 +52,24 @@ function attachBridge(server) {
     const automatic = actor >= 0 && !r.seats[actor].vacant && (r.seats[actor].bot || r.seats[actor].auto);
     if (control.paused(r) || !g || g.phase === "over" || !r.seats.some((p) => !p.bot && online(p)) || (g.phase !== "trick" && !automatic)) { stop(r); return; }
     const key = `${g.board}:${g.revision}:${actor}`;
-    if (r.timer && r.timerKey === key) return;
+    if (r.timer && r.timerKey === key || r.botJob?.key === key) return;
     stop(r); r.timerKey = key;
-    r.timer = setTimeout(() => {
+    r.timer = setTimeout(async () => {
       r.timer = null; r.timerKey = null;
       if (r.game !== g || `${g.board}:${g.revision}:${E.controller(g)}` !== key || control.paused(r)) return schedule(r);
       try {
         if (g.phase === "trick") E.advanceTrick(g);
-        else { if (!(r.seats[actor].bot || r.seats[actor].auto)) return; E.act(g, actor, E.chooseBotAction(g, actor, personalities.get(r.seats[actor]) ?? 0)); }
+        else {
+          if (!(r.seats[actor].bot || r.seats[actor].auto)) return;
+          const job = { key }; r.botJob = job;
+          const action = await botRunner.run(r.code, E.publicGame(g, actor), actor, personalities.get(r.seats[actor]) ?? 0);
+          if (!action || r.botJob !== job || r.game !== g || `${g.board}:${g.revision}:${E.controller(g)}` !== key || control.paused(r)) return;
+          r.botJob = null;
+          if (!(r.seats[actor].bot || r.seats[actor].auto) || !r.seats.some((p) => !p.bot && online(p))) return;
+          E.act(g, actor, action);
+        }
         broadcast(r);
-      } catch (err) { console.error("Bridge automatic action:", err); r.seats.forEach((p) => send(p.ws, { type: "error", message: "自动行动失败，请重新连接 / Automatic action failed; reconnect" })); }
+      } catch (err) { r.botJob = null; console.error("Bridge automatic action:", err); r.seats.forEach((p) => send(p.ws, { type: "error", message: "自动行动失败，请重新连接 / Automatic action failed; reconnect" })); }
     }, Number(process.env.BRIDGE_BOT_DELAY) || (g.phase === "trick" ? 1500 : 850));
     r.timer.unref?.();
   }
@@ -176,7 +185,7 @@ function attachBridge(server) {
     for (const [token, s] of sessions) if (!s.ws && Date.now() - s.updated > 24 * 3600000) sessions.delete(token);
   }, 30000);
   heartbeat.unref();
-  server.on("close", () => { archives.close(); control.close(); clearInterval(heartbeat); rooms.forEach(stop); wss.clients.forEach((ws) => ws.terminate()); wss.close(); });
+  server.on("close", () => { archives.close(); control.close(); clearInterval(heartbeat); rooms.forEach(stop); botRunner.close(); wss.clients.forEach((ws) => ws.terminate()); wss.close(); });
   return { rooms, broadcast, upgrade(req, socket, head) { wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req)); } };
 }
 module.exports = { attachBridge };

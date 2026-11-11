@@ -15,7 +15,7 @@ function previousCard(g) {
   const winning = legal.filter((c) => E.Core.Card.compare(cards[best], E.Core.Card.numberToCard(c), g.contract.strain) < 0);
   return cheapest(winning.length ? winning : legal);
 }
-function benchmark(boards = 32) {
+function benchmark(boards = 32, baseline = null) {
   let netScore = 0, trickGain = 0, ahead = 0, tied = 0; const durations = [];
   const start = performance.now();
   for (let seed = 1; seed <= boards; seed++) {
@@ -26,7 +26,7 @@ function benchmark(boards = 32) {
       while (g.phase !== "over") {
         if (g.phase === "trick") { E.advanceTrick(g); continue; }
         const actor = E.controller(g), at = performance.now();
-        const action = actor % 2 === newPair ? E.chooseBotAction(g, actor) : { type: "play", card: previousCard(g) };
+        const action = actor % 2 === newPair ? E.chooseBotAction(g, actor) : baseline ? baseline.chooseAction(E.publicGame(g, actor), actor) : { type: "play", card: previousCard(g) };
         if (actor % 2 === newPair) durations.push(performance.now() - at);
         E.act(g, actor, action);
       }
@@ -39,5 +39,15 @@ function benchmark(boards = 32) {
   return { pairedDeals: boards, games: boards * 2, ahead, tied, behind: boards - ahead - tied, netScore, trickGain,
     averageMs: +(durations.reduce((a, b) => a + b, 0) / durations.length).toFixed(2), p95Ms: +durations[Math.floor(durations.length * .95)].toFixed(2), maxMs: +durations.at(-1).toFixed(2), elapsedSeconds: +((performance.now() - start) / 1000).toFixed(2) };
 }
-if (require.main === module) console.log(JSON.stringify(benchmark(Number(process.argv[2]) || 32), null, 2));
+if (require.main === module) {
+  let baseline = null;
+  if (process.argv[3]) {
+    const Module = require("node:module"), path = require("node:path");
+    const saved = new Module(path.join(__dirname, "bridge-bot-baseline.js"), module);
+    saved.filename = saved.id; saved.paths = module.paths;
+    saved._compile(require("node:fs").readFileSync(process.argv[3], "utf8"), saved.filename);
+    baseline = saved.exports;
+  }
+  console.log(JSON.stringify(benchmark(Number(process.argv[2]) || 32, baseline), null, 2));
+}
 module.exports = { benchmark, previousCard };

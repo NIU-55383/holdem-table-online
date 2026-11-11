@@ -34,14 +34,18 @@ function unchanged(game, fn) {
   assert.equal(JSON.stringify(game), before, "Rejected actions must leave the state unchanged");
 }
 
-test("Prompt bank: 250 unique bilingual cards, 30 truths and 20 dares in each of five levels", () => {
-  assert.equal(D.PROMPTS.length, 250);
-  assert.deepEqual(D.LEVELS, ["chill", "heat", "wild", "unmasked", "showdown"]);
-  assert.deepEqual(E.LEVELS, D.LEVELS);
-  for (const field of ["id", "zh", "en"]) assert.equal(new Set(D.PROMPTS.map(p => p[field])).size, 250);
-  for (const level of D.LEVELS) for (const kind of ["truth", "dare"]) {
-    assert.equal(D.PROMPTS.filter(p => p.level === level && p.kind === kind).length, kind === "truth" ? 30 : 20);
+test("Prompt bank: 300 unique bilingual cards in two ungraded categories", () => {
+  assert.equal(D.PROMPTS.length, 300);
+  assert.equal(D.PROMPTS.filter(p => p.kind === "truth").length, 200);
+  assert.equal(D.LEVELS, undefined);
+  assert.equal(E.LEVELS, undefined);
+  assert(D.PROMPTS.every(p => !Object.hasOwn(p, "level")));
+  for (const field of ["id", "zh", "en"]) assert.equal(new Set(D.PROMPTS.map(p => p[field])).size, 300);
+  for (const field of ["zh", "en"]) {
+    const normalized = D.PROMPTS.map(p => p[field].toLowerCase().replace(/[\p{P}\p{Z}\s]/gu, ""));
+    assert.equal(new Set(normalized).size, 300, "Punctuation must not disguise a duplicate prompt");
   }
+  for (const kind of ["truth", "dare"]) assert.equal(D.PROMPTS.filter(p => p.kind === kind).length, kind === "truth" ? 200 : 100);
   for (const prompt of D.PROMPTS) {
     assert.match(prompt.id, /^(chill|heat|wild|unmasked|showdown)-(truth|dare)-[0-9]{2}$/);
     assert.match(prompt.zh, /[\u4e00-\u9fff]/);
@@ -57,7 +61,7 @@ test("V2 creation validates mode/options and records total contest count", () =>
   assert.equal(game.phase, "playing");
   assert.equal(game.round, 1);
   assert.equal(game.rounds, 3);
-  assert.equal(game.level, "heat");
+  assert.equal(game.level, undefined);
   assert.equal(game.mode, "mixed");
   assert.equal(game.asker, -1);
   assert.equal(game.target, -1);
@@ -112,7 +116,7 @@ test("Truth-only and dare-only auto-draw; mixed gives only the highest roller th
       unchanged(game, () => E.act(game, 0, { type: "choose", kind: mode }, fixed(0)));
     }
     assert.equal(game.stage, "prepare");
-    assert.match(game.prompt.id, new RegExp("^chill-" + game.kind));
+    assert.equal(D.PROMPTS.find(p => p.id === game.prompt.id).kind, game.kind);
   }
 });
 
@@ -256,29 +260,19 @@ test("Custom questions are trimmed plain text with 1–240 Unicode characters an
   }
 });
 
-test("Unlimited preparation replacements exhaust each category before repeating, without points or extra contests", () => {
-  for (const level of E.LEVELS) for (const kind of ["truth", "dare"]) {
-    const game = prepare(E.createGame(2, { level, mode: kind }));
-    const expectedIds = new Set(D.PROMPTS.filter(p => p.level === level && p.kind === kind).map(p => p.id));
-    assert.equal(expectedIds.size, kind === "truth" ? 30 : 20);
-    let previous;
-    for (let cycle = 0; cycle < 3; cycle++) {
-      const seen = new Set();
-      for (let index = 0; index < expectedIds.size; index++) {
-        if (cycle || index) E.act(game, 0, { type: "reroll" }, fixed(0));
-        assert(expectedIds.has(game.prompt.id), "Draws must remain in their selected level and category");
-        assert.equal(seen.has(game.prompt.id), false);
-        assert.notEqual(game.prompt.id, previous);
-        previous = game.prompt.id;
-        seen.add(game.prompt.id);
-        assert.equal(game.kind, kind);
-        assert.equal(game.current, game.asker);
-        assert.equal(game.turns, 0);
-        assert.deepEqual(game.scores, [0, 0]);
-        assert.equal(game.used[level + "/" + kind].length, index + 1);
-      }
-      assert.deepEqual(seen, expectedIds, "Every card in the pool appears exactly once per cycle");
+test("Legacy dice draws exhaust each respondent's full category without recycling", () => {
+  for (const kind of ["truth", "dare"]) {
+    const game = prepare(E.createGame(2, { mode: kind }));
+    const expectedIds = new Set(D.PROMPTS.filter(p => p.kind === kind).map(p => p.id)), seen = new Set();
+    for (let index = 0; index < expectedIds.size; index++) {
+      if (index) E.act(game, 0, { type: "reroll" }, fixed(0));
+      assert(expectedIds.has(game.prompt.id)); assert(!seen.has(game.prompt.id));
+      seen.add(game.prompt.id);
+      assert.equal(game.seenPrompts[1].length, index + 1);
     }
+    assert.deepEqual(seen, expectedIds); assert.equal(game.seenPrompts[0].length, 0);
+    unchanged(game, () => E.act(game, 0, { type: "reroll" }, fixed(0)));
+    assert.equal(game.turns, 0); assert.deepEqual(game.scores, [0, 0]);
   }
 });
 
@@ -328,12 +322,12 @@ test("Snapshots isolate nested arrays and tie state; JSON restore resumes the ex
   copy.dice[0] = 1;
   copy.tieHistory[0].dice[0] = 99;
   copy.prompt.zh = "changed";
-  copy.used["heat/truth"].push("fake");
+  copy.seenPrompts[2].push("fake");
   assert.equal(restored.scores[0], 0);
   assert.equal(restored.dice[0], 6);
   assert.equal(restored.tieHistory[0].dice[0], 3);
   assert.notEqual(restored.prompt.zh, "changed");
-  assert.equal(restored.used["heat/truth"].includes("fake"), false);
+  assert.equal(restored.seenPrompts[2].includes("fake"), false);
 });
 
 test("Wrong actors/stages, malformed actions and invalid RNG are rejected atomically", () => {
@@ -364,7 +358,7 @@ function browserEngine(crypto) {
 }
 
 test("Browser UMD uses unbiased rejection sampling for dice and prompt draws", () => {
-  const words = [0xffffffff, 5, 0xffffffff, 6, 0xffffffff, 29];
+  const words = [0xffffffff, 5, 0xffffffff, 6, 0xffffffff, 199];
   let calls = 0;
   const browser = browserEngine({ getRandomValues(buffer) {
     assert.ok(words.length > 0); buffer[0] = words.shift(); calls++; return buffer;
@@ -375,7 +369,7 @@ test("Browser UMD uses unbiased rejection sampling for dice and prompt draws", (
   assert.equal(calls, 6);
   assert.equal(game.dice[0], 6);
   assert.equal(game.dice[1], 1);
-  assert.equal(game.prompt.id, "chill-truth-30");
+  assert.equal(game.prompt.id, "showdown-truth-40");
   assert.equal(game.asker, 0);
   assert.equal(game.target, 1);
 });

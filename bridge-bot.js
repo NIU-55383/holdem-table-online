@@ -3,6 +3,7 @@
 const { Card, Score, Trick } = require("./vendor/bridge-core");
 const DIRS = ["N", "E", "S", "W"], SUITS = ["S", "H", "D", "C"];
 const OBJECTS = Array.from({ length: 52 }, (_, i) => Card.numberToCard(i));
+const COMPARISONS = Object.fromEntries([...SUITS, "NT"].map((trump) => [trump, OBJECTS.map((a) => OBJECTS.map((b) => Card.compare(a, b, trump)))]));
 const suit = (c) => Math.floor(c / 13), rank = (c) => c % 13;
 const points = (c) => Math.max(0, 4 - rank(c));
 const profiles = Object.freeze([
@@ -23,8 +24,13 @@ function handInfo(hand) {
 function bidsOf(v) { return v.auction.filter((a) => /^[1-7]/.test(a.call)).map((a) => ({ ...a, level: Number(a.call[0]), strain: a.call.slice(1) })); }
 function inferBid(v, seat) {
   const bids = bidsOf(v), own = bids.filter((a) => a.seat === seat), first = own[0];
-  const model = { min: 0, max: 40, lengths: [0, 0, 0, 0] };
-  if (!first) { if (v.auction.some((a) => a.seat === seat && a.call === "P")) model.max = 11; return model; }
+  const model = { min: 0, max: 40, lengths: [0, 0, 0, 0], balanced: false };
+  if (!first) {
+    const firstCall = v.auction.findIndex((a) => a.seat === seat);
+    // An opening pass limits strength; declining to overcall does not.
+    if (firstCall >= 0 && v.auction[firstCall].call === "P" && !v.auction.slice(0, firstCall).some((a) => /^[1-7]/.test(a.call))) model.max = 12;
+    return model;
+  }
   const opening = bids[0], responding = first.seat % 2 === opening.seat % 2 && first !== opening;
   if (first === opening) {
     [model.min, model.max] = first.call === "1NT" ? [15, 17] : first.call === "2NT" ? [20, 21] : first.call === "3NT" ? [25, 27] : first.call === "2C" ? [22, 40] : first.level >= 2 ? [6, 11] : [12, 21];
@@ -37,14 +43,20 @@ function inferBid(v, seat) {
   for (const bid of own) {
     const s = SUITS.indexOf(bid.strain); if (s < 0 || bid.call === "2C" && bid === opening || bid.call === "2D" && opening.call === "2C" && bid === first) continue;
     const raise = responding && bid.strain === opening.strain;
-    model.lengths[s] = Math.max(model.lengths[s], raise ? s < 2 ? 3 : 4 : bid === opening ? bid.level >= 2 ? bid.level + 4 : s < 2 ? 5 : 3 : 4);
+    model.lengths[s] = Math.max(model.lengths[s], raise ? s < 2 ? 3 : 4 : bid === opening ? bid.level >= 2 ? Math.min(8, bid.level + 4) : s < 2 ? 5 : 3 : !responding && bid === first || responding && opening.strain === "NT" && s < 2 ? 5 : 4);
   }
   if (own.length >= 2) {
     const last = own.at(-1);
     if (first === opening && last.strain === "NT") [model.min, model.max] = first.call === "2C" ? last.level === 2 ? [22, 24] : [25, 27] : last.level === 1 ? [12, 14] : last.level === 2 ? [18, 19] : [19, 24];
-    if (last.strain === first.strain && last.strain !== "NT" && own.length > 1 && first === opening) model.lengths[SUITS.indexOf(last.strain)] = Math.max(6, model.lengths[SUITS.indexOf(last.strain)]);
+    const supported = bids.some((a) => a.seat === (seat + 2) % 4 && a.strain === first.strain);
+    if (last.strain === first.strain && last.strain !== "NT" && !supported && first === opening) model.lengths[SUITS.indexOf(last.strain)] = Math.max(6, model.lengths[SUITS.indexOf(last.strain)]);
   }
+  model.balanced = !responding && first.strain === "NT" || first === opening && own.at(-1).strain === "NT";
   return model;
+}
+function supportValue(hand, trump) {
+  const h = handInfo(hand);
+  return h.hcp + h.lengths.reduce((n, length, s) => n + (s === trump ? 0 : length === 0 ? 3 : length === 1 ? 2 : length === 2 ? 1 : 0), 0);
 }
 function chooseBid(v, actor, style) {
   const h = handInfo(v.hands[actor]), p = profile(style), legal = v.legalCalls;
@@ -62,7 +74,8 @@ function chooseBid(v, actor, style) {
     if (h.hcp >= 22) return "2C";
     if (h.balanced && h.hcp >= 15 && h.hcp <= 17) return "1NT";
     if (h.hcp >= 12 + margin || h.hcp >= 10 && h.hcp + [...h.lengths].sort((a, b) => b - a).slice(0, 2).reduce((a, b) => a + b) >= 20 + margin) {
-      const s = h.lengths[0] >= 5 ? 0 : h.lengths[1] >= 5 ? 1 : h.lengths[2] >= 4 && h.lengths[2] >= h.lengths[3] ? 2 : 3;
+      const major = [0, 1].filter((s) => h.lengths[s] >= 5).sort((a, b) => h.lengths[b] - h.lengths[a] || a - b)[0];
+      const s = major ?? (h.lengths[2] >= 4 && h.lengths[2] >= h.lengths[3] ? 2 : 3);
       return `1${SUITS[s]}`;
     }
     const honors = v.hands[actor].filter((c) => suit(c) === longest && rank(c) <= 4).length;
@@ -85,7 +98,7 @@ function chooseBid(v, actor, style) {
     }
     if (!own.length && first === opening && first.level === 1) {
       const s = SUITS.indexOf(first.strain), fit = s >= 0 && h.lengths[s] >= (s < 2 ? 3 : 5);
-      const strength = h.hcp + (fit ? h.supportPoints : 0);
+      const strength = fit ? supportValue(v.hands[actor], s) : h.hcp;
       if (fit && strength >= 6 + margin) {
         if (s < 2) return pick(`${strength >= 13 + margin ? 4 : strength >= 10 + margin ? 3 : 2}${first.strain}`);
         if (h.balanced && h.hcp >= 13 && stops) return pick("3NT");
@@ -98,9 +111,15 @@ function chooseBid(v, actor, style) {
       }
       return pick(h.hcp >= 13 + margin && stops ? "3NT" : h.hcp >= 11 + margin && h.balanced ? "2NT" : "1NT", fit ? `2${first.strain}` : "P");
     }
+    // With a five-card natural response to NT, opener chooses the major only with support.
+    if (own[0] === opening && own[0].strain === "NT" && recent.strain !== "NT") {
+      const s = SUITS.indexOf(recent.strain);
+      if (s < 2 && s >= 0 && recent.level >= 3) return h.lengths[s] >= 3 ? pick(`4${recent.strain}`) : pick("3NT");
+      if (s < 2 && s >= 0 && recent.level === 2) return "P";
+    }
     const fits = [0, 1, 2, 3].filter((s) => h.lengths[s] + pm.lengths[s] >= 8);
     const fit = fits.sort((a, b) => (a < 2 ? 0 : 1) - (b < 2 ? 0 : 1) || h.lengths[b] + pm.lengths[b] - h.lengths[a] - pm.lengths[a])[0];
-    const total = h.hcp + pm.min + (fit !== undefined ? Math.min(3, h.supportPoints) : 0);
+    const total = h.hcp + pm.min + (fit !== undefined ? Math.min(3, supportValue(v.hands[actor], fit) - h.hcp) : 0);
     if (fit !== undefined) {
       const strain = SUITS[fit], game = fit < 2 ? 4 : 5, gamePoints = fit < 2 ? 25 : 29;
       if (total >= 33 + margin && h.hcp + pm.min >= 30 && h.stops.filter(Boolean).length >= 3) return pick(`6${strain}`);
@@ -180,6 +199,7 @@ function sampleDeals(v, actor, count = 8) {
       const original = [...hands[s], ...k.played.filter((p) => p.seat === s).map((p) => p.card)], h = handInfo(original), m = models[s];
       penalty += Math.max(0, m.min - h.hcp, h.hcp - m.max) * .13;
       penalty += m.lengths.reduce((n, min, i) => n + Math.max(0, min - h.lengths[i]) * .35, 0);
+      if (m.balanced && !h.balanced) penalty += 1.5 + h.lengths.reduce((n, length) => n + Math.max(0, 2 - length), 0);
     }
     output.push({ hands, weight: Math.max(.02, Math.exp(-penalty)) });
   }
@@ -187,7 +207,7 @@ function sampleDeals(v, actor, count = 8) {
 }
 function legal(hand, trick) { return Trick.generatePlayableCards(trick.map((p) => OBJECTS[p.card]), hand.map((c) => OBJECTS[c])).map(Card.cardToNumber); }
 function currentWinner(trick, trump) {
-  let best = trick[0]; for (const p of trick.slice(1)) if (Card.compare(OBJECTS[best.card], OBJECTS[p.card], trump) < 0) best = p; return best;
+  let best = trick[0]; for (const p of trick.slice(1)) if (COMPARISONS[trump][best.card][p.card] < 0) best = p; return best;
 }
 const cheapest = (cards) => [...cards].sort((a, b) => rank(b) - rank(a) || a - b)[0];
 function rollCard(hands, turn, trick, trump) {
@@ -201,13 +221,13 @@ function rollCard(hands, turn, trick, trump) {
     const sequence = hand.filter((c) => suit(c) === s && hand.includes(c + 1) && rank(c) <= 3);
     return sequence[0] ?? cheapest(hand.filter((c) => suit(c) === s));
   }
-  const best = currentWinner(trick, trump), winning = choices.filter((c) => Card.compare(OBJECTS[best.card], OBJECTS[c], trump) < 0);
+  const best = currentWinner(trick, trump), winning = choices.filter((c) => COMPARISONS[trump][best.card][c] < 0);
   if (best.seat % 2 === turn % 2) {
     const remaining = 4 - trick.length - 1;
     let threatened = false;
     for (let offset = 1; offset <= remaining; offset++) {
       const next = (turn + offset) % 4;
-      if (next % 2 !== turn % 2 && legal(hands[next], trick).some((c) => Card.compare(OBJECTS[best.card], OBJECTS[c], trump) < 0)) threatened = true;
+      if (next % 2 !== turn % 2 && legal(hands[next], trick).some((c) => COMPARISONS[trump][best.card][c] < 0)) threatened = true;
     }
     if (!threatened) return cheapest(choices);
   }
@@ -225,18 +245,40 @@ function rollout(state, trump) {
   return state.won[0];
 }
 function copy(s) { return { hands: s.hands.map((h) => [...h]), turn: s.turn, trick: [...s.trick], won: [...s.won] }; }
-// Bounded minimax for small endings, with rollout evaluation at the node limit.
-function ending(state, trump, budget, alpha = -1, beta = 14) {
+function distinctCards(choices, remaining) {
+  const live = new Set(remaining), mine = new Set(choices);
+  return [...choices].sort((a, b) => b - a).filter((c) => {
+    for (let next = c + 1; next < (suit(c) + 1) * 13; next++) {
+      if (!live.has(next)) continue;
+      return !mine.has(next);
+    }
+    return true;
+  });
+}
+// Equivalent ranks share a branch. Midgame searches finish the current trick;
+// the last five tricks use bounded full-depth alpha-beta instead.
+function ending(state, trump, budget, depth = Infinity, alpha = -1, beta = 14) {
   if (!state.hands.some((h) => h.length)) return state.won[0];
-  if (--budget.nodes < 0) return rollout(copy(state), trump);
+  if (depth === 0 || --budget.nodes < 0) return rollout(copy(state), trump);
+  const alphaStart = alpha, betaStart = beta;
+  const key = budget.cache ? `${state.hands.map((h) => [...h].sort((a, b) => a - b).join(",")).join("/")}|${state.turn}|${state.won[0]}|${state.trick.map((p) => `${p.seat}:${p.card}`).join(",")}` : null;
+  const cached = key && budget.cache.get(key);
+  if (cached) {
+    if (cached.bound === "exact") return cached.value;
+    if (cached.bound === "lower") alpha = Math.max(alpha, cached.value); else beta = Math.min(beta, cached.value);
+    if (alpha >= beta) return cached.value;
+  }
   const maximize = state.turn % 2 === 0; let best = maximize ? -1 : 14;
-  const choices = legal(state.hands[state.turn], state.trick).sort((a, b) => rank(a) - rank(b));
+  const choices = distinctCards(legal(state.hands[state.turn], state.trick), [...state.hands.flat(), ...state.trick.map((p) => p.card)]);
+  const preferred = rollCard(state.hands, state.turn, state.trick, trump);
+  choices.sort((a, b) => Number(b === preferred) - Number(a === preferred) || rank(a) - rank(b));
   for (const c of choices) {
-    const next = copy(state); play(next, c, trump); const value = ending(next, trump, budget, alpha, beta);
+    const next = copy(state); play(next, c, trump); const value = ending(next, trump, budget, depth - 1, alpha, beta);
     best = maximize ? Math.max(best, value) : Math.min(best, value);
     if (maximize) alpha = Math.max(alpha, best); else beta = Math.min(beta, best);
     if (alpha >= beta) break;
   }
+  if (key && budget.nodes >= 0) budget.cache.set(key, { value: best, bound: best <= alphaStart ? "upper" : best >= betaStart ? "lower" : "exact" });
   return best;
 }
 function preference(v, actor, c, style) {
@@ -252,21 +294,28 @@ function preference(v, actor, c, style) {
     if (SUITS[suit(c)] !== trump && rank(c) !== 0 && remainingHigher.length && h.some((n) => suit(n) === suit(c) && rank(n) === 0)) value -= .03;
   } else {
     const best = currentWinner(v.trick, trump);
-    if (best.seat % 2 === actor % 2 && Card.compare(OBJECTS[best.card], OBJECTS[c], trump) < 0) value -= .04;
+    if (best.seat % 2 === actor % 2 && COMPARISONS[trump][best.card][c] < 0) value -= .04;
   }
   return value;
 }
 function chooseCard(v, actor, style = 0) {
-  const choices = v.legalCards; if (choices.length === 1) return choices[0];
-  const deals = sampleDeals(v, actor), p = profile(style), trump = v.contract.strain, declarer = DIRS.indexOf(v.contract.declarer);
-  const smallEnding = v.counts.every((n) => n <= 3), candidates = [];
+  if (v.legalCards.length === 1) return v.legalCards[0];
+  const played = new Set(playedCards(v).map((p) => p.card));
+  const remaining = Array.from({ length: 52 }, (_, c) => c).filter((c) => !played.has(c) || v.trick.some((p) => p.card === c));
+  const choices = distinctCards(v.legalCards, remaining);
+  if (choices.length === 1) return choices[0];
+  const smallEnding = v.counts.every((n) => n <= 5);
+  const deals = sampleDeals(v, actor, smallEnding ? 16 : 24), p = profile(style), trump = v.contract.strain, declarer = DIRS.indexOf(v.contract.declarer), candidates = [];
+  if (smallEnding) deals.forEach((deal) => { deal.cache = new Map(); });
+  const scores = Array.from({ length: 14 }, (_, tricks) => Score.calculate(v.contract, v.vulnerability, tricks).score / 100 * (actor % 2 === 0 ? 1 : -1));
   for (const card of choices) {
     let sum = 0, squares = 0, weights = 0;
     for (const deal of deals) {
       const state = { hands: deal.hands.map((h) => [...h]), turn: v.current, trick: [...v.trick], won: [...v.won] };
       play(state, card, trump);
-      const ns = smallEnding ? ending(state, trump, { nodes: 1800 }) : rollout(state, trump), tricks = declarer % 2 === 0 ? ns : 13 - ns;
-      const value = Score.calculate(v.contract, v.vulnerability, tricks).score / 100 * (actor % 2 === 0 ? 1 : -1);
+      const depth = smallEnding ? Infinity : state.trick.length ? 4 - state.trick.length : 0;
+      const ns = ending(state, trump, { nodes: smallEnding ? 2400 : 64, cache: deal.cache }, depth), tricks = declarer % 2 === 0 ? ns : 13 - ns;
+      const value = scores[tricks];
       sum += value * deal.weight; squares += value * value * deal.weight; weights += deal.weight;
     }
     const mean = weights ? sum / weights : 0, variance = weights ? Math.max(0, squares / weights - mean * mean) : 0;

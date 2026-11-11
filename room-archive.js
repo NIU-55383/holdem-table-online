@@ -212,7 +212,11 @@ function encode(kind, room) {
   }
   const config = pick(room, CONFIG[kind]);
   if (kind === "million" && config.edition === undefined) config.edition = progress.edition ?? "2016";
-  if (kind === "truth") Object.assign(config, { rounds: progress.rounds, selection: progress.selection || "dice", skipLimit: progress.skipLimit ?? -1 });
+  if (kind === "truth") {
+    progress = require("./truth-engine").snapshot(progress);
+    delete config.level;
+    Object.assign(config, { rounds: progress.rounds, selection: progress.selection || "dice", skipLimit: progress.skipLimit ?? -1 });
+  }
   const archive = { format: FORMAT, version: 1, game: kind, savedAt: new Date().toISOString(),
     positions: seats.map((p, i) => p.position ?? i), config, progress };
   checkTree(archive);
@@ -283,8 +287,14 @@ function validateProgress(kind, g, count, config) {
     fail(Array.isArray(g.auction) && g.auction.length <= 320 && Array.isArray(g.tricks) && g.tricks.length <= 13 && Array.isArray(g.trick) && g.trick.length <= 4);
     fail(require("./bridge-engine").Core.Auction.isAuctionValid(g.auction));
   } else if (kind === "truth") {
+    const E = require("./truth-engine"), ids = new Set(require("./truth-data").PROMPTS.map(p => p.id));
+    const promptList = list => Array.isArray(list) && list.length <= ids.size && list.every(id => ids.has(id)) && new Set(list).size === list.length;
     fail([2, 3].includes(g.version) && g.playerCount === count && ["playing", "over"].includes(g.phase) && ["roll", "choose", "prepare", "challenge"].includes(g.stage));
-    fail(integer(g.current, 0, count - 1) && (g.version === 3 ? [0, 3, 5, 8] : [3, 5, 8]).includes(g.rounds) && Array.isArray(g.scores) && g.scores.length === count && require("./truth-engine").LEVELS.includes(g.level));
+    fail(integer(g.current, 0, count - 1) && (g.version === 3 ? [0, 3, 5, 8] : [3, 5, 8]).includes(g.rounds) && Array.isArray(g.scores) && g.scores.length === count && E.validLegacyLevel(g.level) && E.validLegacyLevel(config.level));
+    fail(E.MODES.includes(g.mode) && config.mode === g.mode && Array.isArray(g.history) && g.history.length <= 12);
+    fail(g.seenPrompts === undefined || (Array.isArray(g.seenPrompts) && g.seenPrompts.length === count && g.seenPrompts.every(promptList)));
+    fail(g.used === undefined || (g.used && typeof g.used === "object" && !Array.isArray(g.used) && Object.keys(g.used).length <= 10 && Object.values(g.used).every(promptList)));
+    delete config.level;
     if (g.version === 3) {
       fail(integer(g.turns, 0, Number.MAX_SAFE_INTEGER - 1) && integer(g.round, 1, g.turns + 1));
       fail(count <= 8 && require("./truth-engine").SELECTIONS.includes(g.selection) && integer(g.skipLimit, -1, 10));
@@ -293,8 +303,9 @@ function validateProgress(kind, g, count, config) {
       fail(g.skipLimit === -1 || g.skipsUsed.every(n => n <= g.skipLimit));
       fail(Array.isArray(g.responses) && g.responses.length === count && g.responses.every(v => v === null || v === "skip" || v === "complete"));
       fail(config.selection === g.selection && config.skipLimit === g.skipLimit);
-      require("./truth-engine").resumeEndless(g); config.rounds = 0;
+      config.rounds = 0;
     } else Object.assign(config, { selection: "dice", skipLimit: -1 });
+    E.resumeEndless(g);
   } else if (kind === "million") {
     const edition = g.edition === undefined && g.version === 2 ? "2016" : g.edition;
     fail((edition === "2016" && g.version === 2) || (edition === "2024" && g.version === 3));

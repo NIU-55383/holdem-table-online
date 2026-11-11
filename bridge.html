@@ -34,8 +34,8 @@
         <div class="room-heading"><div><small>房间 / Room</small><strong id="roomCode"></strong></div><button id="copyBtn" class="icon-button" title="复制邀请链接 / Copy invite" aria-label="复制邀请链接 / Copy invite"><i data-lucide="copy"></i></button><button id="leaveBtn" class="icon-button" title="离开 / Leave" aria-label="离开 / Leave"><i data-lucide="log-out"></i></button></div>
         <div id="roomTools"></div>
         <div id="lobby"><h2>搭档座位 <small>Partnerships</small></h2><div id="lobbySeats"></div><div id="swapRequest"></div><div class="lobby-actions"><button id="fillBtn"><i data-lucide="bot"></i>补齐机器人 / Fill bots</button><button id="startBtn" class="primary"><i data-lucide="play"></i>开始 / Start</button></div></div>
-        <section id="biddingPanel" hidden><h2>叫牌 <small>Auction</small></h2><div id="bidControls"></div><div id="auction"></div></section>
         <section id="contractPanel" hidden></section>
+        <section id="biddingPanel" hidden><h2>叫牌 <small>Auction</small></h2><div id="bidControls"></div><div id="auction"></div></section>
         <section id="resultPanel" hidden></section>
         <details id="scoreSection" open><summary>计分 <small>Scores</small><strong id="totalScore"></strong></summary><div id="scores"></div></details>
         <details class="chat-section" open><summary>聊天 <small>Chat</small></summary><div id="messages" class="messages" aria-live="polite"></div><form id="chatForm"><input id="chatText" maxlength="160" aria-label="消息 / Message" placeholder="消息 / Message" autocomplete="off"><button title="发送 / Send" aria-label="发送 / Send"><i data-lucide="send"></i></button></form></details>
@@ -54,8 +54,9 @@
       <p class="rule-source">规则参考 / Reference: <a href="https://www.acbl.org/learn/" target="_blank" rel="noopener">American Contract Bridge League</a></p>
     </div>
   </dialog>
+  <dialog id="scoreDialog" class="score-dialog" aria-labelledby="scoreDialogTitle"><div class="dialog-heading"><h2 id="scoreDialogTitle">计分明细 <small>Score breakdown</small></h2><button class="icon-button" data-close="scoreDialog" aria-label="关闭 / Close"><i data-lucide="x"></i></button></div><div id="scoreDetails" class="dialog-body"></div></dialog>
   <dialog id="settingsDialog"><div class="dialog-heading"><h2>设置 <small>Settings</small></h2><button class="icon-button" data-close="settingsDialog" aria-label="关闭 / Close"><i data-lucide="x"></i></button></div><div class="dialog-body"><label class="volume-label">音效音量 / Sound volume <output id="volumeValue"></output><input id="volume" type="range" min="0" max="100" step="1"></label><label class="check-label"><input type="checkbox" id="mute">静音 / Mute</label></div></dialog>
   <dialog id="confirmDialog"><div class="dialog-body"><h2>离开房间？ <small>Leave room?</small></h2><p>开局后座位会保留，其他人需等你回来或由房主补位。<small>Your seat remains after the start. Play waits for you or a host-managed replacement.</small></p><div class="dialog-actions"><button data-close="confirmDialog">取消 / Cancel</button><button id="confirmLeave" class="primary">离开 / Leave</button></div></div></dialog>
-  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-audio.js"></script><script src="game-ui.js"></script><script src="game-archives.js"></script><script src="game-rules.js"></script><script src="bridge-audio.js"></script><script src="bridge.js"></script>
+  <script src="vendor/lucide.min.js"></script><script src="avatar-data.js"></script><script src="social-data.js"></script><script src="game-audio.js"></script><script src="game-ui.js"></script><script src="game-archives.js"></script><script src="game-rules.js"></script><script src="bridge-audio.js"></script><script src="bridge-score.js"></script><script src="bridge.js"></script>
 </body>
 </html>

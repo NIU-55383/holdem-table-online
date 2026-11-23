@@ -336,10 +336,22 @@
           "Pay 1 grain to activate a knight. It can defend against barbarians immediately, but must wait until your next turn to move, displace a knight or chase the robber."
         ],
         [
-          "移动或驱逐骑士",
-          "Moving or displacing a knight",
-          "可沿自己连续相连的道路移动到空交叉点，也可赶走目的地上等级更低的对手骑士。不能穿过对手的建筑或骑士。",
-          "Move along your connected roads to an empty intersection, or displace a lower-rank opponent's knight at the destination. You cannot pass through an opponent's building or knight."
+          "移动路线",
+          "Movement route",
+          "可沿自己连续相连的道路移动到空交叉点，一次可走多段。不能借用别人的路线，也不能穿过对手的建筑或骑士。",
+          "Move along your connected roads to an empty intersection, across any number of segments. You cannot use another player's routes or pass through an opponent's building or knight."
+        ],
+        [
+          "能驱逐几级骑士",
+          "Which ranks you can displace",
+          "你的骑士必须比对方等级高：2 级可驱逐 1 级；3 级可驱逐 1 级或 2 级；1 级不能驱逐任何骑士。同级不能驱逐，也不能驱逐自己的骑士。对方是否激活都不影响。",
+          "Your rank must be higher: rank 2 can displace rank 1; rank 3 can displace rank 1 or 2; rank 1 cannot displace any knight. Equal ranks and your own knights cannot be displaced. The opponent may be active or inactive."
+        ],
+        [
+          "在游戏里怎么驱逐",
+          "How to displace in this game",
+          "自己的回合掷骰及事件结算后，点「移动骑士」，先点一名本回合开始前已激活的己方骑士，再点高亮的低等级对手骑士。你的骑士会移到对方的位置，不用掷骰，也不额外花资源。",
+          "After rolling and resolving events on your turn, select Move knight, select your knight that was active before this turn, then select a highlighted lower-rank opponent's knight. Your knight takes its place, with no dice roll or extra resource cost."
         ],
         [
           "驱赶强盗",
@@ -356,8 +368,8 @@
         [
           "被驱逐后怎么放",
           "Relocating a displaced knight",
-          "由骑士主人沿自己的道路选择一个可到达的空交叉点，保留原激活状态。没有位置可放，就收回这名骑士。",
-          "Its owner chooses a reachable empty intersection along their own roads, keeping its active state. If no site is available, return the knight to supply."
+          "由被驱逐骑士的主人，从原位置沿自己的道路选择一个可到达的空交叉点。等级和激活状态不变；迁移时不能再驱逐别人的骑士。没有可到达的空位，就从棋盘移除并收回这名骑士。",
+          "Its owner chooses an empty intersection reachable from the original location along their own roads. Its rank and active state stay the same; this relocation cannot displace another knight. With no reachable empty site, remove it from the board and return it to supply."
         ],
         [
           "骑士会挡住对手的路",

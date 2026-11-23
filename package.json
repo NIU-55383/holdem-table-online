@@ -30,7 +30,8 @@
     "test:million-ui": "node million-ui-test.js && node million-2024-ui-test.js",
     "test:city-selections": "node --test catan-card-selection-test.js",
     "test:catan-render": "node catan-render-test.js && node catan-render-ui-test.js",
-    "test:catan-score": "node --test catan-score-test.js catan-score-info-ui-test.js && node catan-score-ui-test.js"
+    "test:catan-score": "node --test catan-score-test.js catan-score-info-ui-test.js && node catan-score-ui-test.js",
+    "test:catan-choices": "node --test catan-graphical-choice-ui-test.js && node catan-give-choice-ui-test.js && node catan-progress-dialog-ui-test.js"
   },
   "engines": {
     "node": ">=20"

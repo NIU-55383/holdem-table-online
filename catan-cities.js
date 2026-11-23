@@ -366,6 +366,8 @@ function publicChoice(g,q) {
     // Old saves have only to/count: the cause is known, but their initial total is not.
     Object.assign(view,{reason:q.to<0?"sabotage":"wedding",source:q.source??(q.to<0?g.current:q.to),to:q.to});
     for(const key of ["total","initialCount","sourceScore","playerScore"])if(q[key]!==undefined)view[key]=q[key];
+  }else if(q.kind==="removeKnight"){
+    Object.assign(view,{reason:"treason",source:q.to,to:q.to,total:1,count:1});
   }else if(q.kind==="harborPay"){
     Object.assign(view,{reason:"harbor",source:q.to,to:q.to,resource:q.resource,total:1,count:1});
   }else if(q.kind==="discardProgress"){

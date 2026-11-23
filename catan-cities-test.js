@@ -251,3 +251,29 @@ test('off-turn progress overflow exposes its limit reason and one-card action wi
   assert.equal(E.publicGame(g,0).citiesKnights.players[1].cards,null);assert.equal(g.cities.players[1].cards.length,5);
   choose(g);assert.equal(g.cities.players[1].cards.length,4);assert.equal(g.phase,'main');C.validate(g);
 });
+
+test('Treason explains the actual card user and one-knight choice for every viewer and old saves',()=>{
+  let g=setup();g.phase='main';g.current=2;
+  const sites=g.board.vertices.filter(v=>v.owner<0&&!v.knight).slice(0,2);
+  sites.forEach((v,i)=>{v.knight={owner:1,rank:i+1,active:i===0,activated:-1,promoted:-1};});
+  grant(g,1,'crane');play(g,2,'treason');choose(g,o=>o.key==='player:1');
+  assert.deepEqual(g.cities.queue[0],{kind:'removeKnight',player:1,to:2},'Existing saved queue already carries the source');
+  const expected={kind:'removeKnight',player:1,count:1,reason:'treason',source:2,to:2,total:1};
+  const before=JSON.stringify(g);
+  for(let viewer=0;viewer<3;viewer++){
+    const view=E.publicGame(g,viewer);assert.deepEqual(view.citiesKnights.choice,expected);
+    if(viewer!==1)assert.equal(view.citiesKnights.players[1].cards,null,'The reason must not reveal the target hand');
+    assert.equal(view.legal.citiesKnights.length,viewer===1?2:0);
+  }
+  assert.equal(JSON.stringify(g),before,'Reading the reason is side-effect free');
+  const differentTurn=structuredClone(g);differentTurn.current=0;
+  assert.equal(E.publicGame(differentTurn,0).citiesKnights.choice.source,2,'Use the recorded card user, not the current player');
+  g=archive(g);assert.deepEqual(E.publicGame(g,0).citiesKnights.choice,expected,'Unmodified legacy queue survives save/restore');
+  choose(g,o=>o.key==='v:'+sites[1].id);
+  assert.equal(g.board.vertices[sites[1].id].knight,undefined);
+  assert(g.board.vertices[sites[0].id].knight,'Only the selected knight is removed');
+  assert.deepEqual(g.cities.queue[0],{kind:'replaceRank',player:2,rank:2,active:false});
+  choose(g,o=>o.key==='rank:2');choose(g);
+  assert(C.knights(g,2).some(v=>v.knight.rank===2&&!v.knight.active),'The free replacement retains the removed knight state');
+  C.validate(g);
+});

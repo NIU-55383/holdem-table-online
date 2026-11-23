@@ -60,6 +60,7 @@ window.CatanCitiesUI = (() => {
    ["cloth","布","Cloth","牧场","pasture","羊毛","wool","贸易","trade"],
    ["coin","币","Coin","山地","mountain","矿石","ore","政治","politics"]].forEach(([key,zh,en,terrain,terrainEn,resource,resourceEn,branch,branchEn])=>{
     helpDetails[key]=[
+      ["开局总数","Starting total",`全场共有 12 张${zh}，所有玩家共用。`,`There are 12 ${key} cards in the game, shared by all players.`],
       ["怎样获得","How to collect",`${terrain}正常生产时，每座相邻城市（含都会）领取 1 张${resource} + 1 张${zh}。村庄仍只领 1 张${resource}，不领${zh}。`,`When a ${terrainEn} produces normally, each adjacent city, including a metropolis, receives 1 ${resourceEn} + 1 ${key}. A settlement receives only 1 ${resourceEn}, with no ${key}.`],
       ["用来做什么","What it pays for",`${zh}是商品，用来提升${branch}改良。升到 1、2、3、4、5 级，通常分别支付 1、2、3、4、5 张${zh}。`,`${en} is a commodity used for ${branchEn} improvements. Reaching levels 1, 2, 3, 4 and 5 normally costs 1, 2, 3, 4 and 5 ${key}, respectively.`],
       ["也可以交易","Trading",`${zh}可以通过玩家交易或银行交易获得，也会计入掷出 7 点时的手牌数，并可能被强盗偷走。`,`${en} can also be obtained in player or bank trades. It counts toward your hand size on seven and can be stolen by the robber.`]
@@ -172,6 +173,14 @@ window.CatanCitiesUI = (() => {
       items.push(["本次数量","Cards required",amountZh,amountEn]);
       if(!discard&&recipient)items.push(["交给谁","Recipient",`选中的牌交给 ${recipient}，加入其手牌。`,`The chosen cards go to ${recipient}'s hand.`]);
       return {heading:[`${name}：还需${verb} ${remaining} 张`,`${nameEn}: ${remaining} left to ${verbEn}`],prompt:[`${own?"你":"等待 "+player.name} · ${name}：还需${verb} ${remaining} 张`,`${own?"You":"Waiting for "+player.name} · ${nameEn}: ${remaining} left to ${verbEn}`],items};
+    }
+    if(q.kind==="removeKnight"){
+      const source=g.players[q.source??q.to]?.name,sourceZh=source||"出牌者",sourceEn=source||"the card player";
+      return {heading:["叛变：选择移除 1 名骑士","Treason: choose 1 knight to remove"],prompt:[`${own?"你":"等待 "+player.name} · 叛变：移除 1 名骑士`,`${own?"You":"Waiting for "+player.name} · Treason: remove 1 knight`],items:[
+        ["为什么要移除","Why a knight must be removed",`${sourceZh}使用了政治进步卡「叛变」，指定了${who}。`,`${source||"A player"} played the Politics progress card Treason and chose ${own?"you":player.name}.`],
+        ["移除哪一名","Which knight",`${who}必须从自己的骑士中选择 1 名移除。任何等级都可以，已激活或未激活都可以选。`,`${whoEn} must choose 1 of ${own?"your":"their"} own knights to remove, of any rank, whether active or inactive.`],
+        ["出牌者获得什么","What the card player gains",`有空余棋子和合法位置时，${sourceZh}可免费放置 1 名同级或更低级的骑士，保留被移除骑士的激活或未激活状态。`,`With an available piece and a legal location, ${sourceEn} may place 1 knight of equal or lower rank for free, keeping the removed knight's active or inactive state.`]
+      ]};
     }
     if(q.kind==="harborPay"){
       const source=g.players[q.source??q.to]?.name||"出牌者",sourceEn=g.players[q.source??q.to]?.name||"the card player";
@@ -328,6 +337,154 @@ window.CatanCitiesUI = (() => {
       send(payload);if(panel.dataset.pending==="true")closeSelection();else if(selectionDialog.open)renderSelection();
     };
 
+    // All non-board choices use a local draft; only confirmation sends a legal engine key.
+    const pickerDialog=document.createElement("dialog");
+    pickerDialog.id="citiesChoiceDialog";pickerDialog.className="cities-selection-dialog cities-option-dialog";pickerDialog.setAttribute("aria-labelledby","citiesChoiceTitle");
+    pickerDialog.innerHTML='<div class="dialog-heading"><h2 id="citiesChoiceTitle"></h2><button type="button" class="icon-button" data-close aria-label="关闭 / Close">×</button></div><div class="cities-selection-body"><p id="citiesChoiceReason"></p><div id="citiesChoiceOptions"></div><section class="cities-choice-preview"><h3>已选内容 <small>Your selection</small></h3><div id="citiesChoiceSelected"></div><button type="button" class="secondary" data-clear-choice>重选 / Clear</button></section></div><div class="cities-selection-footer"><p id="citiesChoiceHint" aria-live="polite"></p><button type="button" id="citiesChoiceConfirm" class="primary wide">确认选择 / Confirm</button></div>';
+    document.body.append(pickerDialog);
+    let pickerDraft=null;
+    const pickerTitles={
+      alchemy:["炼金术：选择骰子点数","Alchemy: choose the dice"],
+      reward:["选择奖励进步卡类别","Choose a reward deck"],
+      guild:["行会税：选择对手","Guild Dues: choose an opponent"],
+      espionage:["间谍：选择对手","Espionage: choose an opponent"],
+      treason:["叛变：选择对手","Treason: choose an opponent"],
+      replaceRank:["叛变：选择新骑士等级","Treason: choose the new knight's rank"],
+      fleet:["商船队：选择兑换类型","Merchant Fleet: choose a trade type"],
+      monopoly:["资源垄断：选择资源","Resource Monopoly: choose a resource"],
+      tradeMonopoly:["商品垄断：选择商品","Trade Monopoly: choose a commodity"],
+      harbor:["商业港：选择对手和资源","Commercial Harbor: choose a player and resource"],
+      discard:["选择弃掉的进步卡","Choose a progress card to discard"]
+    };
+    const pickerReasons={
+      alchemy:["分别选择黄骰和红骰；事件骰仍随机。","Choose the yellow and red dice separately. The event die stays random."],
+      reward:["选择一类，领取 1 张进步卡。","Choose a category to draw 1 progress card."],
+      guild:["选择一名符合条件的对手，再选择其物资。","Choose an eligible opponent, then choose cards from their hand."],
+      espionage:["选择一名对手，随后查看并选取其 1 张进步卡。","Choose an opponent, then inspect and take 1 of their progress cards."],
+      treason:["被选中的对手自行移除 1 名骑士。","The selected opponent chooses 1 of their knights to remove."],
+      replaceRank:["免费放置新骑士；可选等级由被移除骑士和空余棋子决定。","Place a free knight. Eligible ranks depend on the removed knight and your available pieces."],
+      fleet:["本回合可用 2 张选定类型的牌兑换 1 张其他资源或商品。","For this turn, trade 2 cards of this type for 1 other resource or commodity."],
+      monopoly:["每名对手交出至多 2 张选定资源。","Each opponent gives you up to 2 of the selected resource."],
+      tradeMonopoly:["每名对手交出至多 1 张选定商品。","Each opponent gives you up to 1 of the selected commodity."],
+      harbor:["提供 1 张普通资源，换取对方自选的 1 张商品；对方没有商品则不交换。","Offer 1 normal resource for 1 commodity of their choice. No exchange occurs if they have no commodities."],
+      discard:["选择 1 张进步卡，放回对应牌堆底。","Choose 1 progress card to return to the bottom of its deck."]
+    };
+    function pickerModel(){
+      const g=room?.game,c=g?.citiesKnights;if(!c)return null;
+      const q=g.phase==="ckChoice"?c.choice:null;
+      if(q&&(q.player!==room.you||c.selection))return null;
+      const kind=q?.kind||(["harbor","discard"].includes(group)?group:null);
+      if(!kind)return null;
+      const options=available().filter(o=>!o.position&&!["cancel","done"].includes(o.key)&&(q||o.group===group));
+      return options.length?{kind,options,title:pickerTitles[kind]||choices[kind]||groups[kind]?.slice(0,2)||["选择操作","Choose an action"]}:null;
+    }
+    function pickerKey(model=pickerModel()){
+      return model?JSON.stringify([room.code,room.you,room.seats?.map(s=>s?.socialId??null),room.game.revision,model.kind,model.options.map(o=>o.key)]):"";
+    }
+    function closePicker(){pickerDraft=null;if(pickerDialog.open)pickerDialog.close();}
+    pickerDialog.querySelector("[data-close]").onclick=closePicker;
+    pickerDialog.addEventListener("close",()=>{if(!pickerDialog.open)pickerDraft=null;});
+    function pickerCurrent(){return pickerDraft&&!blocked()&&pickerDraft.key===pickerKey();}
+    function syncPicker(){if(pickerDialog.open){if(!pickerCurrent())closePicker();else renderPicker();}}
+    function openPicker(){
+      const model=pickerModel();if(!model||blocked())return;
+      pickerDraft={key:pickerKey(model),option:null,yellow:null,red:null,player:null,resource:null};
+      renderPicker();if(!pickerDialog.open)pickerDialog.showModal();pickerDialog.querySelector(".cities-selection-body").scrollTop=0;
+    }
+    function pickedKey(model){
+      if(!pickerDraft)return null;
+      if(model.kind==="alchemy")return pickerDraft.yellow&&pickerDraft.red?"dice:"+pickerDraft.yellow+":"+pickerDraft.red:null;
+      if(model.kind==="harbor")return pickerDraft.player!==null&&pickerDraft.resource!==null?"harbor:"+pickerDraft.player+":"+pickerDraft.resource:null;
+      return pickerDraft.option;
+    }
+    function pickerDie(n,color){
+      const coordinates={1:[[32,32]],2:[[18,18],[46,46]],3:[[18,18],[32,32],[46,46]],4:[[18,18],[46,18],[18,46],[46,46]],5:[[18,18],[46,18],[32,32],[18,46],[46,46]],6:[[18,16],[46,16],[18,32],[46,32],[18,48],[46,48]]};
+      return '<svg class="cities-picker-die" viewBox="0 0 64 64" aria-hidden="true"><rect x="3" y="3" width="58" height="58" rx="11" fill="'+(color==="red"?"#d95549":"#f7d16c")+'" stroke="'+(color==="red"?"#a93830":"#b98c27")+'" stroke-width="3"/>'+(coordinates[n]||[]).map(([x,y])=>'<circle cx="'+x+'" cy="'+y+'" r="4.5" fill="'+(color==="red"?"#fff9e8":"#62441a")+'"/>').join("")+'</svg>';
+    }
+    function pickerPlayer(id){
+      const player=room.game.players[id],seat=room.seats?.[id]||player;
+      // This is a form option, so the shared avatar is presentational within its button.
+      const avatar=window.BoardGameUI.avatar({...seat,socialId:null},Boolean(seat.bot||seat.connected),"cities-picker-avatar",false);
+      return '<span class="cities-picker-person">'+avatar+'<span>'+esc(player.name)+'</span></span>';
+    }
+    function optionVisual(option){
+      const [prefix,value]=option.key.split(":"),n=Number(value);
+      if(prefix==="r")return resourceUI.icon(D.resources[n])+'<span>'+esc(resourceUI.labels[n])+'<small>'+esc(resourceUI.english[n])+'</small></span>';
+      if(prefix==="player")return pickerPlayer(n);
+      if(prefix==="b"){const [zh,en]=D.branches[n];return art(branchKey(n))+'<span>'+esc(zh)+'<small>'+esc(en)+'</small></span>';}
+      if(prefix==="rank")return art("knight")+'<span>'+n+' 级骑士<small>Rank '+n+' knight</small></span>';
+      if(prefix==="discard"){
+        const card=room.game.citiesKnights.players[room.you].cards.find(card=>card.id===n),data=card&&D.cards[card.key];
+        if(data)return cardArt(card.key)+'<span>'+esc(data[2])+'<small>'+esc(data[3])+'</small></span>'+cardCategory(data[0]);
+      }
+      return art("metropolis")+'<span>'+esc(option.label)+'</span>';
+    }
+    function optionAttributes(option){
+      const [prefix,value]=option.key.split(":"),n=Number(value);
+      if(prefix==="r")return 'style="--resource:'+resourceUI.colors[n]+'"';
+      if(prefix==="b")return 'data-progress-branch="'+branchKey(n)+'"';
+      if(prefix==="discard"){
+        const card=room.game.citiesKnights.players[room.you].cards.find(card=>card.id===n);
+        if(card)return 'data-progress-branch="'+branchKey(D.cards[card.key][0])+'"';
+      }
+      return "";
+    }
+    function optionButton(option,selected){
+      const resource=option.key.startsWith("r:");
+      return '<button data-render-key="'+esc(option.key)+'" type="button" class="cities-picker-option '+(resource?"trade-resource-add":"")+'" data-option-key="'+esc(option.key)+'" '+optionAttributes(option)+' aria-pressed="'+selected+'">'+optionVisual(option)+'<span class="cities-picker-check" aria-hidden="true">✓</span></button>';
+    }
+    function renderPicker(){
+      if(!pickerCurrent()){closePicker();return;}
+      const model=pickerModel(),key=pickedKey(model),selected=model.options.find(o=>o.key===key);
+      pickerDialog.dataset.kind=model.kind;
+      pickerDialog.querySelector("#citiesChoiceTitle").innerHTML=esc(model.title[0])+"<small>"+esc(model.title[1])+"</small>";
+      const reason=pickerReasons[model.kind]||["选择后确认。","Choose an option, then confirm."];
+      pickerDialog.querySelector("#citiesChoiceReason").innerHTML=esc(reason[0])+"<small>"+esc(reason[1])+"</small>";
+      let optionsHtml="",preview="",count=selected?1:0,required=1;
+      if(model.kind==="alchemy"){
+        required=2;count=Number(Boolean(pickerDraft.yellow))+Number(Boolean(pickerDraft.red));
+        optionsHtml=["yellow","red"].map(color=>{
+          const label=color==="yellow"?["黄骰","Yellow die"]:["红骰","Red die"];
+          return '<fieldset class="cities-die-picker"><legend>'+label[0]+' <small>'+label[1]+'</small></legend><div class="cities-die-options">'+Array.from({length:6},(_,i)=>{
+            const face=i+1,allowed=model.options.some(o=>o.key.split(":")[color==="yellow"?1:2]===String(face));
+            return '<button data-render-key="'+color+':'+face+'" type="button" data-die-color="'+color+'" data-face="'+face+'" aria-label="'+label[0]+' '+face+' / '+label[1]+' '+face+'" aria-pressed="'+(pickerDraft[color]===face)+'" '+(!allowed?"disabled":"")+'>'+pickerDie(face,color)+'</button>';
+          }).join("")+'</div></fieldset>';
+        }).join("");
+        preview='<div class="cities-dice-preview">'+(pickerDraft.yellow?pickerDie(pickerDraft.yellow,"yellow"):'<span class="cities-empty-die">?</span>')+'<span>+</span>'+(pickerDraft.red?pickerDie(pickerDraft.red,"red"):'<span class="cities-empty-die">?</span>')+'<strong>= '+(selected?pickerDraft.yellow+pickerDraft.red:"?")+'</strong></div>';
+      }else if(model.kind==="harbor"){
+        required=2;count=Number(pickerDraft.player!==null)+Number(pickerDraft.resource!==null);
+        const players=[...new Set(model.options.map(o=>Number(o.key.split(":")[1])))],resources=[...new Set(model.options.filter(o=>pickerDraft.player===null||Number(o.key.split(":")[1])===pickerDraft.player).map(o=>Number(o.key.split(":")[2])))];
+        optionsHtml='<section><h3>选择对手 <small>Choose an opponent</small></h3><div class="cities-option-grid">'+players.map(id=>'<button data-render-key="player:'+id+'" type="button" class="cities-picker-option" data-choice-player="'+id+'" aria-pressed="'+(pickerDraft.player===id)+'">'+pickerPlayer(id)+'<span class="cities-picker-check" aria-hidden="true">✓</span></button>').join("")+'</div></section><section><h3>提供 1 张资源 <small>Offer 1 resource</small></h3><div class="cities-option-grid cities-resource-options">'+resources.map(r=>'<button data-render-key="resource:'+r+'" type="button" class="cities-picker-option trade-resource-add" style="--resource:'+resourceUI.colors[r]+'" data-choice-resource="'+r+'" aria-pressed="'+(pickerDraft.resource===r)+'">'+optionVisual({key:"r:"+r})+'<span class="cities-picker-check" aria-hidden="true">✓</span></button>').join("")+'</div></section>';
+        if(pickerDraft.player!==null||pickerDraft.resource!==null)preview='<div class="cities-harbor-preview">'+(pickerDraft.player!==null?pickerPlayer(pickerDraft.player):'<span>未选对手 / No opponent</span>')+(pickerDraft.resource!==null?'<span class="cities-resource-preview" style="--resource:'+resourceUI.colors[pickerDraft.resource]+'">'+optionVisual({key:"r:"+pickerDraft.resource})+'</span>':"")+'</div>';
+      }else{
+        optionsHtml='<div class="cities-option-grid '+(model.options.every(o=>o.key.startsWith("r:"))?"cities-resource-options":"")+'">'+model.options.map(o=>optionButton(o,o.key===key)).join("")+'</div>';
+        if(selected)preview='<div class="cities-selected-option" '+optionAttributes(selected)+'>'+optionVisual(selected)+'</div>';
+      }
+      window.CatanRender.html(pickerDialog.querySelector("#citiesChoiceOptions"),optionsHtml);
+      window.CatanRender.html(pickerDialog.querySelector("#citiesChoiceSelected"),preview||'<span class="empty-trade-slot" role="img" aria-label="尚未选择 / Nothing selected"></span>');
+      pickerDialog.querySelector("[data-clear-choice]").hidden=count===0;
+      pickerDialog.querySelector("#citiesChoiceHint").textContent="已选 "+count+" / "+required+" · Selected "+count+" / "+required;
+      const confirm=pickerDialog.querySelector("#citiesChoiceConfirm");
+      confirm.disabled=!selected;
+      confirm.textContent=({alchemy:"确认点数 / Confirm dice",reward:"确认抽牌 / Draw card",harbor:"确认交换 / Offer trade",discard:"确认弃牌 / Discard"})[model.kind]||"确认选择 / Confirm";
+    }
+    pickerDialog.addEventListener("click",e=>{
+      const button=e.target.closest("[data-die-color],[data-option-key],[data-choice-player],[data-choice-resource],[data-clear-choice]");
+      if(!button||button.disabled||!pickerDialog.open||!pickerCurrent())return;
+      const model=pickerModel();
+      if(button.hasAttribute("data-clear-choice"))Object.assign(pickerDraft,{option:null,yellow:null,red:null,player:null,resource:null});
+      else if(button.dataset.dieColor){const color=button.dataset.dieColor,face=Number(button.dataset.face);if(!["yellow","red"].includes(color)||face<1||face>6)return;pickerDraft[color]=pickerDraft[color]===face?null:face;}
+      else if(button.hasAttribute("data-choice-player")){const id=Number(button.dataset.choicePlayer);if(!model.options.some(o=>o.key.startsWith("harbor:"+id+":")))return;pickerDraft.player=pickerDraft.player===id?null:id;if(pickerDraft.resource!==null&&!model.options.some(o=>o.key==="harbor:"+pickerDraft.player+":"+pickerDraft.resource))pickerDraft.resource=null;}
+      else if(button.hasAttribute("data-choice-resource")){const r=Number(button.dataset.choiceResource);if(!model.options.some(o=>Number(o.key.split(":")[2])===r))return;pickerDraft.resource=pickerDraft.resource===r?null:r;}
+      else{const key=button.dataset.optionKey;if(!model.options.some(o=>o.key===key))return;pickerDraft.option=pickerDraft.option===key?null:key;}
+      renderPicker();
+    });
+    pickerDialog.querySelector("#citiesChoiceConfirm").onclick=()=>{
+      if(!pickerDialog.open||!pickerCurrent())return;
+      const model=pickerModel(),key=pickedKey(model);if(!model.options.some(o=>o.key===key))return;
+      closePicker();send({type:"ck",choice:key});
+    };
+
 
     const cardInfo=document.createElement("dialog");cardInfo.id="citiesCardInfoDialog";cardInfo.className="cities-dialog";cardInfo.dataset.rulesDialog="";
     cardInfo.innerHTML='<div class="dialog-heading"><h2></h2><button type="button" class="icon-button" data-close aria-label="关闭 / Close">×</button></div><div data-rules-body></div>';
@@ -376,7 +533,7 @@ window.CatanCitiesUI = (() => {
       refreshCardInfo();if(!cardInfo.open)cardInfo.showModal();body.scrollTop=0;
     }
     function selectGroup(next) {
-      group=next;render(room,panel.dataset.pending==="true");redraw();
+      group=next;render(room,panel.dataset.pending==="true");redraw();if(["harbor","discard"].includes(next))openPicker();
     }
     function choose(key){const o=available().find(x=>x.key===key);if(o)confirm(o);}
     function setDescription(upgrade,cardKey){
@@ -399,8 +556,9 @@ window.CatanCitiesUI = (() => {
     panel.onclick=e=>{
       const b=e.target.closest("button");if(!b||b.disabled)return;
       if(b.hasAttribute("data-cities-select")){openSelection();return;}
+      if(b.hasAttribute("data-cities-picker")){openPicker();return;}
       if(b.hasAttribute("data-progress-catalog")){rules("progress");return;}
-      if(b.dataset.group){selectGroup(group===b.dataset.group?"":b.dataset.group);return;}
+      if(b.dataset.group){selectGroup(["harbor","discard"].includes(b.dataset.group)?b.dataset.group:group===b.dataset.group?"":b.dataset.group);return;}
       if(b.dataset.card){const card=room?.game?.citiesKnights.players[room.you].cards.find(card=>String(card.id)===b.dataset.cardId);if(!card)return;const o=available().find(x=>x.key===`play:${card.id}`);if(o&&!blocked())confirm(o);else explainCard(card);return;}
       const o=available().find(x=>x.key===b.dataset.choice);if(o){if(o.group==="choice")send({type:"ck",choice:o.key});else confirm(o);}
     };
@@ -415,7 +573,7 @@ window.CatanCitiesUI = (() => {
     }
     document.getElementById("board").addEventListener("click",boardClick,true);document.getElementById("board").addEventListener("keydown",boardClick,true);
     function render(r,pending=false){
-      room=r;if(r)setMap(r.mapId);const g=r?.game,c=g?.citiesKnights;panel.hidden=!c;status.hidden=!c;fleet.hidden=!c;panel.dataset.pending=String(pending);refreshCardInfo();syncSelection();if(!c)return;
+      room=r;if(r)setMap(r.mapId);const g=r?.game,c=g?.citiesKnights;panel.hidden=!c;status.hidden=!c;fleet.hidden=!c;panel.dataset.pending=String(pending);refreshCardInfo();syncSelection();syncPicker();if(!c)return;
       const resolving=["pillage","reward"].includes(c.choice?.kind),position=resolving?7:c.ship,remaining=7-position;
       const zh=resolving?"蛮族入侵，正在结算":`距入侵还差 ${remaining} 格`,en=resolving?"Barbarian attack: resolving":`${remaining} ${remaining===1?"advance":"advances"} until attack`;
       if(fleet.dataset.position!==String(position)||fleet.dataset.resolving!==String(resolving)){
@@ -431,7 +589,11 @@ window.CatanCitiesUI = (() => {
       const key=`${r.code}:${r.you}:${g.revision}`;if(key!==revision){revision=key;group="";if(dialog.open)dialog.close();}
       const all=available(), q=c.choice, opts=q?.player===r.you?all:all.filter(o=>o.group===group);
       const description=choiceDescription(g,r.you),heading=description?.heading||(q?choices[q.kind]||[q.kind,q.kind]:groups[group]?.slice(0,2));
-      const disabled=blocked();
+      const disabled=blocked(),picker=pickerModel();
+      const launch=(attribute,title,graphic)=>`<button type="button" class="primary cities-choice-launch" ${attribute} ${disabled?"disabled":""}>${graphic}<span>${esc(title[0])}<small>${esc(title[1])}</small></span></button>`;
+      const batch=c.selection&&q?.player===r.you;
+      const choiceEntry=batch?launch("data-cities-select",["选择卡牌","Choose cards"],art("paper")):picker?launch("data-cities-picker",picker.title,D.cards[picker.kind]?cardArt(picker.kind):art(picker.kind==="replaceRank"?"knight":"metropolis")):"";
+      const boardButtons=opts.filter(o=>["cancel","done"].includes(o.key));
 
       const players=c.players.map((p,i)=>{
         const levels=p.levels.map((n,b)=>{
@@ -443,8 +605,8 @@ window.CatanCitiesUI = (() => {
       window.CatanRender.html(status, `<h3 class="cities-heading">城市与骑士 <small>Cities &amp; Knights</small><button class="icon-button" data-cities-rules title="规则 / Rules" aria-label="规则 / Rules"><i data-lucide="book-open" aria-hidden="true"></i></button></h3>${players}`);
       const hand=c.players[r.you].cards;
       window.CatanRender.html(panel, `<div class="cities-progress-heading"><div><h3 id="citiesProgressTitle">进步卡 <small>Progress cards</small></h3><p>我的手牌 · ${hand.length} 张 / My hand: ${hand.length}</p></div><button type="button" class="icon-button" data-progress-catalog aria-label="查看进步卡清单 / Browse progress cards" title="查看进步卡清单 / Browse progress cards"><i data-lucide="circle-help" aria-hidden="true"></i></button></div><div class="cities-progress" aria-labelledby="citiesProgressTitle">${hand.map(card=>{const d=D.cards[card.key],o=all.find(x=>x.key===`play:${card.id}`),ready=Boolean(o&&!disabled),hint=ready?"可用 / Ready":"暂不可用，点击查看说明 / Unavailable; view explanation";return `<button data-render-key="progress:${card.id}" type="button" data-card="${card.key}" data-card-id="${card.id}" data-ready="${ready}" data-choice="${ready?o.key:""}" data-progress-branch="${branchKey(d[0])}" aria-label="${esc(d[2]+" / "+d[3]+" · "+hint)}" title="${hint}">${cardArt(card.key)}<span class="cities-hand-card-name">${esc(d[2])}<small>${esc(d[3])}</small></span>${cardCategory(d[0])}${ready?'<span class="cities-card-ready">可用 / Ready</span>':'<span class="cities-card-unavailable"><span>暂不可用<small>Unavailable</small></span><span class="cities-card-help" aria-hidden="true">?</span></span>'}</button>`;}).join("")}</div>${hand.length?"":'<p class="cities-progress-empty">暂无进步卡手牌<small>No progress cards in hand</small></p>'}
-        <div class="cities-controls">${Object.entries(groups).filter(([key])=>!["wall","recruit","activate","promote","improvement","move"].includes(key)&&all.some(o=>o.group===key)).map(([key,n])=>`<button data-group="${key}" class="secondary ${group===key?"selected":""}" ${disabled?"disabled":""}>${art(n[2])}<span>${n[0]}<small>${n[1]}</small></span></button>`).join("")}</div>
-        ${heading?`<div class="cities-choice" aria-live="polite"><h3>${esc(heading.join(" / "))}${q?` · ${esc(g.players[q.player].name)}`:""}</h3>${description?`<div class="cities-choice-context">${infoList(description.items)}</div>`:""}<div class="cities-choice-list">${c.selection&&q?.player===r.you?`<button type="button" class="primary" data-cities-select ${disabled?"disabled":""}>选择卡牌 / Choose cards</button>`:opts.filter(o=>!o.position).map(o=>`<button data-choice="${esc(o.key)}" ${disabled?"disabled":""}>${esc(o.label)}</button>`).join("")}</div></div>`:""}`);
+        <div class="cities-controls">${Object.entries(groups).filter(([key])=>!["wall","recruit","activate","promote","improvement","move"].includes(key)&&all.some(o=>o.group===key)).map(([key,n])=>`<button data-group="${key}" class="secondary cities-tool-entry ${group===key?"selected":""}" ${disabled?"disabled":""}>${art(n[2])}<span>${n[0]}<small>${n[1]}</small></span></button>`).join("")}</div>
+        ${heading?`<div class="cities-choice" aria-live="polite"><h3>${esc(heading.join(" / "))}${q?` · ${esc(g.players[q.player].name)}`:""}</h3>${description?`<div class="cities-choice-context">${infoList(description.items)}</div>`:""}<div class="cities-choice-list">${choiceEntry}</div>${boardButtons.length?`<div class="cities-board-actions">${boardButtons.map(o=>`<button type="button" class="${o.key==="done"?"primary":"secondary"}" data-choice="${esc(o.key)}" ${disabled?"disabled":""}><i data-lucide="${o.key==="done"?"check":"x"}" aria-hidden="true"></i>${esc(o.label)}</button>`).join("")}</div>`:""}</div>`:""}`);
       window.lucide?.createIcons();
     }
     function overlay(board){

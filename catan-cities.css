@@ -118,3 +118,38 @@
 .cities-selection-footer{flex:none;padding-top:10px}#citiesSelectionHint{font-weight:700;font-size:13px;margin:0 0 8px}#citiesSelectionConfirm{min-height:44px}
 .cities-choice-list [data-cities-select]{min-height:44px;width:100%;font-size:14px}
 @media(max-width:740px){.cities-selection-dialog[open]{padding:12px;max-width:calc(100vw - 20px);max-height:calc(100svh - 20px)}.cities-selection-dialog .dialog-heading h2{font-size:18px}.cities-selection-body{gap:10px}}
+
+/* Graphical choice dialogs share the gold/resource picker surface and fixed footer. */
+.cities-choice-list .cities-choice-launch{display:flex;align-items:center;justify-content:flex-start;gap:12px;width:100%;min-height:58px;text-align:left;border:2px solid #b58117;border-radius:6px;box-shadow:0 0 0 3px #f4cd6326;padding:10px 12px}
+.cities-choice-launch>svg{width:34px;height:34px;flex:0 0 34px}.cities-choice-launch>span{min-width:0;font-weight:700}.cities-choice-launch small{display:block;font-size:12px;font-weight:500;margin-top:3px}
+.cities-controls .cities-tool-entry{background:#fff4d4;border:1px solid #c5a65e;color:#244d5e;border-radius:6px}
+.cities-board-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.cities-board-actions button{display:flex;align-items:center;gap:7px;min-height:44px;font-size:13px;border-radius:5px}.cities-board-actions svg{width:18px;height:18px}
+.cities-option-dialog[open]{width:580px}
+#citiesChoiceReason{font-size:14px;line-height:1.55;margin:0;color:#244d5e}#citiesChoiceReason small{display:block;font-size:12px;margin-top:4px;color:#52707b}
+#citiesChoiceOptions{display:grid;gap:14px}
+.cities-option-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:3px}
+.cities-option-grid.cities-resource-options{grid-template-columns:repeat(4,minmax(0,1fr))}
+.cities-picker-option{position:relative;min-width:0;min-height:78px;display:flex;align-items:center;justify-content:center;gap:10px;padding:10px;background:var(--card-paper,#fffef8);color:#20516a;border:2px solid var(--card-edge,#b6cbcb);border-radius:6px;text-align:left}
+.cities-picker-option>svg{width:36px;height:40px;flex:0 0 36px}.cities-picker-option>span{min-width:0;font-size:14px;font-weight:700;overflow-wrap:anywhere}.cities-picker-option small{display:block;font-size:11px;font-weight:500;margin-top:4px}
+.cities-picker-option.trade-resource-add{background:var(--resource);color:white;flex-direction:column;text-align:center;height:96px}
+.cities-picker-option .cities-card-category{flex-basis:100%;font-size:11px}.cities-picker-option[data-option-key^="discard:"]{flex-wrap:wrap;justify-content:flex-start}
+.cities-picker-check{position:absolute;right:5px;top:4px;display:none;width:19px;height:19px;border-radius:50%;background:#20516a;color:white;text-align:center;line-height:19px!important;font-size:12px!important}
+.cities-picker-option[aria-pressed="true"],.cities-die-options button[aria-pressed="true"]{outline:3px solid #245e72;outline-offset:1px;border-color:#fff7cf;box-shadow:0 0 0 1px #245e72}
+.cities-picker-option[aria-pressed="true"] .cities-picker-check{display:block}
+.cities-picker-option:focus-visible,.cities-die-options button:focus-visible{outline:3px solid #245e72;outline-offset:2px}
+.cities-picker-person{display:flex;align-items:center;gap:9px;min-width:0;width:100%}.cities-picker-person>span:last-child{overflow-wrap:anywhere;min-width:0}
+.cities-picker-avatar{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 42px;width:42px;height:42px;border-radius:50%;background:#d4e7e4;overflow:visible;font-size:23px;color:#244d5e}
+.cities-picker-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.cities-picker-avatar [data-avatar-image]{width:100%;height:100%}
+.cities-die-picker{border:0;padding:3px;margin:0;min-width:0}.cities-die-picker legend{font-size:14px;font-weight:700;padding:0 0 6px;color:#244d5e}.cities-die-picker legend small{font-weight:500;font-size:12px}
+.cities-die-options{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:7px}
+.cities-die-options button{display:grid;place-items:center;min-width:0;min-height:48px;padding:2px;background:#fffef8;border:2px solid #bfd0cc;border-radius:9px}
+.cities-picker-die{display:block;width:100%;max-width:60px;height:auto;aspect-ratio:1}
+.cities-choice-preview{border-top:1px solid #bfd3d0;padding-top:12px}.cities-choice-preview>[data-clear-choice]{margin-top:7px;min-height:36px;font-size:12px}
+#citiesChoiceSelected{min-height:62px;padding:3px}.cities-dice-preview{display:flex;align-items:center;justify-content:center;gap:12px;font-size:24px;color:#244d5e}.cities-dice-preview>svg,.cities-empty-die{flex:0 0 52px;width:52px;height:52px}.cities-empty-die{display:grid;place-items:center;border:2px dashed #a9c3c5;border-radius:9px;color:#7c9ba0}
+.cities-selected-option{display:flex;align-items:center;gap:10px;padding:9px;min-width:0;background:var(--card-paper,#edf4ed);color:#244d5e;border:1px solid var(--card-edge,#bfd3d0);border-radius:6px;flex-wrap:wrap}
+.cities-selected-option>svg{width:36px;height:40px;flex:0 0 36px}.cities-selected-option>span{font-size:14px;font-weight:700;overflow-wrap:anywhere}.cities-selected-option small{display:block;font-size:11px;font-weight:500}.cities-selected-option .cities-card-category{flex-basis:100%}
+.cities-harbor-preview{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.cities-harbor-preview>.cities-picker-person{flex:1 1 100px}
+.cities-resource-preview{display:flex;align-items:center;gap:7px;background:var(--resource);padding:6px 10px;border-radius:5px;color:white;font-size:13px}.cities-resource-preview svg{width:28px;height:34px}.cities-resource-preview small{display:block;font-size:10px}
+#citiesChoiceHint{font-size:13px;font-weight:700;margin:0 0 8px;color:#244d5e}#citiesChoiceConfirm{min-height:44px}
+@media(max-width:400px){.cities-option-grid.cities-resource-options{grid-template-columns:repeat(3,minmax(0,1fr))}.cities-option-grid{gap:7px}.cities-picker-option{padding:8px 6px;gap:6px}.cities-picker-option>span{font-size:12px}.cities-picker-option small{font-size:10px}.cities-picker-avatar{width:32px;height:32px;flex-basis:32px;font-size:19px}.cities-picker-person{gap:5px}.cities-die-options{gap:4px}.cities-die-options button{padding:1px}.cities-dice-preview{gap:8px;font-size:21px}.cities-dice-preview>svg,.cities-empty-die{width:44px;height:44px;flex-basis:44px}#citiesChoiceReason{font-size:13px}}

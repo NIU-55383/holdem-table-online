@@ -25,7 +25,20 @@ async function checkHelp(page,source){
  await page.screenshot({path:path.join(__dirname,`test-results/catan-merchant-help-${page.viewportSize().width}.png`)});
  await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>[JSON.stringify(room),actionRequests.length]),before);
 }
-async function checkPlacement(context,port,errors,mainButton,help){
+const merchantCards=page=>page.locator('#citiesPanel [data-card="merchant"]');
+const cardDialog=page=>page.locator('dialog.cities-dialog:has([data-play])');
+async function checkCardHelp(page,playable){
+ const before=await page.evaluate(()=>[JSON.stringify(room),actionRequests.length]);
+ const card=merchantCards(page).first();assert(await card.isEnabled());await card.click();
+ const dialog=cardDialog(page);await dialog.waitFor({state:'visible'});
+ assert.match(await dialog.locator('h2').textContent(),/商人.*Merchant/);
+ assert.match(await dialog.locator('.cities-confirm-details').textContent(),/2:1/);
+ assert.equal(await dialog.locator('[data-play]').isEnabled(),playable);
+ assert(await dialog.locator('.cities-info-list > li').count()>=2);
+ assert(await dialog.evaluate(dialog=>{const r=dialog.getBoundingClientRect(),close=dialog.querySelector('[data-close]').getBoundingClientRect();return dialog.scrollWidth<=dialog.clientWidth+1&&r.left>=0&&r.right<=innerWidth+1&&close.bottom<=innerHeight;}));
+ await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>[JSON.stringify(room),actionRequests.length]),before,'viewing or cancelling Merchant never consumes it');
+}
+async function checkPlacement(context,port,errors){
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
  await page.goto(`http://127.0.0.1:${port}/catan.html?edition=cities`);await page.waitForFunction(()=>window.sock?.readyState===1);
  const saved=A.decode(fixture(),['catan']).room,g=saved.game,deck=g.cities.decks[D.cards.merchant[0]];
@@ -34,26 +47,28 @@ async function checkPlacement(context,port,errors,mainButton,help){
  const resources=await page.evaluate(()=>room.game.players.map(p=>p.resources));
  const scores=await page.evaluate(()=>room.game.players.map(p=>p.score));
  for(const [index,width] of [1600,320].entries()){
-  await page.setViewportSize({width,height:900});assert(await page.locator(mainButton).isEnabled());
-  assert.match(await page.locator(mainButton).textContent(),new RegExp(`Cards × ${2-index}`));
-  const icon=page.locator('#actions .cities-action-info[data-cities-info="merchant"] use');assert.equal(await icon.getAttribute('href'),'catan-cities-art.svg#merchant');
-  assert.equal(await icon.evaluate(el=>getComputedStyle(el.parentElement).filter),'none');
-  assert.match(await page.locator(mainButton).textContent(),new RegExp(`商人 ×${2-index}`));
-  assert(await page.locator(mainButton).evaluate(el=>{
-   const parts=[...el.parentElement.children].map(x=>x.getBoundingClientRect());
-   return el.scrollWidth<=el.clientWidth+1&&parts.every((r,i)=>!i||r.left>=parts[i-1].right-1)&&document.documentElement.scrollWidth<=innerWidth;
-  }),'merchant button and question must fit without overlap');
-  await page.locator('#actions').screenshot({path:path.join(__dirname,`test-results/catan-merchant-actions-${width}.png`)});
-  await checkHelp(page,help);
+  await page.setViewportSize({width,height:900});assert.equal(await merchantCards(page).count(),2-index);
+  assert.equal(await page.locator('#actions [data-action="merchant"]').count(),0,'Merchant belongs in the progress hand, not the build controls');
+  const card=merchantCards(page).first();assert(await card.isEnabled());
+  assert.equal(await card.locator('use[href="catan-progress-art.svg#merchant"]').count(),1);
+  assert.match(await card.textContent(),/贸易|Trade/);
+  assert(await card.evaluate(el=>{const r=el.getBoundingClientRect();return el.scrollWidth<=el.clientWidth+1&&r.left>=0&&r.right<=innerWidth+1;}),'merchant card must fit the hand');
+  await page.locator('.cities-progress').screenshot({path:path.join(__dirname,`test-results/catan-merchant-hand-${width}.png`)});
+  await checkCardHelp(page,true);
   const before=await page.evaluate(()=>actionRequests.length);
-  await page.evaluate(selector=>{document.querySelector(selector).click();document.querySelector(selector).click();},mainButton);
+  await card.click();assert.equal(await page.evaluate(()=>actionRequests.length),before,'opening the hand card only shows its description');
+  await cardDialog(page).locator('[data-play]').evaluate(button=>{button.click();button.click();});
   await page.waitForFunction(()=>room.game.citiesKnights.choice?.kind==='merchant');
   assert.equal(await page.evaluate(()=>actionRequests.length),before+1);assert.equal(await page.locator('.cities-dialog[open]').count(),0);
   assert.equal(await page.evaluate(()=>room.game.citiesKnights.players[0].cards.filter(c=>c.key==='merchant').length),1-index);
+  assert.equal(await merchantCards(page).count(),1-index);
   assert.match(await page.locator('#turnPrompt').textContent(),/Choose a hex beside your building/);
-  assert.match(await page.locator(mainButton).getAttribute('class'),/selected/);
-  await page.locator(mainButton).click();assert.equal(await page.evaluate(()=>actionRequests.length),before+1);
-  await checkHelp(page,help);
+  if(index===0){
+   await checkCardHelp(page,false);
+   await merchantCards(page).first().click();await cardDialog(page).locator('[data-play]').evaluate(button=>button.click());
+   assert.equal(await page.evaluate(()=>actionRequests.length),before+1,'cannot play another Merchant while choosing its hex');await page.keyboard.press('Escape');
+  }
+  await checkHelp(page,'#board [data-cities-info="merchant"]');
   const targets=page.locator('#board [data-ck-choice^="tile:"]');assert(await targets.count()>0);
   const target=targets.nth(index),tile=Number((await target.getAttribute('data-ck-choice')).split(':')[1]);
   if(width===320)await target.press('Enter');else await target.evaluate(el=>{el.dispatchEvent(new MouseEvent('click',{bubbles:true}));el.dispatchEvent(new MouseEvent('click',{bubbles:true}));});
@@ -64,10 +79,9 @@ async function checkPlacement(context,port,errors,mainButton,help){
   assert.deepEqual(await page.evaluate(()=>room.game.players.map(p=>p.score)),[scores[0]+1,scores[1]-1,scores[2]]);
   assert.equal(await page.locator('#board [data-ck-choice]').count(),0);
  }
- assert(await page.locator(mainButton).isDisabled());assert.match(await page.locator(mainButton).textContent(),/Cards × 0/);
- const count=await page.evaluate(()=>actionRequests.length);await page.locator(mainButton).evaluate(b=>b.click());assert.equal(await page.evaluate(()=>actionRequests.length),count);
- await checkHelp(page,help);assert.equal(await page.evaluate(()=>window.serverError||''),'');await page.close();
- console.log('Merchant: main actions, read-only help, direct placement, two-card inventory, no double spending, desktop/mobile OK');
+ assert.equal(await merchantCards(page).count(),0);assert.equal(await page.locator('#actions [data-action="merchant"]').count(),0);
+ await checkHelp(page,'#board [data-cities-info="merchant"]');assert.equal(await page.evaluate(()=>window.serverError||''),'');await page.close();
+ console.log('Merchant: hand-only cards, confirmation, read-only pre-roll/while placing, two-card inventory, no double spending, desktop/mobile OK');
 }
 async function main(){
  const probe=http.createServer();probe.listen(0,'127.0.0.1');await once(probe,'listening');const port=probe.address().port;await new Promise(r=>probe.close(r));
@@ -91,14 +105,12 @@ async function main(){
   assert(timing.max<1000,'merchant help must not stall the main thread');
   await cdp.send('Emulation.setCPUThrottlingRate',{rate:1});
   fs.mkdirSync(path.join(__dirname,'test-results'),{recursive:true});
-  const mainButton='#actions [data-action="merchant"]',help='#actions .cities-action-info[data-cities-info="merchant"]';
-  assert.equal(await page.locator('[data-card="merchant"]').count(),0);
+  assert.equal(await page.locator('#actions [data-action="merchant"],#actions .cities-action-info[data-cities-info="merchant"]').count(),0);
+  assert.equal(await merchantCards(page).count(),1);
   for(const width of [1600,390,320]){
-   await page.setViewportSize({width,height:900});assert(await page.locator(mainButton).isDisabled());assert.match(await page.locator(mainButton).textContent(),/Cards × 1/);
-   assert.equal(await page.locator('#actions .cities-action-info[data-cities-info="merchant"] svg').evaluate(el=>getComputedStyle(el).filter),'grayscale(1)');
-   await checkHelp(page,help);await checkHelp(page,'#board [data-cities-info="merchant"]');
+   await page.setViewportSize({width,height:900});await checkCardHelp(page,false);await checkHelp(page,'#board [data-cities-info="merchant"]');
   }
-  await checkPlacement(context,port,errors,mainButton,help);
+  await checkPlacement(context,port,errors);
   assert.deepEqual(errors,[]);assert.equal(await page.evaluate(()=>window.serverError||''),'');assert.equal(backend,'');
  }finally{await browser?.close();server.kill();await once(server,'exit');}
 }

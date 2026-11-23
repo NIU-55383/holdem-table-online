@@ -2,6 +2,15 @@
 window.CatanCitiesUI = (() => {
   const D=window.CatanCitiesData, B=window.CatanBoard, esc=B.escape;
   const art=(name,cls="")=>name==="cloth"?window.CatanScenarioUI.art("cloth",cls):`<svg class="${cls}" viewBox="0 0 48 48" aria-hidden="true"><use href="catan-cities-art.svg#${name}"/></svg>`;
+  const branchKey=branch=>D.branches[branch][1].toLowerCase();
+  const cardArt=key=>`<svg class="cities-card-art" viewBox="0 0 48 48" aria-hidden="true"><use href="catan-progress-art.svg#${key}"/></svg>`;
+  const cardCategory=branch=>`<span class="cities-card-category">${art(branchKey(branch))}<span>${D.branches[branch][0]} / ${D.branches[branch][1]}</span></span>`;
+  function progressCatalog(){
+    return `<div class="cities-progress-catalog"><h3>进步卡清单 / Progress cards</h3><p>按科学、贸易、政治分类；每类共 18 张，总共 54 张。卡名旁的数量是整副牌中的张数。<small>Grouped by Science, Trade and Politics: 18 cards per category, 54 in total. The quantity beside a card name is its count in the deck.</small></p><nav class="cities-card-nav" aria-label="按类别查看进步卡 / Browse progress cards by category">${D.branches.map(([zh,en],b)=>`<button type="button" data-progress-jump="${branchKey(b)}" data-progress-branch="${branchKey(b)}">${art(branchKey(b))}<span>${zh}<small>${en}</small></span></button>`).join("")}</nav><div class="cities-rule-cards">${D.branches.map(([zh,en],b)=>{
+      const cards=Object.entries(D.cards).filter(([,card])=>card[0]===b),count=cards.reduce((n,[,card])=>n+card[1],0),key=branchKey(b);
+      return `<section class="cities-card-group" data-progress-branch="${key}" id="citiesCards-${key}"><header class="cities-card-group-heading">${art(key)}<div><h3 tabindex="-1">${zh} / ${en}</h3><p>${cards.length} 种 · 共 ${count} 张<small>${cards.length} types · ${count} cards in deck</small></p></div></header>${cards.map(([key,card])=>`<article class="cities-rule-card" data-progress-card="${key}" data-progress-branch="${branchKey(b)}"><header class="cities-rule-card-heading">${cardArt(key)}<div><h4>${esc(card[2])} / ${esc(card[3])}</h4>${cardCategory(b)}<span class="cities-card-copies">牌组中 × ${card[1]} / In deck × ${card[1]}</span></div></header>${infoList(D.cardDetails[key])}</article>`).join("")}</section>`;
+    }).join("")}</div></div>`;
+  }
   const info={
     eventDie:["事件骰 / Event die"],barbarians:["蛮族船 / Barbarian ship"],
     paper:["纸 / Paper"],cloth:["布 / Cloth"],coin:["币 / Coin"],
@@ -64,7 +73,7 @@ window.CatanCitiesUI = (() => {
     const commodity=improvementCommodities[i],[colorZh,colorEn]=improvementColors[i];
     info[en.toLowerCase()]=[`${zh}改良 / ${en} improvements`];
     improvementDetails[en.toLowerCase()]=[
-      ["升级什么、什么时候能升级","What and when to upgrade",`提升的是你整条${zh}路线的等级，不是某一座城市。自己的回合完成掷骰及事件结算后，且至少拥有一座城市，才能升级。每次升 1 级，最高 5 级；物资足够时，同回合可连续升级。`,`You improve your whole ${en.toLowerCase()} track, not an individual city. Upgrade on your turn after rolling and resolving events, while owning at least one city. Each purchase raises the track by 1 level, up to level 5. You may buy several upgrades in one turn if you can pay.`],
+      ["升级什么、什么时候能升级","What and when to upgrade",`提升的是你整条${zh}路线的等级，不是某一座城市。至少拥有一座城市才能升级。每次升 1 级，最高 5 级；物资足够时，同回合可连续升级。`,`You improve your whole ${en.toLowerCase()} track, not an individual city. You must own at least one city to upgrade. Each purchase raises the track by 1 level, up to level 5. You may buy several upgrades in one turn if you can pay.`],
       ["每次要付多少","Cost of each upgrade",`用${commodity}升级。升到 1、2、3、4、5 级，通常分别付 1、2、3、4、5 张${commodity}。例如 2 级升到 3 级要付 3 张${commodity}。起重机可让一次升级少付 1 张；确认时会显示实际费用。`,`Pay in ${resource}. Reaching levels 1, 2, 3, 4 and 5 normally costs 1, 2, 3, 4 and 5 respectively. For example, level 2 to 3 costs 3 ${resource}. Crane reduces one upgrade by 1 commodity; the confirmation shows the actual cost.`],
       ["什么时候能抽进步卡","When you draw a progress card",`无论谁掷骰，所有玩家都检查自己的等级。事件骰必须是${colorZh}（${zh}），再看红骰是否符合下表。黄骰和两颗数字骰之和都不影响这次抽牌。符合条件时抽 1 张${zh}进步卡；等级更高不会让一次抽牌的张数增加。`,`Every player checks their own level whenever anyone rolls. The event die must be ${colorEn} (${en}), and the red die must qualify in the table below. Neither the yellow die nor the dice total affects this draw. If eligible, draw 1 ${en.toLowerCase()} progress card; higher levels do not increase the number of cards per draw.`],
       ["等级与红骰点数对照","Levels and eligible red-die results",`前提仍是事件骰为${colorZh}。例如：${zh} 2 级时，红骰 3 可以抽牌，红骰 4 不可以。`,`The event die must still be ${colorEn}. For example, at ${en.toLowerCase()} level 2, a red 3 qualifies but a red 4 does not.`,true],
@@ -118,6 +127,56 @@ window.CatanCitiesUI = (() => {
   document.addEventListener("click",explain,true);document.addEventListener("keydown",explain,true);
   const groups={improvement:["城市改良","Improvements","metropolis"],recruit:["招募","Recruit","knight"],activate:["激活","Activate","knight"],promote:["晋升","Promote","knight"],move:["移动骑士","Move knight","knight"],chase:["驱赶强盗","Chase robber","knight"],wall:["城墙","Walls","wall"],harbor:["商业港","Commercial Harbor","coin"],discard:["弃进步卡","Discard progress","paper"]};
   const choices={discardProgress:["进步卡超过上限，选择弃掉一张","Above the hand limit: discard a progress card"],reward:["防守贡献并列，选择进步卡类别","Tied defense: choose a progress deck"],pillage:["防守失败，选择降级的城市","Defense failed: choose a city to downgrade"],metropolis:["选择都会所在的城市","Choose the metropolis city"],relocate:["选择骑士迁移的位置","Choose where to relocate your knight"],aqueduct:["水渠：任选一张资源","Aqueduct: choose one resource"],give:["选择要交出的物资","Choose cards to give up"],alchemy:["指定黄骰与红骰","Choose yellow and red dice"],engineering:["选择城市建墙","Choose a city for a wall"],invention:["依次选择两枚数字","Select two number discs in order"],smithing:["选择要晋升的骑士","Choose a knight to promote"],guild:["选择分数更高的对手","Choose a higher-scoring opponent"],espionage:["选择查看谁的进步卡","Choose whose progress cards to inspect"],treason:["选择一名对手","Choose an opponent"],takeCards:["选择拿走的物资","Choose cards to take"],takeProgress:["选择拿走的进步卡","Choose a progress card to take"],removeKnight:["选择移除一名骑士","Choose a knight to remove"],replaceRank:["选择新骑士的等级","Choose the replacement rank"],replaceKnight:["放置替代骑士","Place the replacement knight"],merchant:["选择商人地块","Choose the merchant hex"],fleet:["选择本回合 2:1 兑换的物资","Choose this turn's 2:1 item"],monopoly:["选择垄断资源","Choose a resource"],tradeMonopoly:["选择垄断商品","Choose a commodity"],intrigue:["选择要驱逐的骑士","Choose a knight to displace"],taxation:["移动强盗，从每名相邻对手各偷一张","Move the robber; steal once from each adjacent opponent"],diplomacy:["选择开放道路","Choose an open road"],harborPay:["商业港：选择交换的商品","Commercial Harbor: choose a commodity to exchange"]};
+  function choiceDescription(g,you){
+    const q=g.citiesKnights?.choice;if(!q||g.phase!=="ckChoice")return null;
+    const player=g.players[q.player],own=q.player===you,who=own?"你":player.name,whoEn=own?"You":player.name;
+    const remaining=Number.isSafeInteger(q.count)?q.count:1;
+    if(q.kind==="give"){
+      const reason=q.reason|| (q.to===-1?"sabotage":Number.isInteger(q.to)?"wedding":null),discard=reason==="sabotage";
+      const [name,nameEn]=D.cards[reason]?.slice(2,4)||["交出物资","Give cards"],verb=discard?"弃掉":"交出",verbEn=discard?"discard":"give";
+      const source=g.players[q.source]?.name,recipient=g.players[q.to]?.name;
+      const hasTotals=Number.isSafeInteger(q.total)&&Number.isSafeInteger(q.initialCount)&&q.total>=remaining;
+      const hasScores=Number.isSafeInteger(q.sourceScore)&&Number.isSafeInteger(q.playerScore);
+      const items=[];
+      if(reason==="wedding"||reason==="sabotage"){
+        const comparison=discard?"不低于":"高于",comparisonEn=discard?"at least":"higher than";
+        items.push(["为什么要交牌","Why cards are required",`${source||"有玩家"}使用了「${name}」。${hasScores?`出牌时，${who}是 ${q.playerScore} 分，${comparison}出牌者的 ${q.sourceScore} 分。`:`这张卡要求分数${comparison}出牌者的玩家${verb}物资。`}`,`${source||"A player"} played ${nameEn}. ${hasScores?`At that time, ${whoEn} had ${q.playerScore} VP, ${comparisonEn} the player's ${q.sourceScore} VP.`:`Players whose score is ${comparisonEn} the card player's must ${verbEn} cards.`}`]);
+      }
+      let amountZh=`还需${verb} ${remaining} 张资源或商品。`,amountEn=`${remaining} resource or commodity card(s) still to ${verbEn}.`;
+      if(hasTotals){
+        const done=q.total-remaining;
+        amountZh=discard?`这张卡生效时共有 ${q.initialCount} 张资源和商品，弃掉一半并向下取整，共需弃 ${q.total} 张。`:`通常要交 2 张；这张卡生效时共有 ${q.initialCount} 张资源和商品，${q.initialCount<2?"不足 2 张，需要全部交出":"由你选择其中 2 张"}，本次共需交 ${q.total} 张。`;
+        amountZh+=`已${discard?"弃":"交"} ${done} 张，还需${verb} ${remaining} 张。`;
+        amountEn=(discard?`Started with ${q.initialCount} resources and commodities; half, rounded down, means ${q.total} cards in total. `:`Normally give 2 cards, or all if fewer. Started with ${q.initialCount} resources and commodities, so ${q.total} in total. `)+`${done} already ${discard?"discarded":"given"}; ${remaining} still to ${verbEn}.`;
+      }
+      if(!hasTotals&&reason==="wedding"){amountZh="婚礼通常要交 2 张；生效时不足 2 张就全部交出。"+amountZh;amountEn="Wedding requires 2 cards, or all if fewer at the time it took effect. "+amountEn;}
+      if(!hasTotals&&discard){amountZh="按这张卡生效时资源和商品的总数，弃掉一半，向下取整。"+amountZh;amountEn="Discard half the resources and commodities held when the card took effect, rounded down. "+amountEn;}
+      if(discard){amountZh+="城墙不能减少这次弃牌数量。";amountEn+=" City walls do not reduce this discard.";}
+      items.push(["本次数量","Cards required",amountZh,amountEn]);
+      if(discard)items.push(["交到哪里","Where the cards go","选中的牌弃回银行，其他玩家不会拿到。","The chosen cards return to the bank; no other player receives them."]);
+      else if(recipient)items.push(["交给谁","Recipient",`选中的牌交给 ${recipient}，加入其手牌。`,`The chosen cards go to ${recipient}'s hand.`]);
+      items.push([own?"怎么选择":"等待选择",own?"How to choose":"Waiting for the player",own?`每点一次下方按钮，就立即${verb} 1 张该物资。资源和商品都可以选；进步卡不算。交够后自动结束本次选择。`:`等待 ${player.name} 选择。每次${verb} 1 张，交够后自动继续。`,own?`Each button click immediately ${discard?"discards":"gives"} 1 card of that type. Choose resources or commodities, not progress cards. The choice ends automatically after the required cards are submitted.`:`Waiting for ${player.name} to ${verbEn} one card at a time. Play continues automatically once the required cards are submitted.`]);
+      return {heading:[`${name}：还需${verb} ${remaining} 张`,`${nameEn}: ${remaining} left to ${verbEn}`],prompt:[`${own?"你":"等待 "+player.name} · ${name}：还需${verb} ${remaining} 张`,`${own?"You":"Waiting for "+player.name} · ${nameEn}: ${remaining} left to ${verbEn}`],items};
+    }
+    if(q.kind==="harborPay"){
+      const source=g.players[q.source??q.to]?.name||"出牌者",sourceEn=g.players[q.source??q.to]?.name||"the card player";
+      const resources=["木材","砖块","羊毛","麦子","矿石"],resourcesEn=["lumber","brick","wool","grain","ore"],resource=resources[q.resource],resourceEn=resourcesEn[q.resource];
+      return {heading:["商业港：选择 1 张商品交换","Commercial Harbor: choose 1 commodity"],prompt:[`${own?"你":"等待 "+player.name} · 商业港：交出 1 张商品`,`${own?"You":"Waiting for "+player.name} · Commercial Harbor: give 1 commodity`],items:[
+        ["为什么要交换","Why an exchange is required",`${source} 使用了「商业港」，并向${who}发起交换。对方选给出的普通资源，${who}选交出的商品；有商品就必须交换。`,`${sourceEn} used Commercial Harbor to offer this exchange. The initiator chooses a normal resource; ${own?"you choose":player.name+" chooses"} the commodity. A player with a commodity must exchange.`],
+        ["双方各交 1 张","One card each",`从纸、布、币中选择 1 张交给 ${source}，同时收到对方的${resource?` 1 张${resource}`:" 1 张普通资源"}。`, `Choose 1 paper, cloth or coin for ${sourceEn}; receive 1 ${resourceEn||"normal resource"} in return.`],
+        [own?"怎么选择":"等待选择",own?"How to choose":"Waiting for the player",own?"点一次下方商品按钮，立即完成这次交换；普通资源和进步卡不能用来支付。":`等待 ${player.name} 选择 1 张商品。`,own?"Click one commodity button to complete the exchange immediately. Normal resources and progress cards cannot be used as payment.":`Waiting for ${player.name} to choose 1 commodity.`]
+      ]};
+    }
+    if(q.kind==="discardProgress"){
+      const held=g.citiesKnights.players[q.player]?.count;
+      return {heading:[`进步卡超限：还需弃 ${remaining} 张`,`Progress-card limit: discard ${remaining}`],prompt:[`${own?"你":"等待 "+player.name} · 进步卡超限：还需弃 ${remaining} 张`,`${own?"You":"Waiting for "+player.name} · Progress-card limit: discard ${remaining}`],items:[
+        ["为什么要弃牌","Why a discard is required",`${who}${Number.isSafeInteger(held)?`当前持有 ${held} 张进步卡，超过 4 张上限` : "持有的进步卡超过 4 张上限"}。公开的印刷术、宪法不计入这个上限；资源和商品也不算。`,`${whoEn} ${own?"have":"has"} ${Number.isSafeInteger(held)?`${held} progress cards, above the limit of 4`:"more than the limit of 4 progress cards"}. Revealed Printing and Constitution cards do not count; resources and commodities are separate.`],
+        ["弃几张、弃到哪里","How many and where",`本次还需弃 ${remaining} 张进步卡，放回对应类别的牌堆底。`,`Discard ${remaining} more progress card(s) to the bottom of their matching decks.`],
+        [own?"怎么选择":"等待选择",own?"How to choose":"Waiting for the player",own?"每点一次下方卡名，就弃掉这 1 张；弃够后自动继续结算。":`等待 ${player.name} 选择要弃的进步卡。`,own?"Each card-name button discards that 1 card immediately. Resolution continues after the required discard.":`Waiting for ${player.name} to choose a progress card to discard.`]
+      ]};
+    }
+    return null;
+  }
   function buildingCosts() {
     const rows=[
       ["road","道路 / Road",[0,1]], ["settlement","村庄 / Settlement",[0,1,2,3]],
@@ -135,11 +194,18 @@ window.CatanCitiesUI = (() => {
       ["棋子上限","Piece limits","每人最多 5 个村庄、4 座城市、15 条道路、3 道城墙；一级、二级、三级骑士各最多 2 名。","Per player: 5 settlements, 4 cities, 15 roads, 3 walls and 2 knights of each rank."]
     ])}</section>`;
   }
-  function rules(focusCosts=false) {
+  function rules(focus=false) {
+    const focusCosts=focus===true,focusProgress=focus==="progress";
     let dialog=document.getElementById("citiesRules");
     if(!dialog){dialog=document.createElement("dialog");dialog.id="citiesRules";dialog.dataset.rulesDialog="";dialog.innerHTML='<div class="dialog-heading"><h2>城市与骑士<small>Cities &amp; Knights</small></h2><button class="icon-button" data-close aria-label="关闭 / Close">×</button></div><div data-rules-body></div>';document.body.append(dialog);dialog.querySelector("[data-close]").onclick=()=>dialog.close();}
-    dialog.querySelector("h2").innerHTML=focusCosts?"建造费用<small>城市与骑士 / Cities &amp; Knights · Build costs</small>":"城市与骑士<small>Cities &amp; Knights</small>";
-    dialog.querySelector("[data-rules-body]").innerHTML=buildingCosts()+D.ruleSections.map(({key,title,items})=>`<section data-cities-rule="${esc(key)}"><h3>${esc(title)}</h3>${infoList(items)}</section>`).join("")+`<h3>进步卡清单 / Progress cards</h3><div class="cities-rule-cards">${Object.entries(D.cards).map(([key,c])=>`<section style="--branch:${D.branches[c[0]][3]}"><h4>${esc(c[2])} / ${esc(c[3])} × ${c[1]}</h4>${infoList(D.cardDetails[key])}</section>`).join("")}</div><a href="${D.source}" target="_blank" rel="noopener">官方 2025 规则 / Official 2025 Rulebook</a>`;
+    dialog.dataset.view=focusProgress?"progress":"rules";
+    dialog.querySelector("h2").innerHTML=focusProgress?"进步卡清单<small>Progress cards</small>":focusCosts?"建造费用<small>城市与骑士 / Cities &amp; Knights · Build costs</small>":"城市与骑士<small>Cities &amp; Knights</small>";
+    dialog.querySelector("[data-rules-body]").innerHTML=(focusProgress?"":buildingCosts()+D.ruleSections.map(({key,title,items})=>`<section data-cities-rule="${esc(key)}"><h3>${esc(title)}</h3>${infoList(items)}</section>`).join(""))+progressCatalog()+`<a href="${D.source}" target="_blank" rel="noopener">官方 2025 规则 / Official 2025 Rulebook</a>`;
+    dialog.onclick=e=>{
+      const button=e.target.closest("[data-progress-jump]");if(!button)return;
+      const body=dialog.querySelector("[data-rules-body]"),group=dialog.querySelector(`#citiesCards-${button.dataset.progressJump}`);
+      if(group){body.scrollTop+=group.getBoundingClientRect().top-body.getBoundingClientRect().top;group.querySelector("h3").focus({preventScroll:true});}
+    };
     window.BoardGameRules.prepare(dialog); dialog.showModal();dialog.querySelector("[data-rules-body]").scrollTop=0;
   }
   function mount(send,redraw) {
@@ -149,7 +215,7 @@ window.CatanCitiesUI = (() => {
     const status=document.createElement("section");status.id="citiesStatus";status.className="cities-status";status.hidden=true;status.setAttribute("aria-label","城市与骑士状态 / Cities & Knights status");document.querySelector(".player-overview").append(status);
     status.onclick=e=>{if(e.target.closest("[data-cities-rules]"))rules();};
     const fleet=document.createElement("button");fleet.id="citiesFleet";fleet.type="button";fleet.hidden=true;fleet.dataset.citiesInfo="barbarians";
-    fleet.innerHTML='<span class="cities-fleet-heading"><span><strong>蛮族船</strong><small>Barbarian ship</small></span><span class="cities-fleet-state" aria-live="polite"></span><i data-lucide="circle-help" aria-hidden="true"></i></span><span class="cities-fleet-route" aria-hidden="true">'+Array.from({length:8},(_,i)=>`<span class="cities-fleet-stop" data-step="${i}"><b>${i}</b></span>`).join("")+art("barbarians","cities-fleet-ship")+'</span><span class="cities-fleet-ends" aria-hidden="true"><span>起点 / Start</span><span>入侵 / Attack</span></span>';
+    fleet.innerHTML='<span class="cities-fleet-heading"><span><strong>蛮族船</strong><small>Barbarian ship</small></span><span class="cities-fleet-state" aria-live="polite"></span><i data-lucide="circle-help" aria-hidden="true"></i></span><span class="cities-fleet-route" aria-hidden="true">'+Array.from({length:8},(_,i)=>`<span class="cities-fleet-stop" data-step="${i}"><b>${i}</b></span>`).join("")+art("barbarians","cities-fleet-ship")+'</span><span class="cities-fleet-ends" aria-hidden="true"><span>起点 / Start</span><span>入侵 / Attack</span></span><span class="cities-fleet-robber">首次入侵前无强盗<small>No robber before the first attack</small></span>';
     document.getElementById("boardViewport").before(fleet);
     const dialog=document.createElement("dialog");dialog.className="cities-dialog";dialog.innerHTML='<div class="dialog-heading"><h2></h2><button class="icon-button" data-close aria-label="关闭 / Close">×</button></div><p></p><div class="cities-confirm-details" hidden></div><div class="cities-dialog-actions"><button data-play class="primary">使用 / Play</button></div>';document.body.append(dialog);
     dialog.querySelector("[data-close]").onclick=()=>dialog.close();
@@ -160,7 +226,7 @@ window.CatanCitiesUI = (() => {
     }
     function choose(key){const o=available().find(x=>x.key===key);if(o)confirm(o);}
     function setDescription(upgrade,cardKey){
-      const details=dialog.querySelector(".cities-confirm-details"),content=upgrade?improvementConfirmation(upgrade):cardKey?{title:D.cards[cardKey].slice(2,4).join(" / "),html:infoList(D.cardDetails[cardKey])}:null;
+      const details=dialog.querySelector(".cities-confirm-details"),content=upgrade?improvementConfirmation(upgrade):cardKey?{title:D.cards[cardKey].slice(2,4).join(" / "),html:`<div class="cities-card-description-meta" data-progress-branch="${branchKey(D.cards[cardKey][0])}">${cardArt(cardKey)}${cardCategory(D.cards[cardKey][0])}</div>`+infoList(D.cardDetails[cardKey])}:null;
       dialog.classList.toggle("is-improvement",Boolean(upgrade));dialog.classList.toggle("is-description",Boolean(content));dialog.querySelector("p").hidden=Boolean(content);details.hidden=!content;details.innerHTML=content?.html||"";details.scrollTop=0;
       dialog.querySelector("[data-play]").textContent=upgrade?"确认升级 / Upgrade":"使用 / Play";
       if(content)dialog.querySelector("h2").textContent=content.title;
@@ -173,11 +239,12 @@ window.CatanCitiesUI = (() => {
       setDescription(o.improvement,card?.key);
       const key=revision;
       dialog.querySelector("[data-play]").disabled=false;
-      dialog.querySelector("[data-play]").onclick=()=>{if(key===revision && available().some(x=>x.key===o.key)&&!blocked())send({type:"ck",choice:o.key});dialog.close();};
+      dialog.querySelector("[data-play]").onclick=()=>{if(key===revision && available().some(x=>x.key===o.key)&&!blocked()){send({type:"ck",choice:o.key});if(card?.key==="merchant")document.getElementById("boardViewport").scrollIntoView({behavior:"instant",block:"center"});}dialog.close();};
       dialog.showModal();
     }
     panel.onclick=e=>{
       const b=e.target.closest("button");if(!b||b.disabled)return;
+      if(b.hasAttribute("data-progress-catalog")){rules("progress");return;}
       if(b.dataset.group){selectGroup(group===b.dataset.group?"":b.dataset.group);return;}
       if(b.dataset.card){const o=available().find(x=>x.key===b.dataset.choice);if(o)confirm(o);else{setDescription(null,b.dataset.card);dialog.querySelector("[data-play]").onclick=null;dialog.querySelector("[data-play]").disabled=true;dialog.showModal();}return;}
       const o=available().find(x=>x.key===b.dataset.choice);if(o){if(o.group==="choice")send({type:"ck",choice:o.key});else confirm(o);}
@@ -198,16 +265,17 @@ window.CatanCitiesUI = (() => {
       const zh=resolving?"蛮族入侵，正在结算":`距入侵还差 ${remaining} 格`,en=resolving?"Barbarian attack: resolving":`${remaining} ${remaining===1?"advance":"advances"} until attack`;
       if(fleet.dataset.position!==String(position)||fleet.dataset.resolving!==String(resolving)){
         fleet.dataset.position=String(position);fleet.dataset.urgent=String(remaining<=2);fleet.dataset.resolving=String(resolving);fleet.style.setProperty("--fleet-position",position);
-        fleet.setAttribute("aria-label",`蛮族船 / Barbarian ship · ${zh} / ${en} · 规则 / Rules`);
         fleet.querySelector(".cities-fleet-state").innerHTML=`<strong>${zh}</strong><small>${en}</small>`;
         fleet.querySelectorAll("[data-step]").forEach(stop=>{stop.classList.toggle("passed",Number(stop.dataset.step)<position);stop.classList.toggle("current",Number(stop.dataset.step)===position);});
       }
+      fleet.querySelector(".cities-fleet-robber").hidden=Boolean(c.attacked);
+      fleet.setAttribute("aria-label",`蛮族船 / Barbarian ship · ${zh} / ${en}${c.attacked?"":" · 首次入侵前无强盗 / No robber before the first attack"} · 规则 / Rules`);
       if(c.choice?.kind==="moveKnight"){if(c.choice.from!=null)moveSource=c.choice.from;}else if(!pending)moveSource=null;
       const key=`${r.code}:${r.you}:${g.revision}`;if(key!==revision){revision=key;group="";if(dialog.open)dialog.close();}
       const all=available(), q=c.choice, opts=q?.player===r.you?all:all.filter(o=>o.group===group);
-      const heading=q?choices[q.kind]||[q.kind,q.kind]:groups[group]?.slice(0,2);
+      const description=choiceDescription(g,r.you),heading=description?.heading||(q?choices[q.kind]||[q.kind,q.kind]:groups[group]?.slice(0,2));
       const disabled=pending||r.control?.paused;
-      const iconEvent=c.event==="ship"?"蛮族船 / Barbarians":({science:"科学 / Science",trade:"贸易 / Trade",politics:"政治 / Politics"})[c.event]||"事件骰 / Event die";
+
       const players=c.players.map((p,i)=>{
         const levels=p.levels.map((n,b)=>{
           const [zh,en]=D.branches[b],label=`${zh}改良等级：${n} / 5 · ${en} level: ${n} / 5`;
@@ -215,10 +283,11 @@ window.CatanCitiesUI = (() => {
         }).join("");
         return `<div class="cities-player"><span style="border-left:3px solid ${B.COLORS[i]};padding-left:6px">${esc(g.players[i].name)}${p.defenders?` · +${p.defenders} VP`:""}</span>${levels}<span class="cities-strength" title="已激活骑士强度 / Active knight strength" aria-label="已激活骑士强度 / Active knight strength: ${p.strength}">${infoButton("knight")}<b>${p.strength}</b></span></div>`;
       }).join("");
-      status.innerHTML=`<h3 class="cities-heading">城市与骑士 <small>Cities &amp; Knights</small><button class="icon-button" data-cities-rules title="规则 / Rules" aria-label="规则 / Rules"><i data-lucide="book-open" aria-hidden="true"></i></button></h3><div class="cities-event">${iconEvent}<small>${c.attacked?"强盗已入场 / Robber active":"首次入侵前无强盗 / Robber waits for first attack"}</small></div>${players}`;
-      panel.innerHTML=`<div class="cities-progress">${c.players[r.you].cards.filter(card=>card.key!=="merchant").map(card=>{const d=D.cards[card.key],o=all.find(x=>x.key===`play:${card.id}`);return `<button data-card="${card.key}" data-choice="${o?.key||""}" style="--branch:${D.branches[d[0]][3]}" ${disabled?"disabled":""}>${esc(d[2])}<small>${esc(d[3])}${o?" · 可用 / Ready":""}</small></button>`;}).join("")}</div>
+      status.innerHTML=`<h3 class="cities-heading">城市与骑士 <small>Cities &amp; Knights</small><button class="icon-button" data-cities-rules title="规则 / Rules" aria-label="规则 / Rules"><i data-lucide="book-open" aria-hidden="true"></i></button></h3>${players}`;
+      const hand=c.players[r.you].cards;
+      panel.innerHTML=`<div class="cities-progress-heading"><div><h3 id="citiesProgressTitle">进步卡 <small>Progress cards</small></h3><p>我的手牌 · ${hand.length} 张 / My hand: ${hand.length}</p></div><button type="button" class="icon-button" data-progress-catalog aria-label="查看进步卡清单 / Browse progress cards" title="查看进步卡清单 / Browse progress cards"><i data-lucide="circle-help" aria-hidden="true"></i></button></div><div class="cities-progress" aria-labelledby="citiesProgressTitle">${hand.map(card=>{const d=D.cards[card.key],o=all.find(x=>x.key===`play:${card.id}`);return `<button data-card="${card.key}" data-choice="${o?.key||""}" data-progress-branch="${branchKey(d[0])}" ${disabled?"disabled":""}>${cardArt(card.key)}<span class="cities-hand-card-name">${esc(d[2])}<small>${esc(d[3])}</small></span>${cardCategory(d[0])}${o?'<span class="cities-card-ready">可用 / Ready</span>':""}</button>`;}).join("")}</div>${hand.length?"":'<p class="cities-progress-empty">暂无进步卡手牌<small>No progress cards in hand</small></p>'}
         <div class="cities-controls">${Object.entries(groups).filter(([key])=>!["wall","recruit","activate","promote","improvement","move"].includes(key)&&all.some(o=>o.group===key)).map(([key,n])=>`<button data-group="${key}" class="secondary ${group===key?"selected":""}" ${disabled?"disabled":""}>${art(n[2])}<span>${n[0]}<small>${n[1]}</small></span></button>`).join("")}</div>
-        ${heading?`<div class="cities-choice" aria-live="polite"><h3>${esc(heading.join(" / "))}${q?` · ${esc(g.players[q.player].name)}`:""}</h3><div class="cities-choice-list">${opts.filter(o=>!o.position).map(o=>`<button data-choice="${esc(o.key)}" ${disabled?"disabled":""}>${esc(o.label)}</button>`).join("")}</div></div>`:""}`;
+        ${heading?`<div class="cities-choice" aria-live="polite"><h3>${esc(heading.join(" / "))}${q?` · ${esc(g.players[q.player].name)}`:""}</h3>${description?`<div class="cities-choice-context">${infoList(description.items)}</div>`:""}<div class="cities-choice-list">${opts.filter(o=>!o.position).map(o=>`<button data-choice="${esc(o.key)}" ${disabled?"disabled":""}>${esc(o.label)}</button>`).join("")}</div></div>`:""}`;
       window.lucide?.createIcons();
     }
     function overlay(board){
@@ -248,5 +317,5 @@ window.CatanCitiesUI = (() => {
     }
     return {render,overlay,selectGroup,choose,get selectedGroup(){return group;}};
   }
-  return {art,infoButton,showInfo,eventDie,rules,mount};
+  return {art,infoButton,showInfo,eventDie,rules,choiceDescription,mount};
 })();

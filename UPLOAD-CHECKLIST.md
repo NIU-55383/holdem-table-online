@@ -10,11 +10,15 @@
 
 城市与骑士为独立 3–4 人模式，依据 CATAN 官网 2025 年说明书及 FAQ，不与航海家或 5–6 人扩展混用。同步上传全部 `catan-cities*` 文件、`catan-engine.js`、`catan-server.js`、`catan.js/html`、`catan-stats.js`、`catan-music.js`、`room-archive.js`，以及 `audio/peritune-strategy.mp3` 和 `audio/CREDITS.md`。新局选择城市与骑士，旧局规则不变。测试初始城市、三种商品、骑士、城墙、都会、蛮族、54 张进步卡和所有选择阶段的存档恢复；核对手机和桌面棋盘标记、规则阅读器与音乐切换。部署重启前先保存现有房间。
 
-卡坦岛全部进步卡弹窗修复：同步更新 `catan.js`、`catan-cities-ui.js`、`catan-alchemy-ui-test.js`、`catan-progress-dialog-ui-test.js` 和 `package.json`。检查全部 25 种进步卡：22 种普通手牌在掷骰前后均能关闭说明或取消确认；商人专用说明及印刷术、宪法的规则说明也可退出。重点核对掷骰前灌溉、掷骰后炼金术，以及可用卡和不可用卡快速切换时按钮状态不串用；查看和取消不耗牌、不改变回合，之后仍能正常掷骰或结束回合。运行 `npm run test:cities-ui`，包含桌面、手机触摸、键盘和完整炼金术出牌流程；本次没有后端协议或存档格式变更。
+卡坦岛全部进步卡弹窗修复：同步更新 `catan.js`、`catan-cities-ui.js`、`catan-alchemy-ui-test.js`、`catan-progress-dialog-ui-test.js` 和 `package.json`。检查全部 25 种进步卡：23 种手动使用的进步卡（含商人）在掷骰前后均能关闭说明或取消确认；棋盘商人说明及印刷术、宪法的规则说明也可退出。重点核对掷骰前灌溉、掷骰后炼金术，以及可用卡和不可用卡快速切换时按钮状态不串用；查看和取消不耗牌、不改变回合，之后仍能正常掷骰或结束回合。运行 `npm run test:cities-ui`，包含桌面、手机触摸、键盘和完整炼金术出牌流程；本次没有后端协议或存档格式变更。
 
 城市改良说明与升级确认更新：一并部署 `catan-cities-ui.js`、`catan-cities.css`、`catan-cities.js`、`catan-cities-test.js`、`catan-improvement-ui-test.js` 和 `package.json`。三种改良介绍使用分条说明和 0—5 级红骰对照表；确认弹窗按后端提供的等级、实际费用、起重机减费和都会归属显示本次收益，不能仅更新前端。检查免费升级、三级能力、四级没有拿到都会、五级夺取和保住都会的不同提示；阅读和取消不得发送出牌请求。运行 `npm run test:cities` 和 `npm run test:cities-ui`；更新服务前先保存现有对局。
 
 城市与骑士全部新增机制说明改用中英配对的 bullet point：一起更新 `catan-cities-data.js`、`catan-cities-ui.js`、`catan-cities.css`、`catan.js` 与对应浏览器、规则测试。覆盖蛮族船、骑士、城墙、商人、都会、事件骰、商品、全部 25 种进步卡、保卫卡坦得分说明和完整规则页；升级条件与红骰表保持明确。检查桌面、320px 手机及横屏阅读，长内容仅在正文区域滚动，关闭按钮与出牌按钮保持可见；查看或关闭说明不消耗卡牌、不改变游戏。运行 `npm run test:rules`、`npm run test:cities-ui` 与 `node --test catan-score-info-ui-test.js`。
+
+城市与骑士交牌提示更新：同时部署 `catan-cities.js`、`catan-cities-ui.js`、`catan-cities.css`、`catan.js`、对应测试和 `package.json`，仅更新网页不能获得新的交牌原因数据。婚礼与破坏的选择栏和顶部提示应显示出牌者、触发条件、本次总数、已交与剩余数，以及交给玩家或弃回银行；每点一次只交 1 张。商业港显示双方各交什么，进步卡超限显示本次弃牌数量。新存档保存触发时的数量和分数；旧存档缺少原始总数时，只显示可信的剩余数。运行 `npm run test:cities` 与 `node catan-give-choice-ui-test.js`，验证逐张选择、旁观玩家、掉线重连和交牌中途保存恢复；更新服务前先保存现有对局。
+
+进步卡分类与插图更新：同步部署新增 `catan-progress-art.svg`，以及 `catan-cities-ui.js`、`catan-cities.css`、`catan.js`、相关浏览器测试和 `package.json`。清单按科学、贸易、政治分组，分别用白、黄、蓝卡面，每张卡附独立插图和类别文字；事件骰的绿色科学规则不变。手牌区显示全部未公开进步卡（包含商人），标题旁可直接打开分类清单；商人不再放在主操作按钮中。检查空手牌及暂停时仍可读清单、类别跳转、手机布局、商人确认后只消耗一张并选地放置，以及原规则和费用入口正常。运行 `node catan-progress-catalog-ui-test.js`、`node catan-merchant-ui-test.js` 与 `npm run test:cities-ui`。
 
 百万美金 2024 与 2016 共用 `million.html`、`million.js/css` 和共享规则阅读器，不另建新版页面。同步部署 `million-2024.js`、`million-bot.js`、`million-data.js`、`million-engine.js`、`million-server.js`、`room-archive.js`、规则数据、`package.json` 及相关测试。检查版本切换后人数上限（旧版 8、新版 9）、角色列表、规则入口和角色详情均对应所选版本；新版不显示旧版威胁卡、禁止连选或暴徒不分赃选项，旧版问号帮助仍可用。
 

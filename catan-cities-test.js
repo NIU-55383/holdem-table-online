@@ -164,3 +164,90 @@ test('Diplomacy cannot strand any knight, including an opponent',()=>{
   delete g.board.vertices[e.a].knight;g.board.vertices[e.a].owner=2;g.board.vertices[e.a].level=1;
   assert(E.legal(g,0).citiesKnights.some(o=>o.key===`play:${card.id}`));
 });
+
+
+function clearHands(g){for(const p of g.players)for(let r=0;r<8;r++)hand(g,p.id,r,0);}
+const giveContextFields=['reason','source','total','initialCount','sourceScore','playerScore'];
+function pendingGive(reason='wedding',count=5){
+  const g=setup();g.phase='main';g.current=0;clearHands(g);
+  if(reason==='wedding')g.cities.players[1].defenders=1;
+  hand(g,1,2,count-1);hand(g,1,7,1);grant(g,1,'crane');play(g,0,reason);return g;
+}
+
+test('Wedding exposes its cause and exact two-card or short-hand obligation without revealing cards',()=>{
+  let g=setup(4);g.phase='main';g.current=0;clearHands(g);
+  g.cities.players[1].defenders=1;g.cities.players[2].defenders=1;
+  hand(g,1,2,2);hand(g,1,7,1);hand(g,2,3,1);hand(g,3,4,2);grant(g,1,'crane');play(g,0,'wedding');
+  const expected={kind:'give',player:1,count:2,reason:'wedding',source:0,to:0,total:2,initialCount:3,sourceScore:3,playerScore:4};
+  for(let viewer=0;viewer<4;viewer++){
+    const view=E.publicGame(g,viewer);assert.deepEqual(view.citiesKnights.choice,expected);
+    for(let id=0;id<4;id++)if(id!==viewer){assert.equal(view.players[id].resources,null);assert.equal(view.citiesKnights.players[id].cards,null);}
+    assert.equal(view.legal.citiesKnights.length>0,viewer===1,'only the required payer may choose cards');
+  }
+  assert.deepEqual(g.cities.queue.map(q=>q.player),[1,2],'equal-score player owes nothing for Wedding');
+  const receiver=[...g.players[0].resources];choose(g,o=>o.key==='r:7');
+  assert.equal(g.players[0].resources[7],receiver[7]+1);assert.equal(g.players[1].resources[7],0);
+  assert.deepEqual(E.publicGame(g,1).citiesKnights.choice,{...expected,count:1});
+  g=archive(g);assert.deepEqual(E.publicGame(g,1).citiesKnights.choice,{...expected,count:1},'mid-payment save retains original totals and cause');
+  choose(g,o=>o.key==='r:2');
+  assert.deepEqual(E.publicGame(g,2).citiesKnights.choice,{...expected,player:2,count:1,total:1,initialCount:1},'one-card hand owes one, not two');
+  choose(g);assert.equal(g.phase,'main');assert.equal(g.players[2].resources.reduce((a,b)=>a+b),0);
+  assert.equal(g.players[0].resources.reduce((a,b)=>a+b),3);assert.equal(g.players[3].resources[4],2);C.validate(g);
+});
+
+test('Sabotage records an odd hand total, includes tied scores and decrements only the remaining count',()=>{
+  let g=pendingGive('sabotage',9);C.cities(g,1)[0].wall=true;
+  const expected={kind:'give',player:1,count:4,reason:'sabotage',source:0,to:-1,total:4,initialCount:9,sourceScore:3,playerScore:3};
+  assert.deepEqual(E.publicGame(g,1).citiesKnights.choice,expected);
+  const bank=[...g.bank],source=[...g.players[0].resources];
+  choose(g,o=>o.key==='r:7');assert.equal(g.bank[7],bank[7]+1);assert.deepEqual(g.players[0].resources,source,'discarded cards go to the bank, not the source');
+  assert.deepEqual(E.publicGame(g,0).citiesKnights.choice,{...expected,count:3});
+  g=archive(g);assert.deepEqual(E.publicGame(g,2).citiesKnights.choice,{...expected,count:3});
+  choose(g);assert.equal(E.publicGame(g,1).citiesKnights.choice.count,2);choose(g);assert.equal(E.publicGame(g,1).citiesKnights.choice.count,1);choose(g);
+  assert.equal(g.phase,'main');assert.equal(g.players[1].resources.reduce((a,b)=>a+b),5);assert.equal(g.bank[2],bank[2]+3);assert(C.cities(g,1)[0].wall);C.validate(g);
+});
+
+test('legacy mid-payment archives preserve their remaining debt without inventing an initial total',()=>{
+  for(const reason of ['wedding','sabotage']){
+    let g=pendingGive(reason,5);choose(g,o=>o.key==='r:7');
+    const remaining=g.cities.queue[0].count;
+    for(const q of g.cities.queue)for(const field of giveContextFields)delete q[field];
+    g=archive(g);
+    const view=E.publicGame(g,1).citiesKnights.choice;
+    assert.deepEqual(view,{kind:'give',player:1,count:remaining,reason,source:0,to:reason==='wedding'?0:-1});
+    assert(!Object.hasOwn(view,'total'));assert(!Object.hasOwn(view,'initialCount'));assert(!Object.hasOwn(view,'sourceScore'));
+    finishChoices(g);C.validate(g);
+  }
+});
+
+test('invalid or partial payment explanation metadata is rejected when restoring a save',()=>{
+  const g=pendingGive('wedding',5);
+  const corruptions=[
+    q=>q.reason='invented',q=>q.reason='sabotage',q=>q.source=1,q=>q.source=99,
+    q=>q.to=-1,q=>q.total=3,q=>q.count=3,q=>q.initialCount=4,q=>q.initialCount=999,
+    q=>q.sourceScore=-1,q=>q.playerScore=q.sourceScore,q=>q.sourceScore=1000001,
+    q=>delete q.reason,q=>delete q.total,q=>q.total=null
+  ];
+  for(const corrupt of corruptions){const bad=structuredClone(g);corrupt(bad.cities.queue[0]);assert.throws(()=>archive(bad));}
+  const partial=structuredClone(g);for(const field of giveContextFields)delete partial.cities.queue[0][field];partial.cities.queue[0].initialCount=5;assert.throws(()=>archive(partial));
+  const unrelated=setup();unrelated.phase='ckChoice';unrelated.cities.queue=[{kind:'aqueduct',player:0,total:1}];assert.throws(()=>archive(unrelated));
+});
+
+test('Commercial Harbor publicly explains the one-for-one exchange but keeps the chosen commodity private',()=>{
+  let g=setup();g.phase='main';g.current=0;clearHands(g);hand(g,0,0,1);hand(g,1,5,1);hand(g,1,6,1);play(g,0,'harbor');
+  E.act(g,0,{type:'ck',choice:'harbor:1:0'});g=archive(g);
+  const expected={kind:'harborPay',player:1,count:1,reason:'harbor',source:0,to:0,resource:0,total:1};
+  for(let id=0;id<3;id++)assert.deepEqual(E.publicGame(g,id).citiesKnights.choice,expected);
+  assert.equal(E.publicGame(g,0).players[1].resources,null);
+  choose(g,o=>o.key==='r:6');assert.equal(g.players[0].resources[0],0);assert.equal(g.players[1].resources[0],1);assert.equal(g.players[0].resources[6],1);assert.equal(g.players[1].resources[5],1);C.validate(g);
+});
+
+test('off-turn progress overflow exposes its limit reason and one-card action without exposing the hand',()=>{
+  const g=setup();g.cities.players[1].levels[0]=1;
+  for(const key of ['crane','medicine','mining','invention'])grant(g,1,key);
+  const deck=g.cities.decks[0],top=deck.findIndex(key=>key!=='printing');[deck[0],deck[top]]=[deck[top],deck[0]];
+  const dice=[.5,0,.5];E.act(g,0,{type:'roll'},()=>dice.shift());
+  assert.deepEqual(E.publicGame(g,0).citiesKnights.choice,{kind:'discardProgress',player:1,count:1,reason:'progressLimit'});
+  assert.equal(E.publicGame(g,0).citiesKnights.players[1].cards,null);assert.equal(g.cities.players[1].cards.length,5);
+  choose(g);assert.equal(g.cities.players[1].cards.length,4);assert.equal(g.phase,'main');C.validate(g);
+});

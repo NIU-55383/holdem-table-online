@@ -78,7 +78,7 @@ async function checkRulesBullets(page){
   const section=sections.nth(i);assert(await section.locator(':scope > ul.cities-info-list > li').count()>=2,'every rule chapter uses bullets');
   assert.equal(await section.locator(':scope > p').count(),0);
  }
- const cards=body.locator('.cities-rule-cards section');assert.equal(await cards.count(),Object.keys(D.cards).length);
+ const cards=body.locator('.cities-rule-cards [data-progress-card]');assert.equal(await cards.count(),Object.keys(D.cards).length);
  for(let i=0;i<await cards.count();i++){
   const card=cards.nth(i);assert(await card.locator('ul.cities-info-list > li').count()>=1,'every progress card uses bullets');
   assert(await card.locator('li').evaluateAll(items=>items.every(item=>item.querySelector('small')?.textContent.trim())));
@@ -94,10 +94,20 @@ async function checkFleet(page){
  assert(await fleet.evaluate(el=>el.nextElementSibling.id==='boardViewport'&&el.parentElement.classList.contains('board-section')));
  assert.equal(await fleet.locator('[data-step]').count(),8);assert.equal(await fleet.locator('use').getAttribute('href'),'catan-cities-art.svg#barbarians');
  for(const ship of [0,1,4,6]){
-  await page.evaluate(ship=>{const r=structuredClone(room);r.game.citiesKnights.ship=ship;r.game.citiesKnights.choice=null;testCities.render(r);},ship);
+  await page.evaluate(ship=>{const r=structuredClone(room);r.game.citiesKnights.ship=ship;r.game.citiesKnights.choice=null;r.game.citiesKnights.attacked=false;testCities.render(r);},ship);
   assert.equal(await fleet.getAttribute('data-position'),String(ship));assert.match(await fleet.textContent(),new RegExp(`${7-ship} 格`));assert.equal(await fleet.getAttribute('data-urgent'),String(ship>=5));assert.equal(await fleet.locator('.current').getAttribute('data-step'),String(ship));
  }
+ const note=fleet.locator('.cities-fleet-robber');assert(await note.isVisible());
+ assert.match(await note.textContent(),/首次入侵前无强盗/);assert.match(await note.textContent(),/No robber before the first attack/);
+ assert(await note.evaluate(el=>el.previousElementSibling.classList.contains('cities-fleet-ends')),'robber note belongs below the fleet track');
+ assert.equal(await page.locator('#citiesStatus .cities-event').count(),0,'remove the duplicate event/robber status row');
+ for(const attacked of [true,false]){
+  await page.evaluate(attacked=>{const r=structuredClone(room);r.game.citiesKnights.ship=6;r.game.citiesKnights.choice=null;r.game.citiesKnights.attacked=attacked;testCities.render(r);},attacked);
+  assert.equal(await note.isHidden(),attacked,'robber note updates even when the ship position does not change');
+  assert.equal((await fleet.getAttribute('aria-label')).includes('首次入侵前无强盗'),!attacked);
+ }
  await fleet.scrollIntoViewIfNeeded();await page.waitForTimeout(500);
+ assert(await note.evaluate(el=>{const r=el.getBoundingClientRect(),fleet=el.parentElement.getBoundingClientRect();return el.scrollWidth<=el.clientWidth+1&&r.left>=fleet.left&&r.right<=fleet.right&&r.bottom<=fleet.bottom;}),'bilingual robber note fits desktop and mobile');
  assert(await fleet.evaluate(el=>{const r=el.getBoundingClientRect(),ship=el.querySelector('.cities-fleet-ship').getBoundingClientRect(),route=el.querySelector('.cities-fleet-route').getBoundingClientRect();return el.scrollWidth<=el.clientWidth+1&&r.left>=0&&r.right<=innerWidth+1&&ship.left>=r.left&&ship.right<=r.right&&Math.abs(ship.x+ship.width/2-(route.x+route.width*6.5/8))<2;}));
  await fleet.screenshot({path:path.join(__dirname,`test-results/catan-barbarian-fleet-${page.viewportSize().width}.png`)});
  if(page.viewportSize().width===1440)await fleet.press('Enter');else await fleet.locator('svg.cities-fleet-ship').click();
@@ -106,7 +116,7 @@ async function checkFleet(page){
   await page.evaluate(kind=>{const r=structuredClone(room);r.game.citiesKnights.ship=0;r.game.citiesKnights.choice={kind,player:1};testCities.render(r);},kind);
   assert.equal(await fleet.getAttribute('data-position'),'7');assert.match(await fleet.textContent(),/正在结算/);assert(!/7 advances until/.test(await fleet.textContent()));
  }
- await page.evaluate(()=>{const r=structuredClone(room);r.game.citiesKnights.ship=0;r.game.citiesKnights.choice=null;r.game.citiesKnights.attacked=true;testCities.render(r);});assert.equal(await fleet.getAttribute('data-position'),'0');assert.match(await fleet.textContent(),/7 advances until attack/);
+ await page.evaluate(()=>{const r=structuredClone(room);r.game.citiesKnights.ship=0;r.game.citiesKnights.choice=null;r.game.citiesKnights.attacked=true;testCities.render(r);});assert.equal(await fleet.getAttribute('data-position'),'0');assert.match(await fleet.textContent(),/7 advances until attack/);assert(await note.isHidden());
  await page.evaluate(()=>{const r=structuredClone(room);delete r.game.citiesKnights;testCities.render(r);});assert(await fleet.isHidden());
  await page.evaluate(()=>testCities.render(room));assert(await fleet.isVisible());assert.deepEqual(await page.evaluate(()=>[JSON.stringify(room),actionRequests.length]),before);
 }
@@ -204,12 +214,12 @@ async function main(){
   await page.addInitScript(()=>{for(const [name,handle] of [['CatanStatistics','testStats'],['CatanCitiesUI','testCities']]){let api;Object.defineProperty(window,name,{get:()=>api,set(value){api=value;const mount=api.mount;api.mount=(...args)=>window[handle]=mount(...args);}});}});
   await page.goto(`http://127.0.0.1:${port}/catan.html?edition=cities`);await page.waitForFunction(()=>window.sock?.readyState===1);
   await page.locator('#previewBoard svg').waitFor();assert.equal(await page.locator('[data-edition="cities"]').getAttribute('class'),'selected');assert(await page.locator('[data-seats="6"]').isHidden());
-  await page.click('#baseRules');await page.locator('#citiesRules[open]').waitFor();assert.equal(await page.locator('#citiesRules .cities-rule-cards section').count(),Object.keys(D.cards).length);assert(await page.locator('#citiesRules').evaluate(d=>d.classList.contains('bg-rules-dialog')));await page.keyboard.press('Escape');
+  await page.click('#baseRules');await page.locator('#citiesRules[open]').waitFor();assert.equal(await page.locator('#citiesRules .cities-rule-cards [data-progress-card]').count(),Object.keys(D.cards).length);assert(await page.locator('#citiesRules').evaluate(d=>d.classList.contains('bg-rules-dialog')));await page.keyboard.press('Escape');
   await importRoom(page,fixture());
-  await page.locator('#citiesPanel').waitFor();assert.equal(await page.locator('.cities-progress button').count(),4);assert.equal(await page.locator('#bank .bank-item').count(),8);assert(await page.locator('[data-action="buyDevelopment"]').count()===0);
+  await page.locator('#citiesPanel').waitFor();assert.equal(await page.locator('.cities-progress button').count(),5);assert.equal(await page.locator('#bank .bank-item').count(),8);assert(await page.locator('[data-action="buyDevelopment"]').count()===0);
   assert.match(await page.locator('#players tr').first().locator('.development-count').getAttribute('aria-label'),/Progress cards: 5/);
   assert.match(await page.locator('#players tr').first().locator('.knight-count').textContent(),/2/);
-  assert.deepEqual(await page.locator('#actions [data-action]').evaluateAll(bs=>bs.slice(0,13).map(b=>b.dataset.action)),['road','settlement','city','wall','recruitKnight','activateKnight','promoteKnight','moveKnight','improve0','improve1','improve2','merchant','trade']);
+  assert.deepEqual(await page.locator('#actions [data-action]').evaluateAll(bs=>bs.slice(0,12).map(b=>b.dataset.action)),['road','settlement','city','wall','recruitKnight','activateKnight','promoteKnight','moveKnight','improve0','improve1','improve2','trade']);
   assert.equal(await page.locator('#citiesPanel [data-group="recruit"],#citiesPanel [data-group="activate"],#citiesPanel [data-group="promote"],#citiesPanel [data-group="improvement"],#citiesPanel [data-group="move"]').count(),0);
   const wall=page.locator('#actions [data-action="wall"]');assert(await wall.isEnabled());assert.match(await wall.getAttribute('title'),/2 砖/);assert.equal(await page.locator('#actions [data-cities-info="wall"] use').getAttribute('href'),'catan-cities-art.svg#wall');assert.equal(await page.locator('#citiesPanel [data-group="wall"]').count(),0);
   await checkActionIconStates(page);

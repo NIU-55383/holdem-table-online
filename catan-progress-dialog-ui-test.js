@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),path=require('node:path'),fs=require(
 let pw;try{pw=require('playwright');}catch{pw=require(path.resolve(path.dirname(process.execPath),'../node_modules/playwright'));}
 const {fixture,importRoom}=require('./catan-cities-ui-test');
 const A=require('./room-archive'),D=require('./catan-cities-data');
-const specialCards=['merchant','printing','constitution'];
+const specialCards=['printing','constitution'];
 const ordinaryCards=Object.keys(D.cards).filter(key=>!specialCards.includes(key));
 const orderedCards=['alchemy','irrigation',...ordinaryCards.filter(key=>!['alchemy','irrigation'].includes(key))];
 const packs=Array.from({length:Math.ceil(orderedCards.length/4)},(_,i)=>orderedCards.slice(i*4,i*4+4));
@@ -93,13 +93,13 @@ async function checkMatrix(context,port,width,rolled,errors){
 }
 async function checkSpecialCards(context,port,width,rolled,errors){
  const page=await openRoom(context,port,specialCards,rolled,errors),before=await snapshot(page);
- assert.equal(await page.locator('[data-card="merchant"],[data-card="printing"],[data-card="constitution"]').count(),0,'Merchant uses its own control and VP cards are revealed immediately');
+ assert.equal(await page.locator('[data-card="printing"],[data-card="constitution"]').count(),0,'VP cards are revealed immediately');
  for(let cycle=0;cycle<2;cycle++)for(const method of [width===320?'tap':'click','Escape']){
-  await page.locator('#actions .cities-action-info[data-cities-info="merchant"]').click();const dialog=page.locator('#citiesInfoDialog');await dialog.waitFor({state:'visible'});
+  await page.locator('#board [data-cities-info="merchant"]').click();const dialog=page.locator('#citiesInfoDialog');await dialog.waitFor({state:'visible'});
   assert.match(await dialog.textContent(),/Merchant/);assert.equal(await dialog.locator('[data-play]').count(),0);await closeDialog(page,dialog,method);assert.deepEqual(await snapshot(page),before);
   await page.locator('#gameBaseRules').click();const rules=page.locator('#citiesRules');await rules.waitFor({state:'visible'});
   for(const key of ['printing','constitution']){
-   const entry=rules.locator('.cities-rule-cards section').filter({has:page.locator('h4',{hasText:D.cards[key][3]})});
+   const entry=rules.locator('.cities-rule-cards [data-progress-card]').filter({has:page.locator('h4',{hasText:D.cards[key][3]})});
    assert.equal(await entry.count(),1);assert.match(await entry.textContent(),/1 VP/);assert(await entry.locator('ul.cities-info-list > li').count()>=1);await entry.scrollIntoViewIfNeeded();
   }
   await closeDialog(page,rules,method);assert.deepEqual(await snapshot(page),before);

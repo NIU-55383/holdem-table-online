@@ -910,6 +910,7 @@
     if (S.choice(g, you, "piratePayment")) { zh = `海盗掠夺：交出 ${g.legal.scenario.piratePayment} 张资源`; en = `Pirate raid: lose ${g.legal.scenario.piratePayment} resources`; }
     if (S.choice(g, you, "pirateReward")) { zh = "击退海盗：领取一张资源"; en = "Pirate defense: claim one resource"; }
     if (own && g.phase === "steal" && g.scenario?.kind === "cloth") { zh = "选择玩家及资源或布匹"; en = "Choose a player, then resource or cloth"; }
+    const citiesChoice=CK.choiceDescription(g,you);if(citiesChoice)[zh,en]=citiesChoice.prompt;
     $("turnPrompt").innerHTML = `${B.escape(zh)}<small>${B.escape(en)}</small>`;
     const event = g.dice.length === 2 ? g.citiesKnights?.event : null;
     $("dice").innerHTML = diceMarkup(g.dice[0]) + diceMarkup(g.dice[1]) + (g.citiesKnights ? CK.eventDie(event) : "");
@@ -1020,10 +1021,7 @@
     }).join("") : `<span class="development-empty">暂无发展卡 / No development cards</span>`;
   }
   $("development").onclick = (e) => { const button = e.target.closest("[data-dev]"); if (button && !button.disabled) action({ type: "playDevelopment", card: button.dataset.dev }); };
-  function merchantChoice() {
-    const g=state.room?.game,cards=g?.citiesKnights?.players[state.room.you]?.cards||[];
-    return g?.legal.citiesKnights?.find(o=>cards.some(card=>card.key==="merchant"&&o.key===`play:${card.id}`));
-  }
+
   function renderActions() {
     const g = state.room?.game; if (!g) return;
     const l = g.legal;
@@ -1046,17 +1044,12 @@
       ["moveKnight","knight","移动骑士","Move knight",l.citiesKnights.some(o=>o.group==="move"),"已激活 / Active"],
       ...window.CatanCitiesData.branches.map((b,i)=>[`improve${i}`,b[2],b[0],b[1],l.citiesKnights.some(o=>o.key===`upgrade:${i}`),`${labels[i+5]} / ${english[i+5]} · 1–5`])
     );
-    const placingMerchant=g.citiesKnights?.choice?.kind==="merchant"&&g.citiesKnights.choice.player===state.room.you;
-    if(g.citiesKnights){
-      const count=g.citiesKnights.players[state.room.you].cards.filter(card=>card.key==="merchant").length;
-      items.splice(items.findIndex(x=>x[0]==="trade"),0,["merchant","merchant",`商人 ×${count}`,"Merchant",placingMerchant||merchantChoice(),placingMerchant?"选择地块 / Choose hex":`商人卡 × ${count} / Cards × ${count}`]);
-    }
     const shownReason = l.buildBlocked?.[$("buildNotice").dataset.type];
     if (!shownReason) $("buildNotice").hidden = true;
     else $("buildNotice").textContent = shownReason;
     $("actions").innerHTML = items.map(([type, image, zh, en, enabled, cost]) => {
       const reason = l.buildBlocked?.[type];
-      const selected = type === "merchant" ? placingMerchant : type === "wall" ? citiesUI.selectedGroup === "wall" : knightActions[type] ? citiesUI.selectedGroup === knightActions[type] : state.mode === type;
+      const selected = type === "wall" ? citiesUI.selectedGroup === "wall" : knightActions[type] ? citiesUI.selectedGroup === knightActions[type] : state.mode === type;
       const hasInfo=g.citiesKnights&&["knight","wall","paper","cloth","coin","merchant"].includes(image),improvement=g.citiesKnights&&/^improve[0-2]$/.test(type)?["science","trade","politics"][Number(type.slice(-1))]:null;
       const button=`<button data-action="${type}" title="${B.escape(reason || `${zh} / ${en} · ${cost}`)}" class="${reason ? "build-unavailable" : selected ? "selected" : ""}" ${type === "help" || (enabled || reason) && !state.pending && !state.room.control?.paused ? "" : "disabled"}>${hasInfo?"":icon(image)}<span>${zh}<small>${en}</small><small class="action-cost">${cost}</small></span></button>`;
       return hasInfo?`<div class="cities-action-item${improvement?" cities-improvement-item":""}">${CK.infoButton(improvement||image,"cities-action-info")}${button}</div>`:button;
@@ -1081,11 +1074,6 @@
       if (rect.top < 0 || rect.bottom > innerHeight) $("boardViewport").scrollIntoView({ behavior: "smooth", block: "center" });
     }
     else if (/^improve[012]$/.test(type)) citiesUI.choose(`upgrade:${type.slice(-1)}`);
-    else if (type === "merchant") {
-      const choice=merchantChoice();if(choice)action({type:"ck",choice:choice.key});
-      const rect=$("boardViewport").getBoundingClientRect();
-      if(rect.top<0||rect.bottom>innerHeight)$("boardViewport").scrollIntoView({behavior:"instant",block:"center"});
-    }
     else if (type === "help") showBaseRules(true);
     else if (type === "trade") {
       tradeDraft = { give: resourceZeros(), want: resourceZeros() };

@@ -178,7 +178,11 @@ function play(g,id,key,H) {
   } else if (key === "roads") { g.freeRoads = 2; g.resumePhase = "main"; g.phase = "freeRoads"; }
   else if (key === "wedding" || key === "sabotage") {
     const own = H.score(g,id);
-    begin(g,ordered(g).filter(i => i !== id && (key === "wedding" ? H.score(g,i) > own : H.score(g,i) >= own)).map(player => ({kind:"give",player,to:key === "wedding" ? id : -1,count:key === "wedding" ? Math.min(2,sum(g.players[player].resources)) : Math.floor(sum(g.players[player].resources)/2)})));
+    begin(g,ordered(g).filter(i => i !== id && (key === "wedding" ? H.score(g,i) > own : H.score(g,i) >= own)).map(player => {
+      const initialCount=sum(g.players[player].resources),total=key === "wedding" ? Math.min(2,initialCount) : Math.floor(initialCount/2);
+      return {kind:"give",player,to:key === "wedding" ? id : -1,count:total,
+        reason:key,source:id,total,initialCount,sourceScore:own,playerScore:H.score(g,player)};
+    }));
   } else begin(g,[{kind:key,player:id,remaining:key === "smithing" ? 2 : undefined}],key === "alchemy" ? "roll" : "main");
 }
 function options(g,id,H) {
@@ -278,11 +282,26 @@ function act(g,id,a,H) {
   if(g.phase === "ckChoice") advance(g,H);
   H.updateAwards(g); return true;
 }
+function publicChoice(g,q) {
+  if(!q)return null;
+  const view={kind:q.kind,player:q.player,count:q.count};
+  if(q.kind==="moveKnight")view.from=q.from;
+  if(q.kind==="give"){
+    // Old saves have only to/count: the cause is known, but their initial total is not.
+    Object.assign(view,{reason:q.to<0?"sabotage":"wedding",source:q.source??(q.to<0?g.current:q.to),to:q.to});
+    for(const key of ["total","initialCount","sourceScore","playerScore"])if(q[key]!==undefined)view[key]=q[key];
+  }else if(q.kind==="harborPay"){
+    Object.assign(view,{reason:"harbor",source:q.to,to:q.to,resource:q.resource,total:1,count:1});
+  }else if(q.kind==="discardProgress"){
+    Object.assign(view,{reason:"progressLimit",count:1});
+  }
+  return view;
+}
 function publicState(g,id) {
   if(!g.cities) return null;
   const c=g.cities,q=c.queue[0];
   return {ship:c.ship,attacked:c.attacked,event:c.event,merchant:c.merchant,medicine:c.medicine,deckCounts:c.decks.map(d=>d.length),
-    choice:q ? {kind:q.kind,player:q.player,count:q.count,...(q.kind==="moveKnight"?{from:q.from}:{})} : null,
+    choice:publicChoice(g,q),
     players:c.players.map((p,i)=>({levels:p.levels,revealed:p.revealed,defenders:p.defenders,count:p.cards.length,cards:i===id||g.phase==="over"?p.cards:null,strength:sum(knights(g,i).map(v=>v.knight.active?v.knight.rank:0))}))};
 }
 function resetTurn(g) { if(g.cities) Object.assign(g.cities,{fleet:[],crane:0,medicine:0,harbor:[],alchemy:null}); }
@@ -328,6 +347,17 @@ function validate(g) {
     if(['takeCards','takeProgress'].includes(q.kind)) fail(actor(q.target)&&q.target!==q.player);
     if(['smithing','takeCards'].includes(q.kind)) fail(int(q.remaining,1,2));
     if(q.kind==='give') fail((q.to===-1||actor(q.to))&&int(q.count,0,100));
+    const contextFields=['reason','source','total','initialCount','sourceScore','playerScore'];
+    if(contextFields.some(key=>Object.hasOwn(q,key))){
+      // This optional group is absent from older archives; partial or contradictory new metadata is invalid.
+      fail(q.kind==='give'&&contextFields.every(key=>Object.hasOwn(q,key)));
+      fail(['wedding','sabotage'].includes(q.reason)&&actor(q.source)&&q.source===g.current&&q.source!==q.player);
+      fail(q.to===(q.reason==='wedding'?q.source:-1)&&int(q.total,0,100)&&int(q.initialCount,0,131));
+      fail(q.total===(q.reason==='wedding'?Math.min(2,q.initialCount):Math.floor(q.initialCount/2))&&q.count<=q.total);
+      fail(q.initialCount-(q.total-q.count)===sum(g.players[q.player].resources));
+      fail(int(q.sourceScore,0,1000000)&&int(q.playerScore,0,1000000));
+      fail(q.reason==='wedding'?q.playerScore>q.sourceScore:q.playerScore>=q.sourceScore);
+    }
     if(['removeKnight','harborPay'].includes(q.kind)) fail(actor(q.to)&&q.to!==q.player);
     if(q.kind==='harborPay') fail(int(q.resource,0,4)&&g.players[q.to].resources[q.resource]>0);
     if(['replaceRank','replaceKnight'].includes(q.kind)) fail(int(q.rank,1,3)&&typeof q.active==='boolean');

@@ -37,6 +37,23 @@ function isCategoryColor(value,branch){
  if(branch===1)return r>210&&g>180&&r>b+20&&g>b;
  return b>r+10&&b>180;
 }
+async function checkHandCardStyle(page,key){
+ const card=page.locator(`.cities-progress [data-card="${key}"]`),branch=D.cards[key][0];
+ const ready=await card.evaluate(el=>!room.control.paused&&room.game.legal.citiesKnights.some(o=>o.key===`play:${el.dataset.cardId}`));
+ assert.equal(await card.getAttribute('data-ready'),String(ready),'readiness matches the legal card action');
+ const background=await card.evaluate(el=>getComputedStyle(el).backgroundColor);
+ if(ready)assert(isCategoryColor(background,branch),`${key} Ready card keeps its category color`);
+ else {const rgb=background.match(/[\d.]+/g).slice(0,3).map(Number);assert(Math.max(...rgb)-Math.min(...rgb)<=8&&Math.min(...rgb)>=180,`${key} unavailable card has a neutral gray background: ${background}`);assert(await card.isEnabled(),'unavailable cards remain clickable for their rules');}
+ await bounds(card);return ready;
+}
+async function checkPausedHand(page){
+ for(const key of sampleCards)assert.equal(await checkHandCardStyle(page,key),false);
+ const before=await snapshot(page);await page.locator('.cities-progress [data-card="harbor"]').click();
+ const info=page.locator('#citiesCardInfoDialog');await info.waitFor({state:'visible'});
+ assert.equal(await info.locator('[data-play]').count(),0);assert(await info.locator('[data-rules-body] .cities-info-list > li').count()>0);
+ assert.equal(await page.locator('#citiesConfirm').isVisible(),false);await page.keyboard.press('Escape');
+ assert.deepEqual(await snapshot(page),before,'gray-card help is read-only while paused');
+}
 async function checkCatalog(page,width,{screenshot=false}={}){
  const current=dialog(page),body=current.locator('[data-rules-body]'),groups=current.locator('.cities-rule-cards > [data-progress-branch]');
  assert(await current.evaluate(el=>el.classList.contains('bg-rules-dialog')),'catalog uses the shared rules reader');
@@ -82,7 +99,7 @@ async function checkHand(page,width){
  for(const key of expected){
   const card=page.locator(`.cities-progress [data-card="${key}"]`),branch=D.cards[key][0],text=await card.textContent();
   assert(text.includes(D.branches[branch][0]));assert(text.includes(D.branches[branch][1]));assert.equal(await card.locator('svg.cities-card-art use').getAttribute('href'),`catan-progress-art.svg#${key}`);
-  assert(isCategoryColor(await card.evaluate(el=>getComputedStyle(el).backgroundColor),branch));await bounds(card);
+  await checkHandCardStyle(page,key);
  }
  assert.equal(await page.locator('#actions [data-action="merchant"]').count(),0,'merchant is a progress card, not a duplicated main action');
  await heading.scrollIntoViewIfNeeded();await page.locator('#citiesPanel').screenshot({path:path.join(__dirname,`test-results/catan-progress-hand-${width}.png`)});
@@ -110,7 +127,7 @@ async function main(){
   await once(server.stdout,'data');browser=await pw.chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});fs.mkdirSync(path.join(__dirname,'test-results'),{recursive:true});
   for(const width of [1440,320]){
    const context=await browser.newContext({viewport:{width,height:900},hasTouch:width===320});await context.addInitScript(()=>{localStorage.setItem('catan-music-enabled','false');window.actionRequests=[];const Native=WebSocket;window.WebSocket=class extends Native{constructor(...args){super(...args);window.sock=this;this.addEventListener('message',event=>{const data=JSON.parse(event.data);if(data.type==='state')window.room=data;if(data.type==='error')window.serverError=data.message;});}send(data){const message=JSON.parse(data);if(message.type==='action')actionRequests.push(message.action);super.send(data);}};});
-   const page=await openRoom(context,port,errors);assert(await page.evaluate(()=>room.control.paused));await checkHelp(page,width);await resumeRoom(page);await checkHand(page,width);await checkHelp(page,width,{screenshot:true});await checkFullRules(page,width);await checkMerchantUse(page);assert.equal(await page.evaluate(()=>window.serverError||''),'');await page.close();
+   const page=await openRoom(context,port,errors);assert(await page.evaluate(()=>room.control.paused));await checkPausedHand(page);await checkHelp(page,width);await resumeRoom(page);await checkHand(page,width);await checkHelp(page,width,{screenshot:true});await checkFullRules(page,width);await checkMerchantUse(page);assert.equal(await page.evaluate(()=>window.serverError||''),'');await page.close();
    const empty=await openRoom(context,port,errors,true);assert.equal(await empty.locator('.cities-progress [data-card]').count(),0);await checkHelp(empty,width);assert.match(await empty.locator('#citiesPanel').textContent(),/暂无|没有|No progress/i);await empty.close();await context.close();
    console.log(`Progress catalog ${width}px: 3 branches, 25 distinct illustrations, category backgrounds/labels, keyboard/touch help, paused/empty hands and unchanged game state`);
   }

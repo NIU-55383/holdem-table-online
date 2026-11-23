@@ -19,6 +19,104 @@ function finish(g, rng = seeded(72)) {
   }
   assert.equal(g.phase, "over");
 }
+
+const diceHistogram=rolls=>{const counts=Array(11).fill(0);rolls.forEach(([a,b])=>counts[a+b-2]++);return counts;};
+const addHist=(...rows)=>Array.from({length:11},(_,i)=>rows.reduce((n,row)=>n+row[i],0));
+function recordedDiceGame(mapId,names,kind){
+  const g=E.createGame(names,seeded(72),mapId),normal=[[1,2],[3,4],[5,6],[3,4]],alchemy=[[6,6],[1,1],[3,4]];
+  let random=[],fixed=[],unknown=[];
+  const roll=(pair,isAlchemy)=>{
+    g.turn++;g.phase='roll';g.current=0;g.rolled=false;g.dice=[];g.cities.queue=[];
+    if(isAlchemy){
+      const deck=g.cities.decks[0],at=deck.indexOf('alchemy');assert(at>=0);deck.splice(at,1);
+      const card={id:++g.cities.sequence,key:'alchemy'};g.cities.players[0].cards.push(card);
+      E.act(g,0,{type:'ck',choice:`play:${card.id}`},()=>.6);
+      E.act(g,0,{type:'ck',choice:`dice:${pair[0]}:${pair[1]}`},()=>.6);
+    }
+    const values=pair.map(n=>(n-.5)/6);E.act(g,0,{type:'roll'},()=>isAlchemy?.6:values.length?values.shift():.6);
+    assert.deepEqual(g.dice,pair);assert.equal(g.phase,'main');
+  };
+  if(kind==='mixed'){random=normal;fixed=alchemy;}
+  if(kind==='all-alchemy')fixed=alchemy;
+  if(kind==='no-alchemy')random=normal;
+  if(kind.startsWith('legacy')){
+    for(const pair of normal.slice(0,2))roll(pair,false);
+    for(const pair of alchemy.slice(0,2))roll(pair,true);
+    unknown=[...normal.slice(0,2),...alchemy.slice(0,2)];
+    g.statistics.version=2;delete g.statistics.diceRandom;delete g.statistics.diceAlchemy;delete g.statistics.diceUnknown;
+    if(kind==='legacy-partial'){random=normal.slice(2);fixed=alchemy.slice(2);}
+  }
+  for(const pair of random)roll(pair,false);for(const pair of fixed)roll(pair,true);
+  g.phase='over';g.winner=0;
+  const expected={random:diceHistogram(random),alchemy:diceHistogram(fixed),unknown:diceHistogram(unknown)};
+  expected.all=addHist(expected.random,expected.alchemy,expected.unknown);
+  assert.deepEqual(g.statistics.dice,expected.all,'Actual engine roll records match the controlled samples');
+  return{g,expected};
+}
+async function assertDiceSeries(page,key,counts){
+  const series=page.locator(`[data-dice-series="${key}"]`),total=E.sum(counts);assert.equal(await series.count(),1);
+  assert.equal(Number(await series.getAttribute('data-dice-total')),total,`${key}: independent sample count`);
+  const columns=await series.locator('[data-dice-sum]').evaluateAll(nodes=>nodes.map(n=>({sum:Number(n.dataset.diceSum),count:Number(n.dataset.diceCount),expected:Number(n.dataset.diceExpected),bar:parseFloat(n.querySelector('.stats-dice-bar').style.height),line:parseFloat(n.querySelector('.stats-dice-track i').style.bottom)})));
+  assert.equal(columns.length,11);const scale=Math.max(1,...counts,total/6);
+  columns.forEach((c,i)=>{
+    const chance=(6-Math.abs(5-i))/36;assert.equal(c.sum,i+2);assert.equal(c.count,counts[i]);assert(Math.abs(c.expected-total*chance)<1e-8,`${key} sum ${i+2}: expected count uses this sample N`);
+    assert(Math.abs(c.bar-counts[i]/scale*100)<1e-4);assert(Math.abs(c.line-total*chance/scale*100)<1e-4);
+  });
+  const table=series.locator('.stats-data');await table.locator('summary').press('Enter');assert(await table.evaluate(e=>e.open));
+  const headers=await table.locator('thead th').allTextContents();assert.equal(headers.length,5);assert.match(headers[2],/占比|Actual/);assert.match(headers[3],/理论次数|Expected.*count/i);assert.match(headers[4],/理论概率|Expected.*%/);
+  const rows=await table.locator('tbody tr').evaluateAll(nodes=>nodes.map(n=>[...n.children].map(c=>c.textContent.trim())));assert.equal(rows.length,11);
+  rows.forEach((row,i)=>{
+    const chance=(6-Math.abs(5-i))/36;assert.equal(Number(row[0]),i+2);assert.equal(Number(row[1]),counts[i]);
+    assert.equal(parseFloat(row[2]),Number((total?counts[i]/total*100:0).toFixed(1)),`${key}: percentages use independent sample count`);
+    assert(Math.abs(Number(row[3])-total*chance)<=.051,`${key}: expected table count`);assert.equal(parseFloat(row[4]),Number((chance*100).toFixed(1)));
+  });
+  await table.locator('summary').press('Enter');assert.equal(await table.evaluate(e=>e.open),false);
+}
+async function checkAlchemyDiceUI(host,send){
+  const reports=[];
+  for(const mapId of ['cities','cities-shores-1']){
+    await host.evaluate(()=>document.querySelectorAll('dialog[open]').forEach(d=>d.close()));
+    await send(host,{type:'create',name:'Alice',seats:3,mapId});await host.locator('#lobby').waitFor();const code=await host.locator('#copyCode').textContent();
+    await send(host,{type:'fillBots'});await host.waitForFunction(()=>testState.seats.length===3);await send(host,{type:'start'});await host.locator('#game').waitFor();
+    const room=catan.rooms.get(code);clearTimeout(room.timer);
+    for(const kind of ['mixed','all-alchemy','no-alchemy','zero','legacy-unknown','legacy-partial']){
+      await host.evaluate(()=>document.querySelectorAll('dialog[open]').forEach(d=>d.close()));
+      const {g,expected}=recordedDiceGame(mapId,room.seats.map(p=>p.name),kind);g.revision=room.game.revision+1;room.game=g;
+      await send(host,{type:'chat',text:''});await host.waitForFunction(id=>testState.game.statistics?.id===id,g.statistics.id);await host.locator('#statisticsDialog[open]').waitFor();
+      const recorded=await host.evaluate(()=>testState.game.statistics);assert.deepEqual(recorded.dice,expected.all);
+      assert.deepEqual(recorded.diceRandom,expected.random);assert.deepEqual(recorded.diceAlchemy,expected.alchemy);assert.deepEqual(recorded.diceUnknown,expected.unknown);
+      for(const [width,height] of [[1440,1000],[320,568]]){
+        await host.setViewportSize({width,height});await host.locator('#statsTab-scores').focus();await host.keyboard.press('ArrowRight');assert.equal(await host.locator('#statsTab-dice').getAttribute('aria-selected'),'true');
+        const before=await host.evaluate(()=>JSON.stringify(statsTestSent));
+        assert.equal(await host.locator('[data-dice-series]').count(),2,`${mapId}/${kind}: two separate series`);
+        await assertDiceSeries(host,'all',expected.all);
+        if(kind==='legacy-unknown'){
+          const random=host.locator('[data-dice-series="random"]');assert.equal(await random.locator('.stats-dice-column').count(),0,'Unknown historical source must not fabricate a zero random histogram');
+          assert.equal(await random.locator('.stats-data').count(),0,'Unknown historical source must not fabricate a random data table');
+          assert.match(await random.innerText(),/无法|不能|cannot|unknown/i);
+        }else await assertDiceSeries(host,'random',expected.random);
+        const note=host.locator('[data-dice-source-note]');
+        if(kind.startsWith('legacy')){assert(await note.count()>0);assert.match(await note.innerText(),/来源|source/i);assert.match(await note.innerText(),/4/);if(kind==='legacy-partial')assert.match(await host.locator('[data-dice-series="random"]').innerText(),/已记录|recorded/i);}
+        if(kind==='all-alchemy'||kind==='zero')assert.match(await host.locator('[data-dice-series="random"]').innerText(),/没有|尚无|未|[Nn]o|0/);
+        assert(await host.evaluate(()=>{const d=document.querySelector('#statisticsDialog'),b=document.querySelector('#statisticsBody'),r=d.getBoundingClientRect();return b.scrollWidth<=b.clientWidth+1&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1;}),`${mapId}/${kind} charts fit ${width}px`);
+        if(kind==='mixed'||kind==='legacy-unknown'||kind==='legacy-partial'){
+          await host.locator('#statisticsBody').evaluate(e=>e.scrollTop=0);await host.locator('#statisticsDialog').screenshot({path:`test-results/catan-stats-dice-${mapId}-${kind}-${width}.png`,animations:'disabled'});
+          if(kind==='mixed'||kind==='legacy-unknown'){
+            await host.locator('[data-dice-series="random"]').evaluate(s=>{const b=document.querySelector('#statisticsBody');b.scrollTop+=s.getBoundingClientRect().top-b.getBoundingClientRect().top;});await host.locator('#statisticsDialog').screenshot({path:`test-results/catan-stats-dice-${mapId}-${kind==='mixed'?'random':'unknown-note'}-${width}.png`,animations:'disabled'});
+          }
+        }
+        await host.locator('#statisticsBody').focus();await host.keyboard.press('End');
+        assert(await host.locator('[data-close="statisticsDialog"]').evaluate(e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight;}),'Close button remains visible after scrolling both charts');
+        await host.keyboard.press('Escape');assert.equal(await host.locator('#statisticsDialog').isVisible(),false);await host.locator('#matchStatistics').press('Enter');await host.locator('#statisticsDialog[open]').waitFor();
+        assert.equal(await host.evaluate(()=>JSON.stringify(statsTestSent)),before,'Chart reading, tables, tabs and reopening send no gameplay messages');
+        reports.push({mapId,kind,width,total:E.sum(expected.all),random:E.sum(expected.random),alchemy:E.sum(expected.alchemy),unknown:E.sum(expected.unknown)});
+        await host.locator('#statsTab-scores').click();
+      }
+    }
+  }
+  fs.writeFileSync('test-results/catan-stats-dice-matrix.json',JSON.stringify(reports,null,2));
+}
+
 (async () => {
   let browser;
   try {
@@ -29,9 +127,10 @@ function finish(g, rng = seeded(72)) {
     for (let i = 0; i < 2; i++) {
       const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
       await context.addInitScript(() => {
-        localStorage.setItem("catan-music-enabled", "false");
+        localStorage.setItem("catan-music-enabled", "false"); window.statsTestSent = [];
         const Native = window.WebSocket;
         window.WebSocket = class extends Native {
+          send(data) { window.statsTestSent.push(JSON.parse(data)); return super.send(data); }
           constructor(...args) {
             super(...args); window.testSocket = this;
             this.addEventListener("message", e => { const m = JSON.parse(e.data); if (m.type === "state") window.testState = m; });
@@ -76,6 +175,8 @@ function finish(g, rng = seeded(72)) {
     await host.locator("#statsTab-scores").focus(); await host.keyboard.press("ArrowRight");
     assert.equal(await host.locator("#statsTab-dice").getAttribute("aria-selected"), "true");
     assert.deepEqual((await host.locator(".stats-dice-column>strong").allTextContents()).map(Number), g.statistics.dice);
+    assert.equal(await host.locator('[data-dice-series]').count(),1,'Base mode retains one dice chart');
+    await assertDiceSeries(host,'all',g.statistics.dice);
     await host.locator("#statsTab-resources").click();
     assert.equal(await host.locator(".stats-bar-row").count(), 6);
     assert.match(await host.locator(".stats-footnote").textContent(), /Excludes starting cards/);
@@ -162,8 +263,9 @@ function finish(g, rng = seeded(72)) {
     await syncPirates(); await host.locator("#statsTab-robbed").click();
     assert.deepEqual(await host.locator("[data-robbed-total]").allTextContents(), Array(4).fill("0 次 / times"));
     assert.equal(await host.locator(".stats-bar-track>span").count(), 0);
+    await checkAlchemyDiceUI(host,send);
     assert.deepEqual(errors, []);
-    console.log("Catan stats UI passed: two clients, all five charts, six seats, desktop/mobile/landscape, keyboard, tables, privacy, reconnect, rematch, legacy and zero robbery counts, pirate raids and deferred auto-open.");
+    console.log("Catan stats UI passed: two clients, all five charts, six seats, desktop/mobile/landscape, keyboard, tables, privacy, reconnect, rematch, legacy and zero robbery counts, pirate raids, deferred auto-open, separate Alchemy/random sample counts and expected distributions, legacy unknown/partial samples.");
   } finally {
     await browser?.close();
     for (const room of catan.rooms.values()) clearTimeout(room.timer);

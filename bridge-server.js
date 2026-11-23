@@ -23,7 +23,7 @@ function attachBridge(server) {
   function snapshot(r, session) {
     const you = r.seats.findIndex((p) => p.token === session.token), swap = r.seatSwap;
     const game = r.game ? E.publicGame(r.game, you) : null;
-    return { type: "state", code: r.code, you, host: r.seats.findIndex((p) => p.token === r.host), boards: r.boards,
+    return { type: "state", code: r.code, you, host: r.seats.findIndex((p) => p.token === r.host), boards: r.boards, biddingHints: r.biddingHints === true,
       seats: r.seats.map((p) => ({ socialId: Social.publicId(p), name: p.name, position: p.position, avatar: p.avatar || null,
         bot: Boolean(p.bot), vacant: Boolean(p.vacant), connected: !p.vacant && (p.bot || online(p)), auto: Boolean(p.auto) })),
       seatSwap: swap ? { id: swap.id, from: r.seats.findIndex((p) => p.token === swap.from), to: r.seats.findIndex((p) => p.token === swap.to) } : null,
@@ -113,11 +113,12 @@ function attachBridge(server) {
         fail(session && session.ws === ws, "请先连接 / Connect first"); session.updated = Date.now();
         if (archives.handle(session, ws, d)) return;
         if (d.type === "create") {
-          const name = clean(d.name), boards = d.boards ?? 4;
+          const name = clean(d.name), boards = d.boards ?? 4, biddingHints = d.biddingHints === undefined ? false : d.biddingHints;
           fail(name, "请输入名字 / Enter your name"); fail([4, 8, 16].includes(boards), "请选择 4、8 或 16 副 / Choose 4, 8 or 16 boards");
+          fail(typeof biddingHints === "boolean", "叫牌提示设置无效 / Invalid bidding-hint setting");
           detach(session, true);
           let code; do { code = `B${crypto.randomBytes(3).toString("hex").slice(0, 5).toUpperCase()}`; } while (rooms.has(code));
-          const r = { code, host: session.token, boards, seats: [{ token: session.token, name, avatar: avatar === undefined ? session.avatar || null : avatar, position: 0, bot: false, auto: false, ws }], game: null, scores: [], chat: [], seatSwap: null, updated: Date.now() };
+          const r = { code, host: session.token, boards, biddingHints, seats: [{ token: session.token, name, avatar: avatar === undefined ? session.avatar || null : avatar, position: 0, bot: false, auto: false, ws }], game: null, scores: [], chat: [], seatSwap: null, updated: Date.now() };
           rooms.set(code, r); session.room = code; broadcast(r); return;
         }
         if (d.type === "join") {
@@ -144,6 +145,9 @@ function attachBridge(server) {
         else if (d.type === "chat") {
           const text = clean(d.text, 160);
           if (text) { fail(!p.lastChat || Date.now() - p.lastChat >= 500, "发送太快 / Please slow down"); p.lastChat = Date.now(); r.chat.push({ id: crypto.randomUUID(), playerId: you, name: p.name, text, time: Date.now() }); r.chat = r.chat.slice(-40); }
+        } else if (d.type === "biddingHints") {
+          host(); fail(!r.game, "叫牌提示只能在开局前设置 / Set bidding hints before starting");
+          fail(typeof d.enabled === "boolean", "叫牌提示设置无效 / Invalid bidding-hint setting"); r.biddingHints = d.enabled;
         } else if (d.type === "chooseSeat") {
           fail(!r.game && !r.seatSwap, "请先处理换座申请，开局后不能换座 / Resolve pending swaps; seats lock at start");
           fail(Number.isInteger(d.position) && d.position >= 0 && d.position < 4, "座位无效 / Invalid seat");

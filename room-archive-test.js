@@ -42,6 +42,73 @@ test("all Catan maps and scenarios retain progress throughout an automated game"
   }
 });
 
+test("Catan dice sources and unknown legacy history survive portable saves", () => {
+  const E = require("./catan-engine");
+  const sourceKeys = ["diceRandom", "diceAlchemy", "diceUnknown"], zero = () => Array(11).fill(0);
+  const random = seed => () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+  function ready(mapId) {
+    const r = fixture("catan"), rng = random(43); r.mapId = mapId;
+    r.game = E.createGame(r.seats.map(p => p.name), rng, mapId);
+    for (let step = 0; !r.game.turn && step < 100; step++) {
+      const id = E.requiredActors(r.game)[0]; E.act(r.game, id, E.chooseBotAction(r.game, id, rng), rng);
+    }
+    assert.equal(r.game.phase, "roll"); return r;
+  }
+  function prepareAlchemy(g) {
+    const index = g.cities.decks[0].indexOf("alchemy"); assert(index >= 0);
+    g.cities.decks[0].splice(index, 1);
+    const card = { key: "alchemy", id: ++g.cities.sequence }; g.cities.players[g.current].cards.push(card);
+    E.act(g, g.current, { type: "ck", choice: `play:${card.id}` });
+    E.act(g, g.current, { type: "ck", choice: "dice:2:3" });
+    assert.deepEqual(g.cities.alchemy, [2, 3]);
+  }
+  function roll(g, alchemy = false) {
+    const sequence = alchemy ? [.5] : [0, 0, .5];
+    E.act(g, g.current, { type: "roll" }, () => sequence.shift());
+    for (let step = 0; g.phase !== "main" && step < 100; step++) {
+      const id = E.requiredActors(g)[0]; E.act(g, id, E.chooseBotAction(g, id, () => .5), () => .5);
+    }
+    assert.equal(g.phase, "main");
+  }
+  function roundTrip(r) {
+    const restored = decode(JSON.parse(JSON.stringify(encode("catan", r))), ["catan"]).room;
+    assert.deepEqual(restored.game.statistics, r.game.statistics);
+    return restored;
+  }
+  function conserved(stats) {
+    for (let i = 0; i < 11; i++) assert.equal(sourceKeys.reduce((n, key) => n + stats[key][i], 0), stats.dice[i]);
+  }
+  for (const mapId of ["cities", "cities-shores-1"]) {
+    let r = ready(mapId); roll(r.game); E.act(r.game, r.game.current, { type: "end" });
+    prepareAlchemy(r.game); r = roundTrip(r);
+    assert.deepEqual(r.game.cities.alchemy, [2, 3], "A save before rolling retains the selected Alchemy dice");
+    roll(r.game, true);
+    assert.equal(r.game.statistics.diceRandom[0], 1); assert.equal(r.game.statistics.diceAlchemy[3], 1);
+    assert.deepEqual(r.game.statistics.diceUnknown, zero()); assert.equal(r.game.cities.alchemy, null);
+    conserved(roundTrip(r).game.statistics);
+  }
+  for (const version of [1, 2]) for (const mapId of ["base", "cities", "cities-shores-1"]) {
+    const original = ready(mapId); roll(original.game);
+    const stats = original.game.statistics; stats.version = version;
+    sourceKeys.forEach(key => delete stats[key]);
+    if (version === 1) stats.players.forEach(p => delete p.robbed);
+    const r = roundTrip(original), legacy = structuredClone(r.game.statistics), usesAlchemy = Boolean(r.game.cities);
+    const publicStats = E.publicGame({ ...r.game, phase: "over" }, 0).statistics;
+    assert.deepEqual(r.game.statistics, legacy, "Reading a finished legacy snapshot does not mutate the imported save");
+    assert.deepEqual(publicStats.diceUnknown, usesAlchemy ? legacy.dice : zero());
+    assert.deepEqual(publicStats.diceRandom, usesAlchemy ? zero() : legacy.dice);
+    assert.deepEqual(publicStats.diceAlchemy, zero(), "Legacy logs cannot prove which past rolls used Alchemy");
+    E.act(r.game, r.game.current, { type: "end" });
+    if (usesAlchemy) prepareAlchemy(r.game);
+    roll(r.game, usesAlchemy);
+    const continued = roundTrip(r).game.statistics;
+    assert.equal(continued.version, 3); conserved(continued);
+    assert.deepEqual(continued.diceUnknown, usesAlchemy ? legacy.dice : zero());
+    assert.equal(continued.diceAlchemy[3], usesAlchemy ? 1 : 0);
+    assert.equal(continued.diceRandom[0], usesAlchemy ? 0 : 2);
+    if (version === 1) assert(continued.players.every(p => !Object.hasOwn(p, "robbed")), "Unavailable old robbery totals stay unavailable");
+  }
+});
 async function launch() {
   const probe = http.createServer(); probe.listen(0, "127.0.0.1"); await once(probe, "listening"); const port = probe.address().port; await new Promise(r => probe.close(r));
   const server = spawn(process.execPath, [require.resolve("./server")], { windowsHide: true, env: { ...process.env, PORT: String(port), LOCAL_ONLY: "1", AUTO_OPEN: "0", CATAN_BOT_DELAY: "10000", BRIDGE_BOT_DELAY: "10000", MILLION_BOT_DELAY: "10000", TRUTH_BOT_DELAY: "10000" }, stdio: ["ignore", "pipe", "pipe"] });
@@ -84,7 +151,7 @@ for (const kind of ["bridge", "truth", "million"]) test(`${kind}: every phase an
 test("a save survives a completely new server process", { timeout: 30000 }, async () => {
   const first = await launch(); let saved;
   try {
-    const c = await first.client("bridge"); await c.request({ type: "create", name: "Old host" });
+    const c = await first.client("bridge"); await c.request({ type: "create", name: "Old host", biddingHints: true });
     await c.request({ type: "fillBots" }); await c.request({ type: "start" });
     saved = (await c.request({ type: "archivePrepare" }, "archiveReady")).archive;
   } finally { await first.close(); }
@@ -92,6 +159,7 @@ test("a save survives a completely new server process", { timeout: 30000 }, asyn
   try {
     const c = await second.client("bridge"); await c.request({ type: "archiveImport", name: "New person", archive: saved }, "archiveLobby");
     const state = await c.request({ type: "archiveClaim", seat: 2 });
+    assert.equal(state.biddingHints, true);
     assert.equal(state.you, 2); assert.deepEqual(state.game.hands[2], saved.progress.hands[2]);
     assert.equal(state.game.hands[0], null); assert.equal(state.game.hands[1], null); assert.equal(state.game.hands[3], null);
   } finally { await second.close(); }

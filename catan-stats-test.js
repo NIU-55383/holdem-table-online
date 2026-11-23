@@ -311,3 +311,99 @@ test("robbery totals are private during play, detached after game over, reset fo
   E.act(g, 0, { type: "steal", victim: 1 }, () => 0);
   assert.ok(g.statistics.players.every(p => !Object.hasOwn(p, "robbed")), "Do not invent complete counts for older matches");
 });
+
+
+const sourceKeys = ["diceRandom", "diceAlchemy", "diceUnknown"];
+function sourceTotals(stats) {
+  assert.equal(stats.version, 3);
+  for (const key of ["dice", ...sourceKeys]) assert(stats[key].length === 11 && stats[key].every(n => Number.isSafeInteger(n) && n >= 0));
+  assert.deepEqual(stats.dice, stats.dice.map((_, i) => sourceKeys.reduce((n, key) => n + stats[key][i], 0)));
+  return sourceKeys.map(key => E.sum(stats[key]));
+}
+function alchemy(g, a, b) {
+  const id = g.current, deck = g.cities.decks[0], at = deck.indexOf("alchemy"); assert(at >= 0);
+  deck.splice(at, 1); const card = { id: ++g.cities.sequence, key: "alchemy" }; g.cities.players[id].cards.push(card);
+  E.act(g, id, { type: "ck", choice: `play:${card.id}` });
+  E.act(g, id, { type: "ck", choice: `dice:${a}:${b}` });
+  assert.deepEqual(g.cities.alchemy, [a, b]);
+}
+function legacySources(g, version = 2) {
+  g.statistics.version = version;
+  sourceKeys.forEach(key => delete g.statistics[key]);
+  if (version === 1) g.statistics.players.forEach(p => delete p.robbed);
+  return g;
+}
+
+test("dice source bins record real Alchemy choices and normal seven without consuming extra randomness", () => {
+  for (const map of ["cities", "cities-shores-1"]) {
+    const g = setup(make(3, map)), normal = [0, .999, .5]; let randomCalls = 0;
+    E.act(g, g.current, { type: "roll" }, () => { randomCalls++; return normal.shift(); });
+    assert.equal(randomCalls, 3, "two number dice and one event die"); assert.deepEqual(g.dice, [1, 6]);
+    assert.equal(g.statistics.diceRandom[5], 1); assert.deepEqual(sourceTotals(g.statistics), [1, 0, 0]);
+    E.act(g, g.current, { type: "end" }); const before = structuredClone(g.statistics.dice);
+    alchemy(g, 5, 6); assert.deepEqual(g.statistics.dice, before, "playing and choosing the card does not count as rolling");
+    let eventCalls = 0; E.act(g, g.current, { type: "roll" }, () => { eventCalls++; return .5; });
+    assert.equal(eventCalls, 1, "Alchemy rolls only the event die"); assert.deepEqual(g.dice, [5, 6]); assert.equal(g.cities.alchemy, null);
+    assert.equal(g.statistics.diceAlchemy[9], 1); assert.deepEqual(sourceTotals(g.statistics), [1, 1, 0]);
+    E.act(g, g.current, { type: "end" }); alchemy(g, 3, 4); E.act(g, g.current, { type: "roll" }, () => .5);
+    assert.equal(g.statistics.dice[5], 2); assert.equal(g.statistics.diceRandom[5], 1); assert.equal(g.statistics.diceAlchemy[5], 1); assert.deepEqual(sourceTotals(g.statistics), [1, 2, 0]);
+  }
+});
+
+test("rejected rolls and cancelled card actions cannot change dice-source counters or migrate history", () => {
+  const g = setup(make(3, "cities")); alchemy(g, 2, 5);
+  const before = structuredClone(g.statistics); let calls = 0;
+  assert.throws(() => E.act(g, (g.current + 1) % 3, { type: "roll" }, () => { calls++; return 0; }));
+  assert.deepEqual(g.statistics, before); assert.equal(calls, 0); assert.deepEqual(g.cities.alchemy, [2, 5]);
+  E.act(g, g.current, { type: "roll" }, () => .5); const rolled = structuredClone(g.statistics);
+  assert.throws(() => E.act(g, g.current, { type: "roll" }, () => { calls++; return 0; })); assert.deepEqual(g.statistics, rolled); assert.equal(calls, 0);
+  const base = main(setup(make())); base.players[0].development.push({ type: "roads", turn: 0 });
+  E.act(base, 0, { type: "playDevelopment", card: "roads" }); E.act(base, 0, { type: "cancelDevelopment" }); assert.deepEqual(sourceTotals(base.statistics), [0, 0, 0]);
+  legacySources(g); const legacy = structuredClone(g.statistics); assert.throws(() => E.act(g, g.current, { type: "roll" })); assert.deepEqual(g.statistics, legacy);
+});
+
+test("new games reset every dice-source bin and completed snapshots remain private and detached", () => {
+  const g = setup(make(3, "cities")); alchemy(g, 1, 1); E.act(g, g.current, { type: "roll" }, () => .5);
+  assert.equal(require("./catan-stats").publicStatistics(g), null);
+  for (const id of [0, 1, 2]) assert.equal(E.publicGame(g, id).statistics, null);
+  g.phase = "over"; g.winner = 0; const first = E.publicGame(g, 0).statistics, second = E.publicGame(g, 1).statistics;
+  assert.deepEqual(first, second); for (const key of ["dice", ...sourceKeys]) first[key][0] = 900;
+  assert.deepEqual(sourceTotals(g.statistics), [0, 1, 0]); assert.deepEqual(sourceTotals(E.publicGame(g, 2).statistics), [0, 1, 0]);
+  const next = make(3, "cities"); assert.notEqual(next.statistics.id, g.statistics.id); assert.deepEqual(sourceTotals(next.statistics), [0, 0, 0]); assert.notEqual(next.statistics.dice, next.statistics.diceRandom); assert.notEqual(next.statistics.diceRandom, next.statistics.diceAlchemy);
+});
+
+test("legacy base and pure Seafarers history is known random while legacy Cities history stays unknown", () => {
+  for (const version of [1, 2]) for (const map of ["base", "shores-1", "cities", "cities-shores-1"]) {
+    const g = setup(make(3, map)); E.act(g, g.current, { type: "roll" }, () => .5); legacySources(g, version);
+    const hasAlchemy = Boolean(g.cities), original = structuredClone(g.statistics); g.phase = "over"; g.winner = 0;
+    const view = E.publicGame(g, 0).statistics; assert.deepEqual(sourceTotals(view), hasAlchemy ? [0, 0, 1] : [1, 0, 0]); assert.deepEqual(view.dice, original.dice);
+    assert.deepEqual(g.statistics, original, "public normalization only changes its detached clone");
+    if (version === 1) assert(view.players.every(p => !Object.hasOwn(p, "robbed")), "no fabricated complete robbery count");
+    for (const key of sourceKeys) view[key][0] = 50; assert.deepEqual(g.statistics, original);
+  }
+});
+
+test("resumed legacy Cities keeps unknown historical bins while recording subsequent random and Alchemy rolls", () => {
+  for (const version of [1, 2]) {
+    const g = setup(make(3, "cities")); E.act(g, g.current, { type: "roll" }, () => .5); const history = [...g.statistics.dice]; legacySources(g, version);
+    E.act(g, g.current, { type: "end" }); assert.deepEqual(g.statistics.diceUnknown, history);
+    const values = [0, 0, .5]; E.act(g, g.current, { type: "roll" }, () => values.shift()); E.act(g, g.current, { type: "end" });
+    alchemy(g, 6, 6); E.act(g, g.current, { type: "roll" }, () => .5);
+    assert.deepEqual(sourceTotals(g.statistics), [1, 1, 1]); assert.deepEqual(g.statistics.diceUnknown, history); assert.equal(g.statistics.diceRandom[0], 1); assert.equal(g.statistics.diceAlchemy[10], 1);
+    if (version === 1) assert(g.statistics.players.every(p => !Object.hasOwn(p, "robbed")));
+  }
+});
+
+test("incomplete or contradictory source arrays conservatively fall back as a whole, never to negative random counts", () => {
+  const corruptions = [
+    s => delete s.diceUnknown, s => s.diceRandom.pop(), s => s.diceAlchemy.push(0),
+    s => s.diceRandom[0] = -1, s => s.diceAlchemy[0] = .5, s => s.diceUnknown[0] = "1",
+    s => s.diceRandom[0] = Number.MAX_SAFE_INTEGER + 1, s => s.diceAlchemy[0] = 99,
+    s => { s.diceRandom[6] = 0; s.diceRandom[0] = 1; }
+  ];
+  for (const map of ["base", "cities"]) for (const corrupt of corruptions) {
+    const g = setup(make(3, map)); E.act(g, g.current, { type: "roll" }, () => .5); corrupt(g.statistics); g.phase = "over";g.winner = 0;
+    const before = structuredClone(g.statistics), view = E.publicGame(g, 0).statistics;
+    assert.deepEqual(sourceTotals(view), g.cities ? [0, 0, 1] : [1, 0, 0]); assert.deepEqual(view.dice, before.dice); assert.deepEqual(g.statistics, before);
+  }
+});

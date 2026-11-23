@@ -9,7 +9,7 @@ const copy = (value) => JSON.parse(JSON.stringify(value));
 const pick = (value, keys) => Object.fromEntries(keys.filter(k => value[k] !== undefined).map(k => [k, copy(value[k])]));
 const integer = (v, low, high) => Number.isSafeInteger(v) && v >= low && v <= high;
 const CONFIG = {
-  catan: ["mapId", "layout", "thieves", "maxPlayers", "skins"], bridge: ["boards", "scores"],
+  catan: ["mapId", "layout", "thieves", "maxPlayers", "skins"], bridge: ["boards", "scores", "biddingHints"],
   gomoku: ["difficulty"], xiangqi: ["difficulty"], truth: ["level", "mode", "rounds", "maxPlayers", "selection", "skipLimit"],
   million: ["capacity", "settings", "edition"], poker: ["maxPlayers", "startingStack", "blindInterval", "practiceMode"]
 };
@@ -211,6 +211,7 @@ function encode(kind, room) {
     if (kind === "million") clearMillionConsents(progress);
   }
   const config = pick(room, CONFIG[kind]);
+  if (kind === "bridge" && config.biddingHints === undefined) config.biddingHints = false;
   if (kind === "million" && config.edition === undefined) config.edition = progress.edition ?? "2016";
   if (kind === "truth") {
     progress = require("./truth-engine").snapshot(progress);
@@ -260,25 +261,32 @@ function validateProgress(kind, g, count, config) {
   }
   fail(integer(g.revision, 0, 10000000));
   if (kind === "catan") {
-    const Maps = require("./catan-maps");
-    fail(config.mapId === "base" || config.mapId === "cities" || Maps.get(config.mapId));
+    const Maps = require("./catan-maps"), map = Maps.get(config.mapId);
+    fail(config.mapId === "base" || config.mapId === "cities" || map);
     fail(g.mapId === config.mapId && ["default", "random"].includes(config.layout) && integer(config.maxPlayers, count, config.mapId === "base" ? 6 : 4));
     fail(["setupSettlement", "setupRoad", "scenarioChoice", "ckChoice", "roll", "main", "discard", "robber", "steal", "gold", "plenty", "monopoly", "freeRoads", "over"].includes(g.phase));
     fail(Array.isArray(g.players) && g.players.length === count && integer(g.current, 0, count - 1));
-    const resourceCount = config.mapId === "cities" ? 8 : 5;
+    const cities = config.mapId === "cities" || Boolean(map?.cities), resourceCount = cities ? 8 : 5;
     fail(Array.isArray(g.bank) && g.bank.length === resourceCount && Array.isArray(g.deck) && g.deck.length <= 34);
     fail(g.players.every(p => Array.isArray(p.resources) && p.resources.length === resourceCount && p.resources.every(v => integer(v, 0, 24)) && Array.isArray(p.development)));
     const b = g.board;
+    if (map?.cities) {
+      fail(Maps.combinedMaps.includes(map) && count === map.players && config.maxPlayers === map.players && config.thieves === "both");
+      fail(g.target === map.target && b?.mapId === map.id && b.layout === config.layout && Array.isArray(b.islands) && b.islands.length > 1);
+      fail(Array.isArray(b.tiles) && b.tiles.length === map.tiles.length && b.tiles.every((t, i) => t.q === map.tiles[i].q && t.r === map.tiles[i].r));
+    }
     fail(b && Array.isArray(b.tiles) && b.tiles.length <= 100 && Array.isArray(b.vertices) && b.vertices.length <= 300 && Array.isArray(b.edges) && b.edges.length <= 450 && Array.isArray(b.ports));
     const refs = (a, n, max) => Array.isArray(a) && a.length <= max && a.every(v => integer(v, 0, n - 1));
     b.tiles.forEach((t, i) => fail(t.id === i && refs(t.vertices, b.vertices.length, 6)));
     b.vertices.forEach((v, i) => fail(v.id === i && refs(v.tiles, b.tiles.length, 3) && refs(v.edges, b.edges.length, 3) && refs(v.neighbors, b.vertices.length, 3) && integer(v.owner, -1, count - 1)));
     b.edges.forEach((e, i) => fail(e.id === i && integer(e.a, 0, b.vertices.length - 1) && integer(e.b, 0, b.vertices.length - 1) && e.a !== e.b && integer(e.owner, -1, count - 1)));
     for (let i = 0; i < count; i++) fail(b.edges.filter(e => e.owner === i).length <= 30);
-    if(config.mapId === "cities") require("./catan-cities").validate(g);
+    if(cities) require("./catan-cities").validate(g);
     else fail(!g.cities && g.phase !== "ckChoice");
     g.trade = null;
   } else if (kind === "bridge") {
+    if (config.biddingHints === undefined) config.biddingHints = false;
+    fail(typeof config.biddingHints === "boolean");
     fail([4, 8, 16].includes(config.boards) && integer(g.board, 1, config.boards) && Array.isArray(config.scores) && config.scores.length <= config.boards);
     fail(["auction", "play", "trick", "over"].includes(g.phase) && integer(g.current, 0, 3));
     fail(Array.isArray(g.players) && g.players.length === 4 && Array.isArray(g.hands) && g.hands.length === 4 && Array.isArray(g.originalHands) && g.originalHands.length === 4);

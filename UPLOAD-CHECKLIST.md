@@ -6,9 +6,13 @@
 
 ## 上传步骤
 
+城市与骑士＋航海家：一并部署 `catan-maps.js`、`catan-engine.js`、`catan-cities.js`、`catan-server.js`、`room-archive.js`、`catan.js/html/css`、`catan-cities-data.js`、`catan-cities-ui.js`、`catan-music.js`、首页与相关测试。新入口使用独立 `cities-shores-1/2`、`cities-desert-1/2` 地图 ID，分别提供三、四人默认与随机布局，目标 16 分；原有模式与存档保持原规则。本次只开放官方推荐的扬帆出海、穿越荒漠，不声称其他组合一律被官方禁止。检查海上骑士及船只连接、金矿只领普通资源和水渠先后结算、首次入侵前无强盗和海盗、外交同类型替换、进步卡免费造船、商品隐私、重连和金矿选择中途保存恢复。运行 `npm run test:combined`、`npm run test:combined-ui`、`npm run test:cities`、`npm run test:archives`、`npm run test:rules` 和 `npm run test:rules-ui`。组合模式规则使用共享阅读器与中英分条说明；同步更新全部前后端文件，重启服务前先保存已有对局。
+
+桥牌可选叫牌提示：一并部署 `bridge-bidding.js`、`bridge.js/html/css`、`bridge-server.js`、`room-archive.js` 和对应测试及 `package.json`。创建房间时可选，默认关闭；房主可在开局前修改，开局后本场保持不变。每位玩家仅使用自己的 13 张牌与公开叫牌显示 A/K/Q/J 点数、牌型和简化自然叫牌建议；读取提示不会代叫，也不读取其他座位的暗牌。旧存档默认关闭，新存档、刷新和下一副保留选择。运行 `npm run test:bridge`、`npm run test:bridge-ui`、`npm run test:archives`、`npm run test:rules` 和 `npm run test:rules-ui`，检查桌面与 320px 手机、房主权限、存档恢复及开关关闭后的隐藏。更新服务前先保存现有对局。
+
 独立保存与城市骑士更新：房间管理同时有「保存」和「保存并退出」。前者仅下载，不冻结房间、清空座位或中断 AI；后者保留原有下载后确认退出流程。同步上传 `room-archive.js`、`game-archives.js`、`game-ui.js`、`game-rules.js`、`truth.js`、`duel.js` 及存档测试。
 
-城市与骑士为独立 3–4 人模式，依据 CATAN 官网 2025 年说明书及 FAQ，不与航海家或 5–6 人扩展混用。同步上传全部 `catan-cities*` 文件、`catan-engine.js`、`catan-server.js`、`catan.js/html`、`catan-stats.js`、`catan-music.js`、`room-archive.js`，以及 `audio/peritune-strategy.mp3` 和 `audio/CREDITS.md`。新局选择城市与骑士，旧局规则不变。测试初始城市、三种商品、骑士、城墙、都会、蛮族、54 张进步卡和所有选择阶段的存档恢复；核对手机和桌面棋盘标记、规则阅读器与音乐切换。部署重启前先保存现有房间。
+城市与骑士保留独立 3–4 人模式，并另提供下述城市与骑士＋航海家组合模式；均不支持 5–6 人扩展。规则依据 CATAN 官网 2025 年说明书及 FAQ。同步上传全部 `catan-cities*` 文件、`catan-engine.js`、`catan-server.js`、`catan.js/html`、`catan-stats.js`、`catan-music.js`、`room-archive.js`，以及 `audio/peritune-strategy.mp3` 和 `audio/CREDITS.md`。新局选择城市与骑士，旧局规则不变。测试初始城市、三种商品、骑士、城墙、都会、蛮族、54 张进步卡和所有选择阶段的存档恢复；核对手机和桌面棋盘标记、规则阅读器与音乐切换。部署重启前先保存现有房间。
 
 卡坦岛全部进步卡弹窗修复：同步更新 `catan.js`、`catan-cities-ui.js`、`catan-alchemy-ui-test.js`、`catan-progress-dialog-ui-test.js` 和 `package.json`。检查全部 25 种进步卡：23 种手动使用的进步卡（含商人）在掷骰前后均能关闭说明或取消确认；棋盘商人说明及印刷术、宪法的规则说明也可退出。重点核对掷骰前灌溉、掷骰后炼金术，以及可用卡和不可用卡快速切换时按钮状态不串用；查看和取消不耗牌、不改变回合，之后仍能正常掷骰或结束回合。运行 `npm run test:cities-ui`，包含桌面、手机触摸、键盘和完整炼金术出牌流程；本次没有后端协议或存档格式变更。
 
@@ -84,3 +88,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Remove-RetiredFiles.ps1
 - 棋类 AI 模型沿用已确认的朋友娱乐、不收费、不放广告用途，具体许可见 `AI-ENGINES.md` 和 `THIRD-PARTY.md`。
 
 `retired-files.json` 和 `Remove-RetiredFiles.ps1` 仅用于移除旧文件，不包含被移除游戏的实现。当前功能及测试入口见 `README.md`。
+
+进步卡可用状态更新：同步部署 `catan-cities-ui.js` 与 `catan-cities.css`。未满足使用条件的手牌置灰，点击仅打开卡牌说明及当前不可用原因；只有 Ready 卡能进入使用确认。运行 `node catan-progress-dialog-ui-test.js`，检查掷骰前后、回合外、目标条件不足、暂停、聊天广播及手机上的说明关闭与真实出牌。
+
+城市卡牌整批选牌：同步部署 catan-cities.js、catan-cities-ui.js、catan-cities.css 与 catan.js。破坏、婚礼、商业港、进步卡超限、水渠、行会税和间谍均先选择／撤选，再确认；资源与商品用原有弃牌插画样式，进步卡保留类别色。后端新增 ckSelect，须更新后端并重启；只更新页面不能使用整批提交。重启前保存已有房间。运行 node --test catan-card-selection-test.js 与 node catan-give-choice-ui-test.js，检查准确数量、取消不扣牌、一次提交、旧存档、隐私及暂停／断线／重连失效。
+
+卡坦图标闪烁修复：同步部署新增 `catan-render.js`，以及 `catan.html`、`catan.js`、`catan-board.js`、`catan-cities-ui.js`。Catan 页面在 Lucide 后先加载增量渲染工具；棋盘基础层与城市覆盖层独立保留，手牌、按钮、玩家栏、银行及选牌界面只更新变化的节点。运行 `npm run test:catan-render`，检查桌面与 320px 手机上掷骰、升级、交易、出牌、骑士移动及聊天时图标不重挂、不出现空白帧，数量、骰面、高亮与合法操作及时更新。并运行城市、组合模式及整批选牌浏览器回归。本次不改变游戏规则、后端协议或存档格式。
+
+卡坦完整得分明细：同步部署新增 `catan-score.js` 和 `catan.html`、`catan.js`、`catan.css`。所有玩家的分数旁都有明细入口，基础版、航海家各剧本、城市与骑士和组合模式均按真实来源逐项计分。建筑从棋盘实际等级统计，都会的城市基础分与额外分分开，收复海盗要塞不重复加分；同时覆盖商人、最长道路／商路、最大骑士团、登岛、部落、布匹、保卫卡坦及可见胜利点卡。对手隐藏胜利点卡在结束前不显示。运行 `npm run test:catan-score`，检查分项合计、棋子库存与实际建筑的区别、公开／隐藏／结束公开、实时更新、桌面和手机滚动及无操作副作用。本次不改变计分规则或存档格式。
+
+赛后骰子分布区分炼金术：同步部署 `catan-engine.js`、`catan-stats.js`、`catan-stats-ui.js`、`catan-stats.css` 与对应测试。城市与骑士及组合模式显示「全部掷骰（含炼金术）」和「随机掷骰（不含炼金术）」两图，各用自己的样本数计算理论次数及百分比；普通模式保留一图。统计 v3 新增随机、炼金术、未知来源计数，来源总和须等于全部次数。旧城市历史无法准确拆分，标为来源未记录；后续掷骰可以继续分类，旧基础版／纯航海可归随机。存档保持原格式并保留新计数。需同步更新后端，服务重启前先保存现有对局；仅更新页面无法新增来源记录。运行 `node --test catan-stats-test.js room-archive-test.js` 与 `node catan-stats-ui-test.js`，检查混合／全炼金术／零次、旧记录、随机数调用不变、赛后隐私、存档恢复、桌面及手机布局。

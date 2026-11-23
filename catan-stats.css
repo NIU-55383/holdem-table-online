@@ -95,3 +95,9 @@
   .stats-bar-legend{gap:10px 15px}
   #matchStatistics{margin:0 6px 10px 0}
 }
+
+.stats-dice-series + .stats-dice-series{border-top:2px solid var(--line);margin-top:28px;padding-top:24px}
+.stats-dice-heading h3{margin:0;font-size:16px;line-height:1.5}
+.stats-dice-heading h3 small{display:block;font-size:13px;font-weight:500;margin-top:3px}
+.stats-dice-heading .stats-note{margin:8px 0 12px}
+.stats-dice-series [data-dice-source-note]{margin:12px 0}

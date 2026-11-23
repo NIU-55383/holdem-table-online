@@ -51,7 +51,7 @@
   const citiesUI = CK.mount(action,()=>{
     state.mode = ""; state.selected = null; state.moveFrom = null;
     renderBoard(); renderActions(); renderPrompt();
-  });
+  },{labels,english,colors,icon:name=>icon(name),connected:()=>state.socket?.readyState===WebSocket.OPEN});
   let viewedTradeKey = "", alertTradeKey = "";
   let harborSetupKey = "", harborSetupAcknowledged = false;
   let islandRoadIntent = null;
@@ -65,14 +65,14 @@
   function showMapIntroduction() {
     const room = state.room;
     if (!room || (!Maps.get(room.mapId) && room.mapId !== "cities") || introKey(room) === mapIntroKey || document.querySelector("dialog[open]")) return;
-    if(room.mapId === "cities") {rememberMapIntro(room); CK.rules(); return;}
+    if(room.mapId === "cities" || Maps.get(room.mapId)?.cities) {rememberMapIntro(room); CK.setMap(room.mapId); CK.rules(); return;}
     showSailingRules(room.mapId);
   }
   document.addEventListener("close", showMapIntroduction, true);
   function renderSoundToggle() {
     const button = $("soundToggle"), label = audio.muted ? "开启音效 / Enable sounds" : "关闭音效 / Mute sounds";
     button.title = label; button.setAttribute("aria-label", label); button.setAttribute("aria-pressed", String(!audio.muted));
-    button.innerHTML = `<i data-lucide="${audio.muted ? "volume-x" : "volume-2"}" aria-hidden="true"></i>`;
+    window.CatanRender.html(button, `<i data-lucide="${audio.muted ? "volume-x" : "volume-2"}" aria-hidden="true"></i>`);
     window.lucide?.createIcons();
   }
   $("soundToggle").onclick = () => { audio.setMuted(!audio.muted); renderSoundToggle(); renderAudioSettings(); };
@@ -126,13 +126,17 @@
     const map = Maps.get(mapId);
     if (!map && !general) return;
     $("sailingTitle").innerHTML = general ? "航海家规则<small>Seafarers Rules</small>" : `${B.escape(map.name)}<small>${B.escape(map.english)} · ${S.playerRange(map)} Players · ${S.target(map)[1]}</small>`;
-    $("sailingContent").innerHTML = (general ? Maps.rules : map.rules).map(([zh, en]) => `<p>${B.escape(zh)}<small>${B.escape(en)}</small></p>`).join("")
-      + '<a class="rules-link" href="https://www.catan.com/sites/default/files/2021-06/catan-seafarers_2021_rule_book_201201.pdf" target="_blank" rel="noopener noreferrer">官方规则 / Official Rulebook ↗</a>';
+    const combined = Boolean(map?.cities);
+    if(combined && general) $("sailingTitle").innerHTML = "城市与骑士＋航海家<small>Cities &amp; Knights + Seafarers</small>";
+    const sailing = Maps.rules.filter((_, i) => [0,2,3,4,6].includes(i));
+    const pairs = combined ? general ? [...sailing,...window.CatanCitiesData.combinedRules] : [...map.rules,...window.CatanCitiesData.combinedRules] : general ? Maps.rules : map.rules;
+    $("sailingContent").innerHTML = (combined ? '<ul class="combined-rule-list">'+pairs.map(([zh,en])=>`<li>${B.escape(zh)}<small>${B.escape(en)}</small></li>`).join("")+'</ul>' : pairs.map(([zh,en])=>`<p>${B.escape(zh)}<small>${B.escape(en)}</small></p>`).join(""))
+      + (combined ? window.CatanCitiesData.combinedSources.map(([title,url])=>`<a class="rules-link" href="${B.escape(url)}" target="_blank" rel="noopener noreferrer">${B.escape(title)} ↗</a>`).join("") : '<a class="rules-link" href="https://www.catan.com/sites/default/files/2021-06/catan-seafarers_2021_rule_book_201201.pdf" target="_blank" rel="noopener noreferrer">官方规则 / Official Rulebook ↗</a>');
     if (!general) {
       const preview = document.createElement("div"); preview.className = "map-rules-preview"; $("sailingContent").prepend(preview);
       const mode = document.createElement("p"); mode.className = "map-layout-label"; mode.textContent = layoutName(state.room?.layout || state.layout); $("sailingContent").prepend(mode);
       const roomBoard = state.room?.mapId === mapId && (state.room.game?.board || state.room.previewBoard);
-      if (roomBoard) preview.innerHTML = B.render(roomBoard, { preview: true });
+      if (roomBoard) preview.innerHTML = B.render(state.room.game?.citiesKnights&&!state.room.game.citiesKnights.attacked?{...roomBoard,pirateStart:null}:roomBoard, { preview: true });
       else fetch(`/api/catan-preview?map=${encodeURIComponent(mapId)}&layout=${state.layout}&players=${state.seats}&thieves=${state.thieves}`).then((r) => r.json()).then((board) => { if (preview.isConnected) preview.innerHTML = B.render({ ...board, skins: state.room?.skins || state.skins }, { preview: true }); }).catch(() => {});
     }
     if (!$("sailingDialog").open) $("sailingDialog").showModal();
@@ -164,7 +168,7 @@
     $(id).addEventListener("keydown", explain);
   }
   function showBaseRules(focusCosts = false) {
-    if((state.room?.mapId || state.mapId) === "cities") {CK.rules(focusCosts === true);return;}
+    if((state.room?.mapId || state.mapId) === "cities" || Maps.get(state.room?.mapId || state.mapId)?.cities) {CK.setMap(state.room?.mapId || state.mapId);CK.rules(focusCosts === true);return;}
     const map = Maps.get(state.room?.mapId || state.mapId), target = state.room?.game?.target || map?.target || 10;
     const players = state.room?.game?.players.length || state.room?.maxPlayers || state.seats;
     const extended = !map && players > 4;
@@ -222,14 +226,19 @@
   $("helpAcknowledge").onclick = () => $("helpDialog").close();
   $("mapChoice").innerHTML = Maps.maps.map((map) => `<option value="${map.id}">${map.name} / ${map.english} · ${S.playerRange(map)}人 / Players</option>`).join("");
   function chooseMap(id) {
-    const map = Maps.get(id), cities = id === "cities"; state.mapId = map || cities ? id : "base";
+    const map = Maps.get(id), cities = id === "cities", combined = Boolean(map?.cities); state.mapId = map || cities ? id : "base";
+    CK.setMap(state.mapId);
+    $("mapChoice").innerHTML = (combined ? Maps.combinedMaps : Maps.maps).map(m=>`<option value="${m.id}">${m.name} / ${m.english} · ${S.playerRange(m)}人 / Players</option>`).join("");
+    $("combinedSetupNote").hidden = !combined;
+    $("baseRules").textContent = cities || combined ? "城市规则 / Cities rules" : "基础规则 / Rules";
+    $("seafarerRules").textContent = combined ? "组合规则 / Combined rules" : "航海规则 / Sailing rules";
     if (!state.room) music.setEdition(state.mapId);
     renderSkins();
-    $("baseSetup").hidden = Boolean(map); $("seafarerSetup").hidden = !map; $("playerCountChoice").hidden = Boolean(map && !(map.minPlayers < map.players));
+    $("baseSetup").hidden = Boolean(map) && !combined; $("seafarerSetup").hidden = !map; $("playerCountChoice").hidden = Boolean(map && !(map.minPlayers < map.players));
     $("scenarioSetup").hidden = map?.id !== "new-world";
     $("layoutChoice").querySelector('[data-layout="random"]').innerHTML = map?.randomPolicy?.portsOnly ? "随机港口<small>Random harbors · Fixed terrain</small>" : "随机地图<small>Random</small>";
-    document.querySelectorAll("[data-edition]").forEach((b) => b.classList.toggle("selected", b.dataset.edition === (cities ? "cities" : map ? "seafarers" : "base")));
-    $("editionTitle").innerHTML = cities ? '卡坦：城市与骑士<small>CATAN Cities &amp; Knights</small>' : map ? '卡坦：航海家<small>CATAN Seafarers</small>' : '卡坦岛 <small>CATAN</small>';
+    document.querySelectorAll("[data-edition]").forEach((b) => b.classList.toggle("selected", b.dataset.edition === (combined ? "combined" : cities ? "cities" : map ? "seafarers" : "base")));
+    $("editionTitle").innerHTML = combined ? '城市与骑士＋航海家<small>Cities &amp; Knights + Seafarers</small>' : cities ? '卡坦：城市与骑士<small>CATAN Cities &amp; Knights</small>' : map ? '卡坦：航海家<small>CATAN Seafarers</small>' : '卡坦岛 <small>CATAN</small>';
     if (map) { state.seats = map.minPlayers < map.players ? Math.max(map.minPlayers, Math.min(map.players, Number($("seatChoice").querySelector(".selected")?.dataset.seats) || map.players)) : map.players; $("mapChoice").value = id; }
     else { state.seats = Number($("seatChoice").querySelector(".selected")?.dataset.seats) || 4; }
     if(cities)state.seats=Math.min(4,state.seats);
@@ -243,7 +252,7 @@
     const request = ++previewRequest;
     fetch(`/api/catan-preview?map=${encodeURIComponent(state.mapId)}&layout=${state.layout}&players=${state.seats}&thieves=${state.thieves}`).then((r) => { if (!r.ok) throw new Error("preview"); return r.json(); }).then((board) => { if (request === previewRequest) { $("previewBoard").innerHTML = B.render({ ...board, skins: state.skins }, { preview: true }); $("previewBoard").dataset.layout = board.layout || "default"; $("previewBoard").dataset.map = state.mapId; } }).catch(() => { if (request === previewRequest) $("previewBoard").innerHTML = `<div class="offline-island">${icon("ship")}<p>请使用新版服务器 / Updated server required</p></div>`; });
   }
-  $("editionChoice").onclick = (e) => { const b = e.target.closest("[data-edition]"); if (!b) return; chooseMap(b.dataset.edition === "seafarers" ? $("mapChoice").value : b.dataset.edition); };
+  $("editionChoice").onclick = (e) => { const b = e.target.closest("[data-edition]"); if (!b) return; const current = Maps.get(state.mapId); chooseMap(b.dataset.edition === "combined" ? (current?.cities ? current.id : Maps.get(`cities-${current?.id}`)?.id || "cities-shores-2") : b.dataset.edition === "seafarers" ? (current?.baseMapId || (current && !current.cities ? current.id : "shores-1")) : b.dataset.edition); };
   $("mapChoice").onchange = () => chooseMap($("mapChoice").value);
   $("thiefChoice").onclick = e => {
     const button = e.target.closest("[data-thieves]"); if (!button) return;
@@ -576,10 +585,12 @@
     if (!g) statistics.sync(room);
     if (!room) { supplyRoomKey = ""; $("incomingTradeAlert").hidden = true; $("goldChoiceAlert").hidden = true; alertTradeKey = ""; return; }
     const map = Maps.get(room.mapId);
+    CK.setMap(room.mapId);
     if (g && supplyRoomKey !== room.code) { $("supplyDetails").open = true; supplyRoomKey = room.code; }
     $("lobbyMapName").textContent = map ? `${map.name} / ${map.english} · ${S.target(map)[0]} / ${S.target(map)[1]} · ${layoutName(room.layout)}` : `基础版 / Base Game · ${room.maxPlayers} 人 / Players · 10 VP${room.maxPlayers > 4 ? " · 配对回合 / Paired turns" : ""}`;
     $("lobbyMapRules").hidden = false; $("gameMapRules").hidden = !map; $("gameSailingRules").hidden = !map;
     $("lobbyMapRules").textContent = map ? "本图规则 / Map Rules" : "基础规则 / Base Rules";
+    if(map?.cities) $("lobbyMapName").textContent = "城市与骑士＋航海家 / Cities & Knights + Seafarers · " + $("lobbyMapName").textContent;
     if(room.mapId === "cities") {$("lobbyMapName").textContent=`城市与骑士 / Cities & Knights · ${room.maxPlayers} 玩家 / Players · 13 VP`;$("lobbyMapRules").textContent="规则 / Rules";}
     if (!g) {
       $("incomingTradeAlert").hidden = true; $("goldChoiceAlert").hidden = true; viewedTradeKey = ""; alertTradeKey = "";
@@ -604,7 +615,7 @@
     $("game").dataset.phase = g.phase;
     $("game").dataset.seafarers = String(Boolean(g.board.islands));
     $("game").dataset.cities = String(Boolean(g.citiesKnights));
-    $("gameBaseRules").innerHTML = `<i data-lucide="book-open" aria-hidden="true"></i><span>${g.citiesKnights ? "城市与骑士规则 / Cities & Knights rules" : "基础规则 / Base rules"}</span>`;
+    window.CatanRender.html($("gameBaseRules"), `<i data-lucide="book-open" aria-hidden="true"></i><span>${map?.cities ? "组合规则 / Combined rules" : g.citiesKnights ? "城市与骑士规则 / Cities & Knights rules" : "基础规则 / Base rules"}</span>`);
     if (state.phaseKey !== key) {
       $("buildNotice").hidden = true; $("buildNotice").dataset.type = "";
       state.phaseKey = key; state.selected = null; state.moveFrom = null; state.harbor = null; state.victim = null;
@@ -693,7 +704,17 @@
     const boardKey = JSON.stringify([state.room.code, state.room.you, g.board, options]);
     // Chat, presence and resource-only changes must not rebuild the SVG scene.
     if (state.boardRenderKey !== boardKey) {
-      $("board").innerHTML = B.render(g.board, options); state.boardRenderKey = boardKey;
+      const template = document.createElement("template");
+      template.innerHTML = B.render(g.citiesKnights&&!g.citiesKnights.attacked?{...g.board,pirateStart:null}:g.board, options);
+      const next = template.content.firstElementChild;
+      let svg = $("board").querySelector("svg.catan-island");
+      if (!svg) { svg = next.cloneNode(false); $("board").replaceChildren(svg); }
+      for (const attr of next.attributes) if (svg.getAttribute(attr.name) !== attr.value) svg.setAttribute(attr.name, attr.value);
+      let scene = svg.querySelector(".board-scene");
+      if (!scene) { scene = document.createElementNS("http://www.w3.org/2000/svg", "g"); scene.classList.add("board-scene"); svg.prepend(scene); }
+      // Keep the city overlay outside the base scene so updating either cannot remove the other.
+      window.CatanRender.html(scene, next.innerHTML);
+      state.boardRenderKey = boardKey;
     }
     citiesUI.overlay($("board"));
     $("selection").hidden = !state.selected;
@@ -879,7 +900,7 @@
     $("pairedTurnBanner").hidden = !pair || g.phase.startsWith("setup") || Boolean(winner);
     if (pair) $("pairedTurnBanner").innerHTML = `<div><span class="${pair.part === 1 ? "active" : ""}">主回合 / Main: <b>${B.escape(g.players[pair.primary].name)}</b></span><span aria-hidden="true"> → </span><span class="${pair.part === 2 ? "active" : ""}">补充建造 / Paired build: <b>${B.escape(g.players[pair.secondary].name)}</b></span></div><small>${pair.part === 2 ? "现在不掷骰；可建造、用旧发展卡，只能与银行或港口交易。 / No roll; build, play an old card, and trade with the bank or harbors only." : "主回合结束后，箭头右侧玩家补充建造。 / The paired player builds after the main turn."}</small>`;
     $("phaseLabel").textContent = g.scenario?.harborDraft ? "初始海港 / Initial harbors" : `${phase[0]} / ${phase[1]}`;
-    $("turnAvatar").innerHTML = window.BoardGameUI.avatar(state.room.seats[current.id], seatConnected(current.id), "turn-avatar", current.id === state.room.you) + seatNumber(current.id); $("turnAvatar").style.setProperty("--player", B.COLORS[current.id]);
+    window.CatanRender.html($("turnAvatar"), window.BoardGameUI.avatar(state.room.seats[current.id], seatConnected(current.id), "turn-avatar", current.id === state.room.you) + seatNumber(current.id)); $("turnAvatar").style.setProperty("--player", B.COLORS[current.id]);
     const own = current.id === you, waiting = g.phase === "discard" && !g.legal.discard;
     let zh = g.legal.discard ? `你需要弃掉 ${g.legal.discard} 张资源` : waiting ? "等待玩家弃掉资源" : `${own ? "轮到你" : current.name} · ${phase[0]}`;
     let en = g.legal.discard ? `Discard ${g.legal.discard} resource cards` : waiting ? "Waiting for discards" : `${own ? "Your turn" : current.name} · ${phase[1]}`;
@@ -911,40 +932,36 @@
     if (S.choice(g, you, "pirateReward")) { zh = "击退海盗：领取一张资源"; en = "Pirate defense: claim one resource"; }
     if (own && g.phase === "steal" && g.scenario?.kind === "cloth") { zh = "选择玩家及资源或布匹"; en = "Choose a player, then resource or cloth"; }
     const citiesChoice=CK.choiceDescription(g,you);if(citiesChoice)[zh,en]=citiesChoice.prompt;
-    $("turnPrompt").innerHTML = `${B.escape(zh)}<small>${B.escape(en)}</small>`;
+    window.CatanRender.html($("turnPrompt"), `${B.escape(zh)}<small>${B.escape(en)}</small>`);
     const event = g.dice.length === 2 ? g.citiesKnights?.event : null;
-    $("dice").innerHTML = diceMarkup(g.dice[0]) + diceMarkup(g.dice[1]) + (g.citiesKnights ? CK.eventDie(event) : "");
+    window.CatanRender.html($("dice"), diceMarkup(g.dice[0]) + diceMarkup(g.dice[1]) + (g.citiesKnights ? CK.eventDie(event) : ""));
     const key = `${g.pairedTurn?.round || g.turn}:${g.dice.join()}:${event || ""}`;
     if (state.diceKey !== key && g.dice.length) { $("dice").classList.remove("rolling"); requestAnimationFrame(() => $("dice").classList.add("rolling")); }
     state.diceKey = key;
   }
   function scoreDetails(g, p) {
-    const cardPoints = g.citiesKnights ? g.citiesKnights.players[p.id].revealed.length : Array.isArray(p.development) ? p.development.filter(card => card.type === "vp").length : null;
-    const tribePoints = g.scenario?.kind === "tribes" ? p.scenarioPoints || 0 : 0;
-    const defenderPoints = g.citiesKnights?.players[p.id].defenders || 0;
-    const bonusPoints = (cardPoints || 0) + tribePoints + defenderPoints;
-    return { cardPoints, tribePoints, defenderPoints, bonusPoints, otherPoints: p.score - bonusPoints };
+    return window.CatanScore.breakdown(g, p);
   }
   function showScoreInfo() {
     const room = state.room, g = room?.game, p = g?.players.find(p => p.id === scoreInfoSeat?.id);
     if (!p || scoreInfoSeat.code !== room.code || scoreInfoSeat.you !== room.you) {
       scoreInfoSeat = null; $("scoreInfoDialog").close(); return;
     }
-    const { cardPoints, tribePoints, defenderPoints, bonusPoints, otherPoints } = scoreDetails(g, p);
-    const paragraphs = [[`${p.name}：${otherPoints} + ${bonusPoints} = ${p.score} 分。`, `${p.name}: ${otherPoints} + ${bonusPoints} = ${p.score} VP.`]];
-    if (cardPoints) paragraphs.push([`${g.citiesKnights ? "胜利点进步卡" : "胜利点发展卡"}：${cardPoints} 分。`, `Victory point ${g.citiesKnights ? "progress" : "development"} cards: ${cardPoints} VP.`]);
-    if (tribePoints) paragraphs.push([`部落胜利点标记：${tribePoints} 分。`, `Tribe victory point tokens: ${tribePoints} VP.`]);
-    if (defenderPoints) {
-      paragraphs.push([`保卫卡坦奖励：${defenderPoints} 分。`, `Defender of Catan awards: ${defenderPoints} VP.`]);
-      paragraphs.push([`获奖原因：该玩家曾在成功抵御蛮族时，提供了全场唯一最高的防守贡献。每次获得 1 分，已累计获奖 ${defenderPoints} 次；骑士失活后不会扣回。`, `Why it was awarded: this player was the sole highest contributor when Catan successfully repelled the barbarians. Each award grants 1 VP; this player has earned ${defenderPoints} in total. These points remain after knights deactivate.`]);
-      paragraphs.push(["怎么算防守贡献：蛮族入侵时，把该玩家所有已激活骑士的等级相加。例如一个一级骑士加一个二级骑士，共贡献 3 点防守力。", "How contribution is counted: add the ranks of this player's active knights when the barbarians attack. One rank-1 knight plus one rank-2 knight contributes 3 defense strength."]);
-      paragraphs.push(["怎样算守住：全体玩家的防守贡献相加，不少于全岛城市数（含都会），就成功抵御蛮族。", "When defense succeeds: all players' total contribution must be at least the number of cities on the island, including metropolises."]);
-      paragraphs.push(["最高贡献并列时：并列者各选一类进步卡，抽 1 张；这次不获得保卫卡坦分数。", "When the highest contribution is tied: each tied player draws 1 progress card from a category of their choice; no Defender of Catan VP is awarded for that attack."]);
-    }
-    paragraphs.push([`前面的 ${otherPoints} 分是其他得分；后面的 +${bonusPoints} 分来自以上奖励，已计入 ${p.score} 分，不用再加一次。`, `The first ${otherPoints} points come from other sources. The +${bonusPoints} comes from the bonuses above and is already included in ${p.score} VP; do not add it again.`]);
-    if (cardPoints === null) paragraphs.push(["这里只显示公开得分，不包含对方未公开的胜利点卡。", "Only public points are shown. This opponent's hidden victory point cards are not included."]);
-    const scoreItems=paragraphs.map(([zh,en])=>`<p>${B.escape(zh)}<small>${B.escape(en)}</small></p>`);
-    $("scoreInfoContent").innerHTML=g.citiesKnights?`<ul class="cities-info-list">${scoreItems.map(item=>`<li>${item}</li>`).join("")}</ul>`:scoreItems.join("");
+    const { items, total, publicOnly, defenderPoints } = scoreDetails(g, p);
+    const line = (zh, en) => `<p>${B.escape(zh)}<small>${B.escape(en)}</small></p>`;
+    const defenderRules = defenderPoints ? `<details id="scoreDefenderRules"${$("scoreInfoDialog").open && $("scoreDefenderRules")?.open ? " open" : ""}><summary>保卫卡坦获奖规则 / Defender award rules</summary><ul class="score-rule-list">
+      <li>${line("成功抵御蛮族时，防守贡献全场唯一最高的玩家获得 1 分。获奖分数会累积，骑士失活后不会扣回。", "When Catan repels the barbarians, the sole highest defense contributor gains 1 VP. Awards accumulate and remain after knights deactivate.")}</li>
+      <li>${line("防守贡献是自己所有已激活骑士的等级之和。例如一级骑士加二级骑士，共贡献 3 点。", "Your defense contribution is the sum of your active knights’ ranks. A rank-1 knight and a rank-2 knight contribute 3 strength.")}</li>
+      <li>${line("全体玩家的防守贡献合计，不少于全岛城市数（含都会），就成功抵御蛮族。", "Defense succeeds when all players’ combined strength is at least the number of cities, including metropolises.")}</li>
+      <li>${line("最高贡献并列时，并列玩家各抽 1 张自选类别的进步卡，本次不获得保卫卡坦分数。", "Tied highest contributors each draw 1 progress card from a category of their choice; no Defender of Catan VP is awarded for that attack.")}</li>
+      </ul></details>` : "";
+    const equation = items.map(item => item.points).join(" + ") || "0";
+    window.CatanRender.html($("scoreInfoContent"),
+      `<p class="score-total" data-score-total="${total}" data-score-visibility="${publicOnly ? "public" : "total"}"><strong>${B.escape(p.name)} · ${publicOnly ? "公开得分" : "总分"} ${total} 分</strong><small>${B.escape(p.name)} · ${publicOnly ? "Public score" : "Total"}: ${total} VP</small></p>`
+      + (items.length ? `<ul class="score-breakdown-list">${items.map(item => `<li data-render-key="score:${B.escape(item.key)}" data-score-source="${B.escape(item.key)}" data-score-points="${item.points}">${line(item.zh, item.en)}</li>`).join("")}</ul>` : line("尚无得分。", "No points yet."))
+      + `<p class="score-sum">合计：${equation} = ${total} 分<small>Total: ${equation} = ${total} VP</small></p>`
+      + (publicOnly ? `<p class="score-privacy">这里只显示公开得分，不包含对方未公开的胜利点卡。<small>Only public points are shown. This opponent’s hidden victory point cards are not included.</small></p>` : "")
+      + defenderRules);
     if (!$("scoreInfoDialog").open) $("scoreInfoDialog").showModal();
   }
   $("players").addEventListener("click", event => {
@@ -956,35 +973,36 @@
   });
   function renderPlayers() {
     const { game: g, seats, you } = state.room;
+    const playerTable = $("players").closest("table"), players = document.createElement("tbody");
     const seafarers = Boolean(g.board.islands);
     const pirates = g.scenario?.kind === "pirates";
     const routeUnavailable = Maps.get(g.mapId || state.room.mapId)?.scenario?.longestRoute === false;
-    $("players").closest("table").querySelector("thead th:nth-last-child(3)").innerHTML = g.citiesKnights ? "防守力<small>Defense</small>" : pirates ? "战舰<small>Warships</small>" : "骑士<small>Knights</small>";
-    $("players").closest("table").querySelector("thead th:nth-last-child(4)").innerHTML = g.citiesKnights ? "进步卡<small>Progress cards</small>" : "发展卡<small>Dev cards</small>";
+    playerTable.querySelector("thead th:nth-last-child(3)").innerHTML = g.citiesKnights ? "防守力<small>Defense</small>" : pirates ? "战舰<small>Warships</small>" : "骑士<small>Knights</small>";
+    playerTable.querySelector("thead th:nth-last-child(4)").innerHTML = g.citiesKnights ? "进步卡<small>Progress cards</small>" : "发展卡<small>Dev cards</small>";
     const longestLabel = seafarers ? "最长商路 / Longest Route" : "最长道路 / Longest Road";
-    $("players").closest("table").classList.toggle("seafarers-summary", seafarers);
+    playerTable.classList.toggle("seafarers-summary", seafarers);
     $("islandPointsHeading").hidden = !seafarers;
     $("routeCountHeading").innerHTML = seafarers ? "已建<br>商路<small>Built</small>" : "已建<br>道路<small>Built</small>";
     $("routeCountHeading").title = seafarers ? "已建道路与船只总数 / Total built roads and ships" : "已建道路总数 / Total built roads";
     $("longestRouteHeading").innerHTML = `${seafarers ? "最长<br>商路" : "最长<br>道路"}<small>Longest</small>`;
     $("longestRouteHeading").title = longestLabel;
-    $("players").innerHTML = g.players.map((p) => {
+    players.innerHTML = g.players.map((p) => {
       const connected = seatConnected(p.id);
       const status = seats[p.id].bot ? "机器人 / Bot" : !connected ? "离线 / Offline" : "在线 / Online";
       const length = g.roadLengths[p.id];
       const routeTitle = `${longestLabel}: ${routeUnavailable ? "不可用 / Not available" : `${length}${g.longest === p.id ? " · 最长奖 +2 分 / Award +2 VP" : ""}`}`;
-      const { cardPoints, tribePoints, defenderPoints, bonusPoints, otherPoints } = scoreDetails(g, p);
+      const { items: scoreItems, publicOnly, bonusPoints, otherPoints } = scoreDetails(g, p);
       const scoreText = bonusPoints ? `${otherPoints}+${bonusPoints}` : `${p.score}`;
-      const scoreTitle = `其他得分 ${otherPoints}${cardPoints === null ? "" : ` + 加分卡 ${cardPoints}`}${tribePoints ? ` + 部落标记 ${tribePoints}` : ""}${defenderPoints ? ` + 保卫卡坦 ${defenderPoints}` : ""} = ${cardPoints === null ? "公开分数" : "总分"} ${p.score} / Other points ${otherPoints}${cardPoints === null ? "" : ` + VP cards ${cardPoints}`}${tribePoints ? ` + Tribe tokens ${tribePoints}` : ""}${defenderPoints ? ` + Defender of Catan ${defenderPoints}` : ""} = ${p.score} VP${cardPoints === null ? "（不含未公开加分卡 / Hidden VP cards excluded）" : ""}`;
-      return `<tr data-player-id="${p.id}" class="summary-player ${p.id === g.current && g.phase !== "over" ? "current" : ""}" style="--player:${B.COLORS[p.id]}"><th scope="row"><div class="summary-identity">${numberedAvatar({ name: p.name, avatar: seats[p.id]?.avatar }, p.id, "player-portrait")}<div class="summary-person"><strong title="${B.escape(p.name)} · ${status}">${B.escape(p.name)}</strong><span class="summary-meta" title="${scoreTitle}" aria-label="${scoreTitle}"><i class="player-color"></i><b>${scoreText}</b> VP${bonusPoints ? `<button type="button" class="score-info-button" data-score-info="${p.id}" title="加分说明 / Bonus points" aria-label="${B.escape(p.name)} · +${bonusPoints} 分说明 / Bonus points"><i data-lucide="circle-help" aria-hidden="true"></i></button>` : ""}</span>${p.id === you || p.id === state.room.host ? `<small>${p.id === state.room.host ? "房主 / Host" : "你 / You"}</small>` : ""}</div></div><span class="player-speech" data-chat-bubble="${p.id}" aria-label="${B.escape(p.name)} 说 / says" hidden><span class="player-speech-text"></span></span></th>
+      const scoreTitle = `${publicOnly ? "公开得分" : "总分"} ${p.score} / ${publicOnly ? "Public score" : "Total"}: ${p.score} VP · ${scoreItems.map(item => item.zh + " / " + item.en).join("；")}${publicOnly ? "（不含未公开胜利点卡 / Hidden VP cards excluded）" : ""}`;
+      return `<tr data-render-key="player:${p.id}" data-player-id="${p.id}" class="summary-player ${p.id === g.current && g.phase !== "over" ? "current" : ""}" style="--player:${B.COLORS[p.id]}"><th scope="row"><div class="summary-identity">${numberedAvatar({ name: p.name, avatar: seats[p.id]?.avatar }, p.id, "player-portrait")}<div class="summary-person"><strong title="${B.escape(p.name)} · ${status}">${B.escape(p.name)}</strong><span class="summary-meta" title="${B.escape(scoreTitle)}" aria-label="${B.escape(scoreTitle)}"><i class="player-color"></i><b>${scoreText}</b> VP<button type="button" class="score-info-button" data-score-info="${p.id}" title="得分明细 / Score breakdown" aria-label="${B.escape(p.name)} · 得分明细 / Score breakdown"><i data-lucide="circle-help" aria-hidden="true"></i></button></span>${p.id === you || p.id === state.room.host ? `<small>${p.id === state.room.host ? "房主 / Host" : "你 / You"}</small>` : ""}</div></div><span class="player-speech" data-chat-bubble="${p.id}" aria-label="${B.escape(p.name)} 说 / says" hidden><span class="player-speech-text"></span></span></th>
         ${seafarers ? `<td class="island-points" title="登岛奖励，已包含在总分中 / Island bonus, included in total VP" aria-label="登岛奖励 / Island bonus: ${p.islandPoints} VP"><b>${p.islandPoints}</b><small>VP</small></td>` : ""}
         <td class="resource-count" aria-label="资源卡 / Resource cards: ${p.resourceCount}">${cardCounter(p.id, "resource", "resource-back", p.resourceCount)}</td><td class="development-count" aria-label="发展卡 / Development cards: ${p.developmentCount}">${cardCounter(p.id, "development", "development", p.developmentCount)}</td><td class="knight-count" aria-label="已用骑士 / Played knights: ${p.knights}"><span>${icon("robber")}<b>${p.knights}</b></span></td><td class="road-count" aria-label="已建道路 / Built roads: ${p.roads}"><span>${icon("road")}<b>${p.roads}</b></span></td>
         <td class="longest-count${routeUnavailable ? " route-unavailable" : g.longest === p.id ? " route-holder" : ""}" title="${routeTitle}" aria-label="${routeTitle}">${routeUnavailable ? "<b>不可用</b><small>Not available</small>" : `<b>${length}</b>${g.longest === p.id ? "<small>+2 VP</small>" : ""}`}</td></tr>`;
     }).join("");
-    $("players").querySelectorAll("tr").forEach((row, id) => row.classList.toggle("current", g.phase !== "over" && id === (g.phase === "gold" ? g.goldQueue[0]?.id : g.current)));
-    if (g.phase === "scenarioChoice") $("players").querySelectorAll("tr").forEach((row, id) => row.classList.toggle("current", id === (g.scenario.pending?.actor ?? g.scenario.actor)));
-    if (pirates) $("players").querySelectorAll(".knight-count").forEach((cell, id) => { cell.innerHTML = `<span>${S.art("warship")}<b>${g.players[id].warships || 0}</b></span>`; cell.setAttribute("aria-label", `战舰 / Warships: ${g.players[id].warships || 0}`); });
-    if (g.citiesKnights) $("players").querySelectorAll("tr").forEach((row, id) => {
+    players.querySelectorAll("tr").forEach((row, id) => row.classList.toggle("current", g.phase !== "over" && id === (g.phase === "gold" ? g.goldQueue[0]?.id : g.current)));
+    if (g.phase === "scenarioChoice") players.querySelectorAll("tr").forEach((row, id) => row.classList.toggle("current", id === (g.scenario.pending?.actor ?? g.scenario.actor)));
+    if (pirates) players.querySelectorAll(".knight-count").forEach((cell, id) => { cell.innerHTML = `<span>${S.art("warship")}<b>${g.players[id].warships || 0}</b></span>`; cell.setAttribute("aria-label", `战舰 / Warships: ${g.players[id].warships || 0}`); });
+    if (g.citiesKnights) players.querySelectorAll("tr").forEach((row, id) => {
       const cell = row.querySelector(".knight-count"), strength = g.citiesKnights.players[id].strength;
       cell.innerHTML = `<span>${CK.infoButton("knight")}<b>${strength}</b></span>`;
       cell.title = `已激活骑士的总强度 / Total active knight strength: ${strength}`;
@@ -994,13 +1012,14 @@
     if (["tribes", "cloth", "pirates", "wonders"].includes(g.scenario?.kind)) {
       $("islandPointsHeading").innerHTML = "剧本<br>奖励<small>Scenario VP</small>";
       $("islandPointsHeading").title = "剧本奖励分 / Scenario victory points";
-      $("players").querySelectorAll(".island-points").forEach((cell, id) => { const p = g.players[id], points = (p.scenarioPoints || 0) + (g.scenario.kind === "cloth" ? Math.floor((p.cloth || 0) / 2) : 0); cell.innerHTML = `<b>${points}</b><small>VP</small>`; cell.title = `剧本奖励，已包含在总分中 / Scenario bonus, included in total VP: ${points}`; cell.setAttribute("aria-label", cell.title); });
+      players.querySelectorAll(".island-points").forEach((cell, id) => { const p = g.players[id], points = (p.scenarioPoints || 0) + (g.scenario.kind === "cloth" ? Math.floor((p.cloth || 0) / 2) : 0); cell.innerHTML = `<b>${points}</b><small>VP</small>`; cell.title = `剧本奖励，已包含在总分中 / Scenario bonus, included in total VP: ${points}`; cell.setAttribute("aria-label", cell.title); });
     } else { $("islandPointsHeading").innerHTML = "登岛<br>奖励<small>Island VP</small>"; $("islandPointsHeading").title = "登岛奖励分 / Island bonus victory points"; }
-    $("players").querySelectorAll(".road-count").forEach((cell, i) => {
+    players.querySelectorAll(".road-count").forEach((cell, i) => {
       const p = g.players[i];
       cell.title = `村庄 / Settlements ${p.settlements}/5 · 城市 / Cities ${p.cities}/4 · 道路 / Roads ${p.roads}/15${g.board.islands ? ` · 船 / Ships ${p.ships}/15${p.reservedShips ? ` · 奇迹预留 / Wonder reserved ${p.reservedShips} · 库存 / Available ${p.availableShips}` : ""} · 登岛 / Island bonus ${p.islandPoints} VP` : ""}`;
       if (g.board.islands) { cell.innerHTML += `<span class="ship-count">${icon("ship")}<b>${p.ships}</b></span>`; cell.setAttribute("aria-label", cell.title); }
     });
+    window.CatanRender.html($("players"), players.innerHTML);
     renderCardChanges(); renderChatBubbles();
     window.lucide?.createIcons();
     if (scoreInfoSeat && $("scoreInfoDialog").open) showScoreInfo();
@@ -1011,14 +1030,17 @@
   function renderHand() {
     const p = me(), g = state.room.game;
     $("handTotal").textContent = `${total(p.resources)} 张 / Cards`;
-    $("resources").innerHTML = p.resources.flatMap((n, r) => Array.from({ length: n }, () => `<div class="resource-card" data-resource="${r}" style="--resource:${colors[r]}" role="img" aria-label="${labels[r]} / ${english[r]}" title="${labels[r]} / ${english[r]}">${icon(R[r])}<small>${labels[r]}<br>${english[r]}</small></div>`)).join("") || '<span class="hand-empty">暂无资源 / No resource cards</span>';
+    window.CatanRender.html($("resources"), p.resources.flatMap((n, r) => Array.from({ length: n }, (_, i) => `<div class="resource-card" data-render-key="resource:${r}:${i}" data-resource="${r}" style="--resource:${colors[r]}" role="img" aria-label="${labels[r]} / ${english[r]}" title="${labels[r]} / ${english[r]}">${icon(R[r])}<small>${labels[r]}<br>${english[r]}</small></div>`)).join("") || '<span class="hand-empty">暂无资源 / No resource cards</span>');
     $("resources").querySelectorAll('[data-resource="5"],[data-resource="6"],[data-resource="7"]').forEach(card=>{card.dataset.citiesInfo=R[Number(card.dataset.resource)];card.setAttribute("role","button");card.tabIndex=0;});
     $("development").classList.toggle("empty", !p.development.length);
     $("development").hidden = Boolean(g.citiesKnights);
-    $("development").innerHTML = p.development.length ? p.development.map((card, index) => {
+    const developmentCopies = new Map();
+    window.CatanRender.html($("development"), p.development.length ? p.development.map((card, index) => {
       const name = S.devName(card.type, g.scenario?.kind === "pirates") || devNames[card.type], warship = card.type === "knight" && g.scenario?.kind === "pirates";
-      return `<button class="development-card" data-dev="${card.type}" data-dev-index="${index}" ${!state.pending && !state.room.control?.paused && g.legal.development.includes(card.type) && card.turn < g.turn ? "" : "disabled"} title="${name.join(" / ")}${card.type === "vp" ? " · 自动计分 / Scores automatically" : ""}">${warship ? S.art("warship") : icon(card.type === "knight" ? "robber" : `dev-${card.type}`)}<span>${name[0]}<small>${name[1]}</small></span></button>`;
-    }).join("") : `<span class="development-empty">暂无发展卡 / No development cards</span>`;
+      const identity = `${card.type}:${card.turn}`, copy = developmentCopies.get(identity) || 0;
+      developmentCopies.set(identity, copy + 1);
+      return `<button data-render-key="development:${identity}:${copy}" class="development-card" data-dev="${card.type}" data-dev-index="${index}" ${!state.pending && !state.room.control?.paused && g.legal.development.includes(card.type) && card.turn < g.turn ? "" : "disabled"} title="${name.join(" / ")}${card.type === "vp" ? " · 自动计分 / Scores automatically" : ""}">${warship ? S.art("warship") : icon(card.type === "knight" ? "robber" : `dev-${card.type}`)}<span>${name[0]}<small>${name[1]}</small></span></button>`;
+    }).join("") : `<span class="development-empty">暂无发展卡 / No development cards</span>`);
   }
   $("development").onclick = (e) => { const button = e.target.closest("[data-dev]"); if (button && !button.disabled) action({ type: "playDevelopment", card: button.dataset.dev }); };
 
@@ -1030,7 +1052,7 @@
       ["settlement", "settlement", "建村庄", "Settlement", l.settlements.length, "木砖羊麦 / 4 resources"],
       ["city", "city", "升城市", "City", l.cities.length, g.citiesKnights?.medicine ? "1 麦 + 2 矿 / Grain + Ore" : "2 麦 + 3 矿 / Grain + Ore"],
       ["buyDevelopment", "development", "买发展卡", "Dev card", l.buy, g.deckCount === 0 ? "已售罄 / Sold out" : "羊麦矿 / Wool Grain Ore"],
-      ["trade", "trade", "交易", "Trade", l.trade, g.pairedTurn?.part === 2 ? "仅银行 / Bank only" : "银行 / 玩家 · Bank / Player"],
+      ["trade", "trade", "资源交易", "Resource trading", l.trade, g.pairedTurn?.part === 2 ? "仅银行 / Bank only" : "银行 / 玩家 · Bank / Player"],
       ["help", "dice", "建造费用", "Build costs", true, g.board.islands ? "航海家 / Seafarers" : "基础版 / Base game"],
     ];
     if (g.board.islands) items.splice(1, 0,
@@ -1042,19 +1064,19 @@
       ["activateKnight","knight","激活骑士","Activate knight",l.citiesKnights.some(o=>o.group==="activate"),"1 麦 / Grain"],
       ["promoteKnight","knight","晋升骑士","Promote knight",l.citiesKnights.some(o=>o.group==="promote"),"羊 + 矿 / Wool + Ore"],
       ["moveKnight","knight","移动骑士","Move knight",l.citiesKnights.some(o=>o.group==="move"),"已激活 / Active"],
-      ...window.CatanCitiesData.branches.map((b,i)=>[`improve${i}`,b[2],b[0],b[1],l.citiesKnights.some(o=>o.key===`upgrade:${i}`),`${labels[i+5]} / ${english[i+5]} · 1–5`])
+      ...window.CatanCitiesData.branches.map((b,i)=>[`improve${i}`,b[2],`${b[0]}升级`,`${b[1]} upgrade`,l.citiesKnights.some(o=>o.key===`upgrade:${i}`),`${labels[i+5]} / ${english[i+5]} · 1–5`])
     );
     const shownReason = l.buildBlocked?.[$("buildNotice").dataset.type];
     if (!shownReason) $("buildNotice").hidden = true;
     else $("buildNotice").textContent = shownReason;
-    $("actions").innerHTML = items.map(([type, image, zh, en, enabled, cost]) => {
+    window.CatanRender.html($("actions"), items.map(([type, image, zh, en, enabled, cost]) => {
       const reason = l.buildBlocked?.[type];
       const selected = type === "wall" ? citiesUI.selectedGroup === "wall" : knightActions[type] ? citiesUI.selectedGroup === knightActions[type] : state.mode === type;
       const hasInfo=g.citiesKnights&&["knight","wall","paper","cloth","coin","merchant"].includes(image),improvement=g.citiesKnights&&/^improve[0-2]$/.test(type)?["science","trade","politics"][Number(type.slice(-1))]:null;
-      const button=`<button data-action="${type}" title="${B.escape(reason || `${zh} / ${en} · ${cost}`)}" class="${reason ? "build-unavailable" : selected ? "selected" : ""}" ${type === "help" || (enabled || reason) && !state.pending && !state.room.control?.paused ? "" : "disabled"}>${hasInfo?"":icon(image)}<span>${zh}<small>${en}</small><small class="action-cost">${cost}</small></span></button>`;
-      return hasInfo?`<div class="cities-action-item${improvement?" cities-improvement-item":""}">${CK.infoButton(improvement||image,"cities-action-info")}${button}</div>`:button;
+      const button=`<button data-render-key="action:${type}" data-action="${type}" title="${B.escape(reason || `${zh} / ${en} · ${cost}`)}" class="${reason ? "build-unavailable" : selected ? "selected" : ""}" ${type === "help" || (enabled || reason) && !state.pending && !state.room.control?.paused ? "" : "disabled"}>${hasInfo?"":icon(image)}<span>${zh}<small>${en}</small><small class="action-cost">${cost}</small></span></button>`;
+      return hasInfo?`<div data-render-key="action:${type}" class="cities-action-item${improvement?" cities-improvement-item":""}">${CK.infoButton(improvement||image,"cities-action-info")}${button}</div>`:button;
     }).join("")
-      + `<button class="turn-action" data-action="${l.roll ? "roll" : "end"}" ${!state.pending && !state.room.control?.paused && (l.roll || l.end) ? "" : "disabled"}><span>${l.roll ? "掷骰子" : g.pairedTurn?.part === 2 ? "结束补充建造" : "结束回合"}<small>${l.roll ? "Roll Dice" : g.pairedTurn?.part === 2 ? "End Paired Build" : "End Turn"}</small></span><span aria-hidden="true">→</span></button>`;
+      + `<button data-render-key="turn-action" class="turn-action" data-action="${l.roll ? "roll" : "end"}" ${!state.pending && !state.room.control?.paused && (l.roll || l.end) ? "" : "disabled"}><span>${l.roll ? "掷骰子" : g.pairedTurn?.part === 2 ? "结束补充建造" : "结束回合"}<small>${l.roll ? "Roll Dice" : g.pairedTurn?.part === 2 ? "End Paired Build" : "End Turn"}</small></span><span aria-hidden="true">→</span></button>`);
     if(g.citiesKnights)window.lucide?.createIcons();
   }
   $("actions").onclick = (e) => {
@@ -1094,7 +1116,7 @@
       if (choice) html += `<button class="primary scenario-resource-choice" data-special="${mode}" ${state.pending || state.room.control?.paused ? "disabled" : ""}>${S.art(mode === "piratePayment" ? "fortress" : "warship")}<span>${phases[mode][0]} · ${choice.required}<small>${phases[mode][1]} · ${choice.required}</small></span></button>`;
     }
     if (g.legal.cancelDevelopment) html += `<button class="secondary cancel-development" data-cancel-development ${state.pending ? "disabled" : ""}><span aria-hidden="true">↶</span> ${g.phase === "freeRoads" ? "撤回道路卡" : "撤回丰收卡"} / Cancel card</button>`;
-    $("special").hidden = !html; $("special").innerHTML = html;
+    $("special").hidden = !html; window.CatanRender.html($("special"), html);
     $("cancelDevelopment").hidden = !g.legal.cancelDevelopment || g.phase !== "plenty" || state.resourceMode !== "plenty";
     $("cancelDevelopment").disabled = state.pending;
   }
@@ -1105,7 +1127,7 @@
     const content = S.render(g, state.room.you, { icon, pending: state.pending, paused: state.room.control?.paused, connected: state.socket?.readyState === WebSocket.OPEN, harbor: state.harbor, victim: state.victim });
     for (const [id, html] of [["scenarioPanel", content.panel], ["scenarioWonders", content.wonders]]) {
       const el = $(id); el.hidden = !html;
-      if (el.innerHTML !== html) el.innerHTML = html;
+      window.CatanRender.html(el, html);
     }
   }
   function scenarioClick(event) {
@@ -1144,10 +1166,10 @@
     const b = e.target.closest("[data-special]"); if (b && !b.disabled && !state.pending) resourceDialog(b.dataset.special);
   };
   function tradeCards(cards, side, editable = false) {
-    return cards.flatMap((n, r) => Array.from({ length: n }, () => {
+    return cards.flatMap((n, r) => Array.from({ length: n }, (_, i) => {
       const name = `${labels[r]} / ${english[r]}`, label = editable ? `移除 ${labels[r]} / Remove ${english[r]}` : name;
       const tag = editable ? "button" : "span";
-      return `<${tag} class="trade-card" style="--resource:${colors[r]}" data-resource="${r}" ${editable ? `type="button" data-remove-trade="${side}"` : 'role="img"'} aria-label="${label}" title="${label}">${icon(R[r])}</${tag}>`;
+      return `<${tag} data-render-key="trade:${r}:${i}" class="trade-card" style="--resource:${colors[r]}" data-resource="${r}" ${editable ? `type="button" data-remove-trade="${side}"` : 'role="img"'} aria-label="${label}" title="${label}">${icon(R[r])}</${tag}>`;
     })).join("") || '<span class="empty-trade-slot" role="img" aria-label="未选卡牌 / No cards selected"></span>';
   }
   function renderOffer() {
@@ -1170,7 +1192,7 @@
     }).join("");
     const blocked = state.pending || !connected || state.room.control?.paused;
     const buttons = own ? `<button class="secondary" data-offer="cancelTrade" ${blocked ? "disabled" : ""}>撤回 / Cancel</button>` : recipient ? `<button class="primary" data-offer="acceptTrade" ${blocked || t.rejected.includes(state.room.you) || t.want.some((n, r) => me().resources[r] < n) ? "disabled" : ""}>接受 / Accept</button><button class="secondary" data-offer="rejectTrade" ${blocked || t.rejected.includes(state.room.you) ? "disabled" : ""}>拒绝 / Decline</button>` : "";
-    $("tradeOffer").innerHTML = `<h3>${B.escape(state.room.game.players[t.from].name)} 的交易 / Trade offer</h3><p class="offer-target">交易对象 / To: ${target}</p><div class="trade-card-summary"><section aria-label="提供 / Gives"><h3>提供 <small>Gives</small></h3><div class="trade-card-list">${tradeCards(t.give, "give")}</div></section><span class="trade-arrow" aria-hidden="true">→</span><section aria-label="需要 / Wants"><h3>需要 <small>Wants</small></h3><div class="trade-card-list">${tradeCards(t.want, "want")}</div></section></div><ul class="trade-responses" aria-label="交易回应 / Trade responses" aria-live="polite">${responses}</ul>${buttons ? `<div class="offer-buttons">${buttons}</div>` : ""}`;
+    window.CatanRender.html($("tradeOffer"), `<h3>${B.escape(state.room.game.players[t.from].name)} 的交易 / Trade offer</h3><p class="offer-target">交易对象 / To: ${target}</p><div class="trade-card-summary"><section aria-label="提供 / Gives"><h3>提供 <small>Gives</small></h3><div class="trade-card-list">${tradeCards(t.give, "give")}</div></section><span class="trade-arrow" aria-hidden="true">→</span><section aria-label="需要 / Wants"><h3>需要 <small>Wants</small></h3><div class="trade-card-list">${tradeCards(t.want, "want")}</div></section></div><ul class="trade-responses" aria-label="交易回应 / Trade responses" aria-live="polite">${responses}</ul>${buttons ? `<div class="offer-buttons">${buttons}</div>` : ""}`);
   }
   $("tradeOffer").onclick = (e) => { const b = e.target.closest("[data-offer]"); if (b && !b.disabled) action({ type: b.dataset.offer, offerId: state.room.game.trade.id }); };
   $("viewIncomingTrade").onclick = () => {
@@ -1192,20 +1214,22 @@
   $("chooseGold").onclick = () => { if (!state.pending && window.CatanAudio.goldChoice(state.room)) resourceDialog("gold"); };
   $("resourceDialog").addEventListener("close", renderGoldAlert);
   function renderBank() {
-    const g = state.room.game;
-    $("bank").innerHTML = g.bank.map((n, r) => `<span class="bank-item${n ? "" : " supply-empty"}" title="${labels[r]} / ${english[r]}${n ? "" : " · 暂无库存 / Out of stock"}">${icon(R[r])}${n}</span>`).join("");
-    $("bank").querySelectorAll(".bank-item").forEach((item,r)=>{if(r>=5)item.querySelector("svg").outerHTML=CK.infoButton(R[r]);});
+    const g = state.room.game, bank = document.createElement("div"), awards = document.createElement("div");
+    bank.innerHTML = g.bank.map((n, r) => `<span class="bank-item${n ? "" : " supply-empty"}" title="${labels[r]} / ${english[r]}${n ? "" : " · 暂无库存 / Out of stock"}">${icon(R[r])}${n}</span>`).join("");
+    bank.querySelectorAll(".bank-item").forEach((item,r)=>{if(r>=5)item.querySelector("svg").outerHTML=CK.infoButton(R[r]);});
     $("devSupply").textContent = g.deckCount ? `发展卡 / Dev ${g.deckCount}` : "发展卡已售罄 / Dev sold out";
     if(g.citiesKnights) $("devSupply").textContent=`进步卡 / Progress ${g.citiesKnights.deckCounts.join(" / ")}`;
-    $("awards").innerHTML = `<span>${icon("road")}最长道路 / Longest Road: ${g.longest < 0 ? "—" : B.escape(g.players[g.longest].name) + " · " + g.roadLengths[g.longest]}</span><span>${icon("knight")}最大骑士团 / Largest Army: ${g.largest < 0 ? "—" : B.escape(g.players[g.largest].name) + " · " + g.players[g.largest].knights}</span>`;
+    awards.innerHTML = `<span>${icon("road")}最长道路 / Longest Road: ${g.longest < 0 ? "—" : B.escape(g.players[g.longest].name) + " · " + g.roadLengths[g.longest]}</span><span>${icon("knight")}最大骑士团 / Largest Army: ${g.largest < 0 ? "—" : B.escape(g.players[g.largest].name) + " · " + g.players[g.largest].knights}</span>`;
     if (g.board.islands) {
-      $("awards").firstElementChild.innerHTML = `${icon("ship")}最长商路 / Longest Trade Route: ${g.longest < 0 ? "—" : B.escape(g.players[g.longest].name) + " · " + g.roadLengths[g.longest]}`;
-      $("awards").innerHTML += `<span>目标 / Target ${g.target} VP · 登岛奖励 / Island bonus ${me().islandPoints} VP</span>`;
+      awards.firstElementChild.innerHTML = `${icon("ship")}最长商路 / Longest Trade Route: ${g.longest < 0 ? "—" : B.escape(g.players[g.longest].name) + " · " + g.roadLengths[g.longest]}`;
+      awards.innerHTML += `<span>目标 / Target ${g.target} VP · 登岛奖励 / Island bonus ${me().islandPoints} VP</span>`;
     }
-    if (g.scenario?.kind === "pirates") $("awards").innerHTML = `<span>${S.target(Maps.get(state.room.mapId), g).join(" / ")}</span>`;
-    if (g.scenario?.kind === "wonders") $("awards").lastElementChild.innerHTML = S.target(Maps.get(state.room.mapId), g).join(" / ");
-    if (g.scenario?.kind === "cloth") { $("awards").firstElementChild.remove(); $("awards").lastElementChild.innerHTML = `<button type="button" class="scenario-info-button" data-scenario-info="cloth" aria-label="布匹说明 / About cloth" title="布匹说明 / About cloth">${S.art("cloth")}</button>2 布匹 = 1 分 / 2 cloth = 1 VP · 目标 / Target ${g.target} VP`; }
-    if(g.citiesKnights) $("awards").lastElementChild.textContent="最大军队：不可用 / Largest Army: Not available";
+    if (g.scenario?.kind === "pirates") awards.innerHTML = `<span>${S.target(Maps.get(state.room.mapId), g).join(" / ")}</span>`;
+    if (g.scenario?.kind === "wonders") awards.lastElementChild.innerHTML = S.target(Maps.get(state.room.mapId), g).join(" / ");
+    if (g.scenario?.kind === "cloth") { awards.firstElementChild.remove(); awards.lastElementChild.innerHTML = `<button type="button" class="scenario-info-button" data-scenario-info="cloth" aria-label="布匹说明 / About cloth" title="布匹说明 / About cloth">${S.art("cloth")}</button>2 布匹 = 1 分 / 2 cloth = 1 VP · 目标 / Target ${g.target} VP`; }
+    if(g.citiesKnights) awards.lastElementChild.textContent="最大军队：不可用 / Largest Army: Not available";
+    window.CatanRender.html($("bank"), bank.innerHTML);
+    window.CatanRender.html($("awards"), awards.innerHTML);
   }
   $("chatForm").onsubmit = (e) => { e.preventDefault(); if (send({ type: "chat", text: $("chatInput").value })) $("chatInput").value = ""; };
   const valid = (a) => a.every((n) => Number.isInteger(n) && n >= 0 && n <= 95);
@@ -1227,7 +1251,7 @@
   function renderTradeDraft() {
     for (const [side, id] of [["give", "draftGive"], ["want", "draftWant"]]) {
       const other = side === "give" ? "want" : "give";
-      $(id).innerHTML = tradeCards(tradeDraft[side], side, true);
+      window.CatanRender.html($(id), tradeCards(tradeDraft[side], side, true));
       document.querySelectorAll(`[data-add-trade="${side}"]`).forEach((button) => {
         const r = Number(button.dataset.resource), limit = side === "give" ? me().resources[r] : state.room.game.resourceSupply || 19;
         button.disabled = Boolean(tradeDraft[other][r]) || tradeDraft[side][r] >= limit;
@@ -1312,7 +1336,7 @@
   function resourceLimits() {
     const g = state.room.game, mode = state.resourceMode;
     if (["piratePayment", "pirateReward"].includes(mode)) return S.choice(g, state.room.you, mode) || { required: 0, supply: [0, 0, 0, 0, 0] };
-    return { required: mode === "gold" ? g.legal.gold : mode === "plenty" ? Math.min(2, total(g.bank)) : 1, supply: mode === "monopoly" ? [1, 1, 1, 1, 1] : g.bank };
+    return { required: mode === "gold" ? g.legal.gold : mode === "plenty" ? Math.min(2, total(g.bank.slice(0,5))) : 1, supply: mode === "monopoly" ? [1, 1, 1, 1, 1] : g.bank.slice(0,5) };
   }
   function renderResourceChoices() {
     const { required, supply } = resourceLimits(), monopoly = state.resourceMode === "monopoly";
@@ -1332,10 +1356,10 @@
       button.setAttribute("aria-label", `${monopoly ? "选择 / Choose" : "添加 / Add"} ${labels[r]} / ${english[r]}${empty ? " · 银行暂无库存 / Bank out of stock" : monopoly ? "" : ` · ${available}`}`);
       button.setAttribute("aria-pressed", String(monopoly && resourceDraft[r] > 0));
     });
-    $("resourceSelected").innerHTML = resourceDraft.flatMap((n, r) => Array.from({ length: n }, () => {
+    window.CatanRender.html($("resourceSelected"), resourceDraft.flatMap((n, r) => Array.from({ length: n }, (_, i) => {
       const label = `移除 ${labels[r]} / Remove ${english[r]}`;
-      return `<button type="button" class="trade-card" data-remove-resource="${r}" style="--resource:${colors[r]}" ${state.pending ? "disabled" : ""} aria-label="${label}" title="${label}">${icon(R[r])}</button>`;
-    })).join("") || '<span class="empty-trade-slot" role="img" aria-label="未选卡牌 / No cards selected"></span>';
+      return `<button data-render-key="selected:${r}:${i}" type="button" class="trade-card" data-remove-resource="${r}" style="--resource:${colors[r]}" ${state.pending ? "disabled" : ""} aria-label="${label}" title="${label}">${icon(R[r])}</button>`;
+    })).join("") || '<span class="empty-trade-slot" role="img" aria-label="未选卡牌 / No cards selected"></span>');
     $("resourceHint").textContent = `已选 / Selected ${selected} / ${required}`;
     $("confirmResources").disabled = state.pending || selected !== required;
   }
@@ -1361,10 +1385,10 @@
     discardDraft = discardDraft.map((n, r) => Math.min(n, hand[r]));
     const selected = total(discardDraft);
     for (const [id, side, cards] of [["discardHand", "keep", hand.map((n, r) => n - discardDraft[r])], ["discardSelected", "discard", discardDraft]]) {
-      $(id).innerHTML = cards.flatMap((n, r) => Array.from({ length: n }, () => {
+      window.CatanRender.html($(id), cards.flatMap((n, r) => Array.from({ length: n }, (_, i) => {
         const label = `${side === "keep" ? "弃掉 / Discard" : "放回手牌 / Keep"} ${labels[r]} / ${english[r]}`;
-        return `<button type="button" class="discard-card" data-discard-side="${side}" data-resource="${r}" style="--resource:${colors[r]}" ${state.pending || (side === "keep" && selected >= required) ? "disabled" : ""} aria-label="${label}" title="${label}">${icon(R[r])}<span>${labels[r]}<small>${english[r]}</small></span></button>`;
-      })).join("") || '<span class="empty-discard-slot" role="img" aria-label="未选卡牌 / No cards selected"></span>';
+        return `<button data-render-key="discard:${r}:${i}" type="button" class="discard-card" data-discard-side="${side}" data-resource="${r}" style="--resource:${colors[r]}" ${state.pending || (side === "keep" && selected >= required) ? "disabled" : ""} aria-label="${label}" title="${label}">${icon(R[r])}<span>${labels[r]}<small>${english[r]}</small></span></button>`;
+      })).join("") || '<span class="empty-discard-slot" role="img" aria-label="未选卡牌 / No cards selected"></span>');
     }
     $("resourceHint").textContent = `已选 / Selected ${selected} / ${required}`;
     $("confirmResources").disabled = state.pending || !required || selected !== required;
@@ -1392,6 +1416,6 @@
     if (state.pending) $("resourceDialog").close();
   };
   const initialMap = new URLSearchParams(location.search).get("map");
-  chooseMap(initialMap === "cities" || Maps.get(initialMap) ? initialMap : new URLSearchParams(location.search).get("edition") === "cities" ? "cities" : new URLSearchParams(location.search).get("edition") === "seafarers" ? "shores-1" : "base");
+  chooseMap(initialMap === "cities" || Maps.get(initialMap) ? initialMap : new URLSearchParams(location.search).get("edition") === "combined" ? "cities-shores-2" : new URLSearchParams(location.search).get("edition") === "cities" ? "cities" : new URLSearchParams(location.search).get("edition") === "seafarers" ? "shores-1" : "base");
   connect();
 })();

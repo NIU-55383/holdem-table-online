@@ -109,5 +109,17 @@
     ["金矿产出时：村庄任选 1 张、城市任选 2 张资源。多人领取按当前玩家起顺时针选择，受银行库存限制。黄金不是额外的资源卡。", "Gold fields yield any 1 resource for a settlement or any 2 for a city. Choose clockwise from the active player, subject to bank supply. Gold is not a separate resource card."],
     ["保留基础版距离、交易、弃牌与发展卡规则。旧发展卡可在掷骰前或之后使用，每回合最多一张；胜利点卡例外。", "Base-game distance, trade, discard and development rules still apply. An older action development card can be played before or after rolling, at most one per turn; VP cards are exempt."],
   ];
-  return { maps, rules, get: (id) => maps.find((map) => map.id === id) };
+  // Officially recommended pairings have their own IDs; existing Seafarers maps stay unchanged.
+  const combinedMaps = maps.filter(map => ["shores", "desert"].includes(map.family)).map(base => {
+    const map = JSON.parse(JSON.stringify(base));
+    Object.assign(map, { id: `cities-${base.id}`, baseMapId: base.id, cities: true, target: base.target + 2 });
+    map.rules = base.rules.map(([zh, en], i) => i === 1
+      ? ["初始先放村庄，再逆序放城市；两处都必须在主岛的允许位置。沿海可配道路或船；仅领取初始城市邻接地块各 1 张普通资源，不领商品。", "Place a settlement first, then a city in reverse order, both at permitted mainland sites. Start with a road or ship on the coast. Take one normal resource per producing hex beside the starting city, no commodities."]
+      : i === 3 ? ["首次蛮族入侵前，强盗和海盗均不入场；首次入侵结算后放到本图的起始位置。", "Keep both robber and pirate off the board until the first barbarian attack; then place them at this scenario's starting positions."]
+      : [zh.replace(`达到 ${base.target} 分`, `达到 ${map.target} 分`), en.replace(`reaching ${base.target} VP`, `reaching ${map.target} VP`)]);
+    map.rules.unshift(["本图为「城市与骑士＋航海家」组合：采用城市改良、商品、进步卡和蛮族规则，保留船只与登岛奖励。", "Cities & Knights + Seafarers: use improvements, commodities, progress cards and barbarians alongside ships and island rewards."]);
+    return map;
+  });
+  const allMaps = [...maps, ...combinedMaps];
+  return { maps, combinedMaps, allMaps, rules, get: (id) => allMaps.find((map) => map.id === id) };
 });

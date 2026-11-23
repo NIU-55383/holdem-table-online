@@ -65,6 +65,8 @@
   function renderLobby() {
     $("#lobby").hidden = Boolean(state.game);
     if (state.game) return;
+    $("#biddingHintsLobby").checked = Boolean(state.biddingHints);
+    $("#biddingHintsLobby").disabled = state.host !== state.you;
     $("#lobbySeats").innerHTML = [0, 1, 2, 3].map((pos) => {
       const i = state.seats.findIndex((s) => s.position === pos), p = state.seats[i];
       return `<div class="lobby-seat">${p ? BoardGameUI.avatar(p, p.connected, "bridge-avatar", i === state.you) : '<span class="open-seat">＋</span>'}<div class="seat-info"><strong>${dirs[pos]} · ${p ? esc(p.name) : "空位 / Open"}</strong><small>${pos % 2 === 0 ? "南北搭档 / NS" : "东西搭档 / EW"}${p ? ` · ${p.bot ? "机器人 / Bot" : p.connected ? "在线 / Online" : "离线 / Offline"}` : ""}</small></div>${i !== state.you ? `<button data-seat="${pos}" ${state.seatSwap ? "disabled" : ""} title="${p && !p.bot ? "申请换座 / Request swap" : "选择座位 / Take seat"}"><i data-lucide="arrow-left-right"></i></button>` : ""}${p?.bot && state.host === state.you ? `<button data-remove="${esc(p.socialId)}" title="移除机器人 / Remove bot" aria-label="移除 ${esc(p.name)} / Remove bot"><i data-lucide="user-minus"></i></button>` : ""}</div>`;
@@ -81,6 +83,25 @@
     const sorted = [...cards].sort((a, b) => a - b);
     el.classList.toggle("dummy-hand", Boolean(dummy));
     el.innerHTML = `<div class="hand-heading"><h2>${title}<small>${english}</small></h2><span>${dirs[seat]} · ${esc(playerName(seat))}</span></div><div class="hand-cards">${sorted.map((c) => cardHTML(c, active && g.legalCards.includes(c) && !busy, selected === c)).join("")}</div>${active ? `<div class="hand-actions"><span class="selection-hint">${g.trick.length ? `跟牌 / Follow ${symbols[["S", "H", "D", "C"][Math.floor(g.trick[0].card / 13)]]}` : "领出一张牌 / Lead a card"}</span><button data-play class="primary" ${selected === null || busy ? "disabled" : ""}><i data-lucide="arrow-up"></i>出牌 / Play</button></div>` : ""}`;
+  }
+  function renderBiddingHints() {
+    const panel = $("#biddingHintPanel"), g = state?.game;
+    const hint = state?.biddingHints && g ? BridgeBidding.analyze(g, state.you) : null;
+    panel.hidden = !hint;
+    if (!hint) { panel.replaceChildren(); return; }
+    const recommendation = !state.control.paused && !busy ? hint.recommendation : null;
+    const waiting = state.control.paused ? ["牌局暂停，恢复后再叫牌。", "Play is paused; resume before calling."] : busy ? ["叫牌已提交，正在等待确认。", "Call submitted; waiting for confirmation."] : g.controller !== state.you ? ["等待轮到你叫牌；建议会随公开叫牌更新。", "Wait for your turn; guidance updates with the public auction."] : ["请结合下面的提示自行判断。", "Use the guidance below to choose your call."];
+    panel.innerHTML = `<div class="hint-heading"><h2><i data-lucide="lightbulb" aria-hidden="true"></i>你的叫牌提示<small lang="en">Your bidding hints</small></h2><button type="button" class="icon-button" data-bidding-guide aria-label="查看点数与叫牌参考 / HCP and bidding guide" title="点数与叫牌参考 / HCP and bidding guide"><i data-lucide="circle-help"></i></button></div>
+      <div class="hcp-summary"><div class="hcp-total"><strong id="handHcp">${hint.hcp}</strong><span>大牌点<small lang="en">HCP</small></span></div><div><p class="hcp-breakdown">${["A", "K", "Q", "J"].map((rank, i) => `${rank}：${hint.honors[rank]} × ${4 - i}`).join(" + ")} = ${hint.hcp}</p><small>10–2 不计点 · 只算你的手牌<small lang="en">10–2 = 0 · Your hand only</small></small></div></div>
+      <p class="hint-shape">${["S", "H", "D", "C"].map((s, i) => `<span class="${s === "H" || s === "D" ? "call-red" : ""}">${symbols[s]} ${hint.lengths[i]}</span>`).join(" ")}<span>${hint.balanced ? "均型 / Balanced" : "非均型 / Unbalanced"}</span><span>${hint.vulnerable ? "己方有局 / Vulnerable" : "己方无局 / Not vulnerable"}</span></p>
+      <div id="bidRecommendation" class="bid-recommendation" ${recommendation ? "" : "hidden"}>${recommendation ? `<strong>可考虑 ${callHTML(recommendation.call)}<small lang="en">Consider ${callHTML(recommendation.call)}</small></strong><p>${esc(recommendation.zh)}<small lang="en">${esc(recommendation.en)}</small></p>` : ""}</div>${!recommendation ? `<p class="hint-status">${waiting[0]}<small lang="en">${waiting[1]}</small></p>` : ""}
+      <ul class="hint-notes">${hint.notes.map((note) => `<li>${esc(note.zh)}<small lang="en">${esc(note.en)}</small></li>`).join("")}</ul>`;
+  }
+  function openBiddingGuide() {
+    const dialog = $("#rulesDialog"), body = dialog.querySelector("[data-rules-body]"), target = $("#biddingGuide");
+    if (!dialog.open) dialog.showModal();
+    body.scrollTop += target.getBoundingClientRect().top - body.getBoundingClientRect().top;
+    target.focus({ preventScroll: true });
   }
   function renderAuction() {
     const g = state.game; $("#biddingPanel").hidden = !g;
@@ -144,6 +165,7 @@
   }
   function render() {
     $("#setup").hidden = Boolean(state); $("#roomPanel").hidden = !state;
+    renderBiddingHints();
     if (!state) {
       $("#scoreDialog").close();
       $("#table").innerHTML = '<img class="table-intro" src="bridge-art.svg" alt="桥牌牌桌 / Bridge table">';
@@ -206,7 +228,8 @@
     try { localStorage.setItem("boardclub-name", name); } catch {} return { name, avatar: BoardGameUI.getAvatar() };
   }
   function act(action) { if (busy || !state?.game || state.control.paused) return; busy = true; if (!send({ type: "action", action: { ...action, revision: state.game.revision } })) busy = false; render(); }
-  $("#createBtn").addEventListener("click", () => { const who = identity(); if (who) send({ type: "create", ...who, boards: Number($("#boardCount").value) }); });
+  $("#createBtn").addEventListener("click", () => { const who = identity(); if (who) send({ type: "create", ...who, boards: Number($("#boardCount").value), biddingHints: $("#biddingHintsCreate").checked }); });
+  $("#biddingHintsLobby").addEventListener("change", (e) => send({ type: "biddingHints", enabled: e.target.checked }));
   $("#joinForm").addEventListener("submit", (e) => { e.preventDefault(); const who = identity(); if (who) send({ type: "join", ...who, code: $("#roomInput").value }); });
   $("#fillBtn").addEventListener("click", () => send({ type: "fillBots" })); $("#startBtn").addEventListener("click", () => send({ type: "start" }));
   $("#leaveBtn").addEventListener("click", () => $("#confirmDialog").showModal());
@@ -221,6 +244,7 @@
   document.addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b || b.disabled) return;
     if (b.dataset.close) $("#" + b.dataset.close).close();
+    if (b.hasAttribute("data-bidding-guide")) openBiddingGuide();
     if (b.dataset.scoreBoard !== undefined) showScore(Number(b.dataset.scoreBoard), Number(b.dataset.scoreTeam));
     if (b.dataset.level) { level = Number(b.dataset.level); renderAuction(); $(`[data-level="${level}"]`)?.focus({ preventScroll: true }); }
     if (b.dataset.call) act({ type: "call", call: b.dataset.call });

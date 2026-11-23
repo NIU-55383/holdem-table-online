@@ -122,14 +122,43 @@
     }
 
     function renderDice() {
-      const counts = game.statistics.dice, total = sum(counts), max = Math.max(1, ...counts);
-      body.innerHTML = `<p class="stats-note">${bilingual("实际掷骰次数与理论次数", "Actual and expected roll counts")}</p><div class="stats-dice-key"><span class="stats-swatch" style="--swatch:#4298b5"></span>实际 / Actual <span class="stats-expected-key"></span>理论次数 / Expected</div><div class="stats-dice-chart">${counts.map((n, i) => {
-        const number = i + 2, chance = (6 - Math.abs(7 - number)) / 36, scale = Math.max(max, total / 6);
-        return `<div class="stats-dice-column" title="${number}: ${n} 次 / rolls; ${(chance * 100).toFixed(1)}% 理论概率 / expected probability"><strong>${n}</strong><div class="stats-dice-track"><span class="stats-dice-bar ${number === 7 ? "is-seven" : ""}" style="height:${n / scale * 100}%"></span><i style="bottom:${total * chance / scale * 100}%"></i></div><b>${number}</b></div>`;
-      }).join("")}</div><p class="stats-note stats-footnote">${bilingual("仅统计回合的两颗骰子，不含进攻要塞的单骰。理论次数 = 掷骰总次数 × 该点数的理论概率。", "Only the two turn dice count, not fortress combat dice. Expected count = total rolls × theoretical probability.")}</p>${total ? "" : `<p class="stats-note">${bilingual("本局尚未掷骰。", "No dice were rolled in this match.")}</p>`}${dataTable(["点数 / Sum", "次数 / Rolls", "占比 / Actual %", "理论概率 / Expected %"], counts.map((n, i) => [i + 2, n, total ? `${(n / total * 100).toFixed(1)}%` : "0%", `${((6 - Math.abs(5 - i)) / 36 * 100).toFixed(1)}%`]))}`;
-      if(game.citiesKnights) body.insertAdjacentHTML("afterbegin", `<p class="stats-note">${bilingual("包含炼金术指定的点数，因此本图不单独用于判断随机骰子的公平性。", "Includes dice set by Alchemy, so this chart alone cannot assess random-dice fairness.")}</p>`);
+      const stats = game.statistics, hasAlchemy = Boolean(game.citiesKnights);
+      const series = value => Array.isArray(value) && value.length === 11 && value.every(n => Number.isSafeInteger(n) && n >= 0);
+      const recorded = [stats.diceRandom, stats.diceAlchemy, stats.diceUnknown].every(series)
+        && stats.dice.every((n, i) => n === stats.diceRandom[i] + stats.diceAlchemy[i] + stats.diceUnknown[i]);
+      // Older Cities matches did not distinguish chosen dice from random dice.
+      const random = recorded ? stats.diceRandom : hasAlchemy ? Array(11).fill(0) : stats.dice;
+      const alchemy = recorded ? stats.diceAlchemy : Array(11).fill(0);
+      const unknown = recorded ? stats.diceUnknown : hasAlchemy ? stats.dice : Array(11).fill(0);
+      const randomTotal = sum(random), alchemyTotal = sum(alchemy), unknownTotal = sum(unknown);
+      function chart(kind, counts, titleZh, titleEn, note = "", unavailable = false) {
+        const total = sum(counts), scale = Math.max(1, ...counts, total / 6);
+        const heading = `<header class="stats-dice-heading"><h3>${bilingual(titleZh, titleEn)}</h3><p class="stats-note">${bilingual(`${kind === "random" && unknownTotal ? "已记录随机" : "统计"} ${total} 次`, `${kind === "random" && unknownTotal ? "Recorded random rolls" : "Rolls counted"}: ${total}`)}</p></header>`;
+        const empty = !total && !unavailable ? `<p class="stats-note">${bilingual(kind === "random" ? "本局没有随机掷骰。" : "本局尚未掷骰。", kind === "random" ? "No random rolls in this match." : "No dice were rolled in this match.")}</p>` : "";
+        const plot = unavailable ? "" : `<div class="stats-dice-key"><span class="stats-swatch" style="--swatch:#4298b5"></span>实际 / Actual <span class="stats-expected-key"></span>随机理论参考 / Random-dice reference</div>
+          <div class="stats-dice-chart" role="group" aria-label="${titleZh} / ${titleEn}">${counts.map((n, i) => {
+            const number = i + 2, chance = (6 - Math.abs(7 - number)) / 36, expected = total * chance;
+            return `<div class="stats-dice-column" data-dice-sum="${number}" data-dice-count="${n}" data-dice-expected="${expected}" title="${number}: ${n} 次 / rolls · 随机理论次数 / Expected random count: ${expected.toFixed(1)}"><strong>${n}</strong><div class="stats-dice-track"><span class="stats-dice-bar ${number === 7 ? "is-seven" : ""}" style="height:${n / scale * 100}%"></span><i style="bottom:${expected / scale * 100}%"></i></div><b>${number}</b></div>`;
+          }).join("")}</div>`;
+        const table = unavailable ? "" : dataTable(["点数 / Sum", "次数 / Rolls", "占比 / Actual %", "理论次数 / Expected rolls", "理论概率 / Expected %"], counts.map((n, i) => {
+          const chance = (6 - Math.abs(5 - i)) / 36;
+          return [i + 2, n, total ? `${(n / total * 100).toFixed(1)}%` : "0%", (total * chance).toFixed(1), `${(chance * 100).toFixed(1)}%`];
+        }));
+        return `<section class="stats-dice-series" data-dice-series="${kind}" data-dice-total="${total}">${heading}${note}${empty}${plot}${table}</section>`;
+      }
+      let allNote = "";
+      if (hasAlchemy) allNote = `<p class="stats-note">${bilingual(unknownTotal ? `已记录随机 ${randomTotal} 次、炼金术 ${alchemyTotal} 次；另有 ${unknownTotal} 次来源未记录。` : `随机 ${randomTotal} 次 + 炼金术 ${alchemyTotal} 次。`, unknownTotal ? `${randomTotal} recorded random rolls, ${alchemyTotal} recorded Alchemy rolls; ${unknownTotal} rolls have no source record.` : `${randomTotal} random rolls + ${alchemyTotal} Alchemy rolls.`)}</p>`;
+      body.innerHTML = chart("all", stats.dice, hasAlchemy ? "全部掷骰（含炼金术）" : "全部掷骰", hasAlchemy ? "All rolls (including Alchemy)" : "All rolls", allNote);
+      if (hasAlchemy) {
+        const unavailable = unknownTotal > 0 && randomTotal === 0;
+        const note = `<p class="stats-note" data-dice-source-note>${bilingual(
+          unknownTotal ? unavailable ? `旧记录中有 ${unknownTotal} 次掷骰未记录来源，无法还原完整随机分布；目前没有可确认的随机掷骰。` : `这里只统计已记录的 ${randomTotal} 次随机掷骰；已排除 ${alchemyTotal} 次炼金术及 ${unknownTotal} 次来源未记录的掷骰。` : `已排除 ${alchemyTotal} 次炼金术，仅统计随机掷骰。`,
+          unknownTotal ? unavailable ? `${unknownTotal} older rolls have no source record, so the full random distribution cannot be recovered. No confirmed random rolls are available.` : `Only ${randomTotal} recorded random rolls are included; ${alchemyTotal} Alchemy rolls and ${unknownTotal} rolls with no source record are excluded.` : `${alchemyTotal} Alchemy rolls excluded; only random rolls are counted.`
+        )}</p>`;
+        body.insertAdjacentHTML("beforeend", chart("random", random, unknownTotal ? "已记录随机掷骰（不含炼金术）" : "随机掷骰（不含炼金术）", unknownTotal ? "Recorded random rolls (excluding Alchemy)" : "Random rolls (excluding Alchemy)", note, unavailable));
+      }
+      body.insertAdjacentHTML("beforeend", `<p class="stats-note stats-footnote">${bilingual("只统计回合内两颗数字骰之和，不含事件骰和进攻要塞的单骰。理论次数 = 本图统计次数 × 该点数的理论概率。", "Only the two number dice for a turn count, not the event die or fortress combat die. Expected count = this chart’s roll count × theoretical probability.")}${hasAlchemy ? bilingual("含炼金术的图中，虚线仅作随机掷骰的理论参考。", "In the chart including Alchemy, the dashed line is a random-dice reference.") : ""}</p>`);
     }
-
     function renderBars(production) {
       const keys = production ? resources.slice(0, game.citiesKnights ? 8 : 5) : buildings.map((entry,i)=>game.citiesKnights && i===1 ? ["城市建造","City builds",entry[2]] : entry);
       const values = game.statistics.players.map(p => production ? p.production.map((n, i) => n + p.gold[i]) : [p.built.settlement, p.built.city, p.built.road, p.built.ship]);

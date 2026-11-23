@@ -91,3 +91,30 @@
 .cities-rule-card-heading{display:flex;align-items:center;gap:12px;min-width:0;margin-bottom:12px}.cities-rule-card-heading>div{min-width:0}.cities-rule-card-heading .cities-card-art{width:54px;height:54px}.cities-rule-card-heading h4{line-height:1.4;color:#20516a;overflow-wrap:anywhere}.cities-card-copies{display:block;font-size:12px;color:#52707b;margin-top:3px}
 .cities-card-description-meta{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--card-paper);border:1px solid var(--card-edge);border-radius:7px;margin-bottom:14px}.cities-card-description-meta .cities-card-art{width:44px;height:44px}.cities-card-description-meta .cities-card-category{font-size:14px}
 @media(max-width:400px){.cities-progress button{grid-template-columns:32px minmax(0,1fr);padding:8px;gap:6px}.cities-progress .cities-card-art{width:32px;height:32px}.cities-hand-card-name{font-size:13px}.cities-progress-heading h3 small{display:block}#citiesRules .cities-card-nav button{flex-direction:column;text-align:center;gap:4px;font-size:13px}#citiesRules .cities-card-nav button>svg{width:28px;height:28px}#citiesRules .cities-rule-card{padding:11px}.cities-rule-card-heading{gap:8px;align-items:flex-start}.cities-rule-card-heading .cities-card-art{width:42px;height:42px}#citiesRules .cities-card-group-heading h3{font-size:16px}}
+
+/* Unavailable progress cards remain accessible as read-only help. */
+.cities-progress button[data-ready="false"]{background:#e1e5e3;border-color:#b8c1c0;color:#53635f;cursor:help}
+.cities-progress button[data-ready="false"]>.cities-card-art,.cities-progress button[data-ready="false"] .cities-card-category svg{filter:grayscale(1);opacity:.5}
+.cities-progress button[data-ready="false"] .cities-card-category{color:#53635f}
+.cities-card-unavailable{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:11px;line-height:1.35}
+.cities-card-unavailable small{display:block;font-size:10px;margin-top:1px}
+.cities-card-help{display:grid;place-items:center;flex:0 0 21px;width:21px;height:21px;border:1.5px solid currentColor;border-radius:50%;font-size:14px;font-weight:700}
+#citiesCardInfoDialog .cities-card-unavailable-reason{margin:0 0 18px;padding:12px;background:#e2ebe8;border:1px solid #b9cbc7;border-radius:6px}
+#citiesCardInfoDialog [data-rule-section="saves"]{display:none}
+
+.cities-selection-dialog[open]{display:flex;flex-direction:column;width:560px;max-width:calc(100vw - 24px);max-height:calc(100svh - 24px);overflow:hidden;padding:20px}
+.cities-selection-dialog .dialog-heading{flex:none;margin-bottom:12px}
+.cities-selection-dialog .dialog-heading h2{font-size:20px;overflow-wrap:anywhere}
+.cities-selection-dialog .dialog-heading .icon-button{width:44px;height:44px;flex:0 0 44px}
+.cities-selection-body{min-height:0;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:12px}
+.cities-selection-body>section{flex:none;min-width:0}
+.cities-selection-body h3{margin:0 0 6px;font-size:13px}.cities-selection-body h3 small{font-size:11px;margin-left:4px;color:#597984}
+#citiesSelectionReason .cities-info-list{font-size:13px;padding-left:18px;line-height:1.5}
+#citiesSelectionReason .cities-info-list>li+li{margin-top:8px}#citiesSelectionReason small{display:block;font-size:12px;line-height:1.45;margin-top:4px;color:#52707b}
+.cities-selection-dialog .discard-hand{height:clamp(90px,20svh,170px)}
+.cities-selection-dialog .discard-card{position:relative}.cities-selection-stock{position:absolute;top:0;right:0;padding:1px 3px;border-radius:3px;background:#173f55;color:white;font-size:10px}
+.cities-selection-progress{display:grid;grid-template-columns:32px minmax(0,1fr);align-items:center;gap:5px;flex:0 0 calc(50% - 3px);min-width:0;max-width:100%;padding:8px;background:var(--card-paper);color:#20516a;border:1px solid var(--card-edge);border-radius:6px;text-align:left}
+.cities-selection-progress .cities-card-art{width:32px;height:32px}.cities-selection-progress>span{font-size:12px;overflow-wrap:anywhere}.cities-selection-progress small{display:block;font-size:10px}.cities-selection-progress .cities-card-category{grid-column:1/-1;font-size:10px}
+.cities-selection-footer{flex:none;padding-top:10px}#citiesSelectionHint{font-weight:700;font-size:13px;margin:0 0 8px}#citiesSelectionConfirm{min-height:44px}
+.cities-choice-list [data-cities-select]{min-height:44px;width:100%;font-size:14px}
+@media(max-width:740px){.cities-selection-dialog[open]{padding:12px;max-width:calc(100vw - 20px);max-height:calc(100svh - 20px)}.cities-selection-dialog .dialog-heading h2{font-size:18px}.cities-selection-body{gap:10px}}

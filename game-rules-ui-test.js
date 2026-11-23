@@ -29,6 +29,7 @@ async function main() {
       { game: "xiangqi", url: "/duel.html?game=xiangqi", button: "#rulesBtn", dialog: "#gameRulesDialog", title: "Xiangqi Rules" },
       { game: "bridge", url: "/bridge.html", button: "#rulesBtn", dialog: "#rulesDialog", title: "Bridge Rules" },
       { game: "catan", url: "/catan.html", button: "#helpButton", dialog: "#helpDialog", title: "Base Game Rules" },
+      { game: "cities-combined", url: "/catan.html?edition=combined", button: "#baseRules", dialog: "#citiesRules", title: "Cities & Knights + Seafarers" },
       { game: "cities", url: "/catan.html?edition=cities", button: "#baseRules", dialog: "#citiesRules", title: "Cities & Knights" },
       { game: "seafarers", url: "/catan.html?edition=seafarers", button: "#seafarerRules", dialog: "#sailingDialog", title: "Seafarers" },
       { game: "map", url: "/catan.html?edition=seafarers", button: "#mapRules", dialog: "#sailingDialog", title: "" }
@@ -37,7 +38,8 @@ async function main() {
       await page.setViewportSize({ width: 1440, height: 1000 }); await page.goto(base + spec.url);
       if (spec.game === "bridge") {
         assert.equal(await page.locator('[id*="lesson" i], [id*="tutorial" i], [src*="bridge-lesson"], [href*="bridge-lesson"]').count(), 0);
-        assert.equal(await page.locator("#rulesDialog [lang=en]").count(), 11);
+        assert.equal(await page.locator("#rulesDialog p[lang=en]").count(), 11);
+        assert(await page.locator("#biddingGuide li small[lang=en]").count() >= 15);
       }
       if (spec.game === "poker") await page.click('[data-view-target="online"]');
       await page.evaluate(() => document.querySelectorAll("dialog[open]").forEach((d) => d.close()));

@@ -22,9 +22,10 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
     for (let i = 0; i < 2; i++) {
       const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
       await context.addInitScript(() => {
-        localStorage.setItem("catan-music-enabled", "false");
+        localStorage.setItem("catan-music-enabled", "false"); window.scoreTestSent = [];
         const Native = window.WebSocket;
         window.WebSocket = class extends Native {
+          send(data) { window.scoreTestSent.push(JSON.parse(data)); return super.send(data); }
           constructor(...args) {
             super(...args); window.testSocket = this;
             this.addEventListener("message", e => { const m = JSON.parse(e.data); if (m.type === "state") window.testState = m; });
@@ -59,7 +60,23 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
       for (const page of pages) await page.waitForFunction(r => testState.game.revision === r, revision);
     };
     const score = (page, id) => page.locator(`#players [data-player-id="${id}"] .summary-meta b`).textContent();
+    const checkBreakdown = async (page, id, points, visibility) => {
+      for (let i=0;i<6;i++) if (await page.locator('dialog[open]').count()) await page.keyboard.press('Escape');
+      const before=await page.evaluate(()=>JSON.stringify(scoreTestSent));
+      assert.equal(await page.locator('#players [data-score-info]').count(),3);
+      await page.locator(`#players [data-score-info="${id}"]`).press('Enter');
+      const dialog=page.locator('#scoreInfoDialog');await dialog.waitFor({state:'visible'});
+      const actual=await dialog.locator('[data-score-source]').evaluateAll(nodes=>Object.fromEntries(nodes.map(n=>[n.dataset.scoreSource,Number(n.dataset.scorePoints)])));
+      assert.deepEqual(actual,points,'Real server score detail sources match the visible private state');
+      assert.equal(Number(await dialog.locator('[data-score-total]').getAttribute('data-score-total')),Object.values(points).reduce((a,b)=>a+b,0));
+      assert.equal(await dialog.locator('[data-score-total]').getAttribute('data-score-visibility'),visibility);
+      await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+      assert.equal(await page.evaluate(()=>JSON.stringify(scoreTestSent)),before,'Opening and closing real-room scores sends nothing');
+    };
     await sync();
+    await checkBreakdown(host,0,{cities:8,developmentVP:1},'total');
+    await checkBreakdown(guest,0,{cities:8},'public');
+    await checkBreakdown(host,2,{},'public');
     assert.equal(await score(host, 0), "8+1");
     assert.equal(await score(guest, 0), "8", "Opponents see only public points");
     assert.equal(await score(host, 1), "2");
@@ -73,7 +90,9 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
     assert.equal(await score(host, 0), "8+2");
     await guest.waitForFunction(() => testState.game.players[0].developmentCount === 3);
     assert.equal(await score(guest, 0), "8");
-    assert.match(await host.locator('#players [data-player-id="0"] .summary-meta').getAttribute("title"), /其他得分 8 \+ 加分卡 2 = 总分 10.*Other points 8 \+ VP cards 2 = 10 VP/);
+    const boughtTitle=await host.locator('#players [data-player-id="0"] .summary-meta').getAttribute("title");
+    assert.match(boughtTitle,/总分 10.*Total: 10 VP/);assert.match(boughtTitle,/Cities: 4 × 2 VP = 8 VP/);assert.match(boughtTitle,/Victory point development cards: 2 × 1 VP = 2 VP/);
+    await checkBreakdown(host,0,{cities:8,developmentVP:2},'total');await checkBreakdown(guest,0,{cities:8},'public');
     for (const [width, height] of [[1440, 1000], [390, 844], [320, 568]]) {
       await host.setViewportSize({ width, height });
       await host.locator("#players").scrollIntoViewIfNeeded();
@@ -86,12 +105,15 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
     }
     await host.reload(); await host.locator("#game").waitFor();
     assert.equal(await score(host, 0), "8+2", "The breakdown survives reconnect");
+    await checkBreakdown(host,0,{cities:8,developmentVP:2},'total');
     g.phase = "over"; g.winner = 0; await sync();
     for (const page of pages) {
       assert.equal(await score(page, 0), "8+2");
       assert.equal(await score(page, 1), "2+1");
       assert.equal(await score(page, 2), "0", "Zero bonuses never add +0");
     }
+    await checkBreakdown(guest,0,{cities:8,developmentVP:2},'total');
+    await checkBreakdown(host,1,{settlements:2,developmentVP:1},'total');
     const revision = g.revision;
     Object.assign(g, E.createGame(room.seats.map(p => p.name), undefined, "tribes"));
     room.mapId = "tribes"; g.revision = revision; g.phase = "main"; g.turn = 1; g.current = 0; g.target = 99;
@@ -103,8 +125,10 @@ server.on("upgrade", (req, socket, head) => catan.upgrade(req, socket, head));
     assert.equal(await score(host, 0), "6+3", "Hidden VP cards and tribe tokens share the bonus subtotal");
     assert.equal(await score(guest, 0), "6+2", "Public tribe tokens remain visible without leaking VP cards");
     assert.equal(await score(host, 1), "4+1"); assert.equal(await score(guest, 1), "4+1");
-    assert.match(await guest.locator('#players [data-player-id="0"] .summary-meta').getAttribute("title"), /Tribe tokens 2.*Hidden VP cards excluded/);
+    assert.match(await guest.locator('#players [data-player-id="0"] .summary-meta').getAttribute("title"), /Tribe victory point tokens: 2 × 1 VP = 2 VP.*Hidden VP cards excluded/);
     assert.equal(await guest.evaluate(() => testState.game.players[0].development), null);
+    await checkBreakdown(host,0,{cities:6,tribes:2,developmentVP:1},'total');
+    await checkBreakdown(guest,0,{cities:6,tribes:2},'public');
     for (const page of pages) await page.evaluate(() => document.querySelectorAll("dialog[open]").forEach(d => d.close()));
     for (const width of [390, 1440]) {
       await host.setViewportSize({ width, height: 1000 }); await host.locator("#players").scrollIntoViewIfNeeded();

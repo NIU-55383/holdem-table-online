@@ -137,7 +137,7 @@ function createGame(names, rng = random, mapId = "base", layout = "default", pre
     winner: -1, log: [], revision: 0, trade: null, shipMoved: false, goldQueue: [], goldResume: "main", thief: "robber",
   };
   Scenarios.initialize(g, map, options, rng);
-  if (mapId === "cities") Cities.initialize(g, rng, shuffle);
+  if (mapId === "cities" || map?.cities) Cities.initialize(g, rng, shuffle);
   g.statistics = Statistics.create(g, score);
   log(g, "选择初始村庄 / Choose an initial settlement");
   return g;
@@ -170,14 +170,14 @@ function routeSites(g, id, kind, setup = false, ignore = -1) {
   }))).map((e) => e.id);
 }
 function shipSites(g, id, setup = false) { return routeSites(g, id, "ship", setup); }
-function movableShips(g, id) {
-  if (!g.board.islands || g.shipMoved || g.phase !== "main" || Scenarios.is(g, "pirates")) return [];
+function openShips(g, id) {
+  if (!g.board.islands || Scenarios.is(g, "pirates")) return [];
   const ships = g.board.edges.filter((e) => e.owner === id && routeKind(e) === "ship");
   // Mark every simple path between two of this player's buildings as closed.
   // Opponent buildings do not turn a previously closed route into a movable one.
-  const closed = new Set(), homes = g.board.vertices.filter((v) => v.owner === id);
+  const closed = new Set(), homes = g.board.vertices.filter((v) => v.owner === id || v.knight?.owner === id);
   function visit(vId, path, seen, origin) {
-    if (vId !== origin && g.board.vertices[vId].owner === id) { path.forEach((e) => closed.add(e)); return; }
+    if (vId !== origin && (g.board.vertices[vId].owner === id || g.board.vertices[vId].knight?.owner === id)) { path.forEach((e) => closed.add(e)); return; }
     if (vId !== origin && Scenarios.tradeVillage(g, vId)) path.forEach((e) => closed.add(e));
     for (const eId of g.board.vertices[vId].edges) {
       const e = g.board.edges[eId], next = e.a === vId ? e.b : e.a;
@@ -186,9 +186,15 @@ function movableShips(g, id) {
     }
   }
   homes.forEach((v) => visit(v.id, [], new Set([v.id]), v.id));
-  return ships.filter((e) => !closed.has(e.id) && e.builtTurn !== g.turn && !e.tiles.includes(g.board.pirate)
-    && [e.a, e.b].some((vId) => g.board.vertices[vId].owner < 0 && ships.filter((s) => s.a === vId || s.b === vId).length === 1)
-    && routeSites(g, id, "ship", false, e.id).length).map((e) => e.id);
+  return ships.filter((e) => !closed.has(e.id)
+    && [e.a, e.b].some((vId) => g.board.vertices[vId].owner < 0 && !g.board.vertices[vId].knight && ships.filter((s) => s.a === vId || s.b === vId).length === 1)).map((e) => e.id);
+}
+function movableShips(g, id) {
+  if (g.shipMoved || g.phase !== "main") return [];
+  return openShips(g, id).filter((eid) => {
+    const e = g.board.edges[eid];
+    return e.builtTurn !== g.turn && !e.tiles.includes(g.board.pirate) && routeSites(g, id, "ship", false, eid).length;
+  });
 }
 function citySites(g, id) { const fallen = g.board.vertices.filter(v => v.owner === id && v.fallen); return fallen.length ? fallen.map(v=>v.id) : pieceCount(g, id, 2) >= 4 ? [] : g.board.vertices.filter((v) => v.owner === id && v.level === 1).map((v) => v.id); }
 function longestRoad(g, id) {
@@ -222,7 +228,7 @@ function score(g, id, hidden = true) {
 function updateAwards(g) {
   // Diplomacy relocates one road atomically for Longest Road ownership.
   if(g.cities?.diplomacyPending && g.phase === "freeRoads") return;
-  if(g.cities) g.cities.diplomacyPending = false;
+  if(g.cities) { g.cities.diplomacyPending = false; g.cities.diplomacyKind = null; }
   g.roadLengths = g.players.map((p) => longestRoad(g, p.id));
   g.longest = Scenarios.is(g, "cloth") || Scenarios.is(g, "pirates") ? -1 : award(g.roadLengths, g.longest, 5);
   g.largest = g.cities || Scenarios.is(g, "pirates") ? -1 : award(g.players.map((p) => p.knights), g.largest, 3);
@@ -249,7 +255,7 @@ function take(g, p, r, amount = 1, source = null) {
   supplyShortage(g, p.id, r, amount, n);
 }
 function limitGoldSupply(g) {
-  const available = sum(g.bank);
+  const available = sum(g.bank.slice(0,5));
   // Only the next recipient can reserve the remaining bank supply.
   for (const choice of available ? g.goldQueue.slice(0, 1) : g.goldQueue) {
     supplyShortage(g, choice.id, -1, choice.count, Math.min(choice.count, available), "gold");
@@ -288,13 +294,16 @@ function produce(g, number) {
     if (total <= g.bank[r] || recipients === 1) demand.forEach((d, id) => take(g, g.players[id], r, d[r], "production"));
     else if (total) demand.forEach((d, id) => supplyShortage(g, id, r, d[r], 0, "shared"));
   });
+  goldProduction(g, number);
+  Scenarios.produceCloth(g, number);
+}
+function goldProduction(g, number) {
   const gold = g.players.map(() => 0);
   g.board.tiles.filter((t) => !t.noProduction && t.resource === 5 && t.number === number && t.id !== g.board.robber).forEach((t) => t.vertices.forEach((vId) => { const v = g.board.vertices[vId]; if (v.owner >= 0) gold[v.owner] += v.level; }));
   g.goldQueue = Array.from({ length: g.players.length }, (_, n) => (g.current + n) % g.players.length).filter((id) => gold[id]).map((id) => ({ id, count: gold[id] }));
   limitGoldSupply(g);
-  if (g.goldQueue.length && sum(g.bank)) { g.goldResume = g.phase; g.phase = "gold"; }
-  else g.goldQueue = [];
-  Scenarios.produceCloth(g, number);
+  if (g.goldQueue.length) { g.goldResume = g.phase; g.phase = "gold"; return true; }
+  return false;
 }
 function finishRoll(g, number) {
   if (number === 7) {
@@ -328,7 +337,7 @@ function tradeRate(g, id, r) {
 }
 function legal(g, id) {
   const ownTurn = id === g.current && g.phase !== "over", p = g.players[id];
-  const out = { roads: [], ships: [], moveShips: [], shipDestinations: {}, settlements: [], cities: [], robber: [], pirate: [], victims: [], development: [], cancelDevelopment: false, roll: false, end: false, buy: false, trade: false, playerTrade: false, discard: g.discard[id] || 0, gold: g.phase === "gold" && g.goldQueue[0]?.id === id ? Math.min(g.goldQueue[0].count, sum(g.bank)) : 0 };
+  const out = { roads: [], ships: [], moveShips: [], shipDestinations: {}, settlements: [], cities: [], robber: [], pirate: [], victims: [], development: [], cancelDevelopment: false, roll: false, end: false, buy: false, trade: false, playerTrade: false, discard: g.discard[id] || 0, gold: g.phase === "gold" && g.goldQueue[0]?.id === id ? Math.min(g.goldQueue[0].count, sum(g.bank.slice(0,5))) : 0 };
   out.buildBlocked = {};
   out.scenario = Scenarios.legal(g, id, scenarioHelpers);
   if(g.cities) out.citiesKnights = Cities.legal(g,id,scenarioHelpers);
@@ -357,6 +366,10 @@ function legal(g, id) {
   if (g.phase === "setupRoad") out.roads = roadSites(g, id, true);
   if (g.phase === "freeRoads") out.roads = roadSites(g, id);
   if (["setupRoad", "freeRoads"].includes(g.phase)) out.ships = shipSites(g, id, g.phase === "setupRoad");
+  if (g.phase === "freeRoads" && g.cities?.diplomacyKind) {
+    if (g.cities.diplomacyKind === "ship") out.roads = [];
+    else out.ships = [];
+  }
   if (g.phase === "roll") out.roll = true;
   out.cancelDevelopment = Boolean(g.pendingDevelopment && g.pendingDevelopment.player === id && g.pendingDevelopment.turn === g.turn
     && ((g.phase === "plenty" && g.pendingDevelopment.card.type === "plenty")
@@ -364,6 +377,8 @@ function legal(g, id) {
   if (g.phase === "robber") {
     out.robber = g.board.tiles.filter((t) => t.resource >= -1 && t.id !== g.board.robber).map((t) => t.id);
     if (g.board.islands) out.pirate = g.board.tiles.filter((t) => t.resource === -2 && t.id !== g.board.pirate).map((t) => t.id);
+    if (g.cities?.chaseThief === "robber") out.pirate = [];
+    if (g.cities?.chaseThief === "pirate") out.robber = [];
   }
   if (g.phase === "steal") out.victims = [...g.victims];
   if (["roll", "main"].includes(g.phase) && !g.developmentPlayed) out.development = [...new Set(p.development.filter((d) => d.type !== "vp" && d.turn < g.turn).map((d) => d.type))];
@@ -410,7 +425,7 @@ function canRespondToTrade(g, id) {
 
 function act(g, id, a, rng = random) {
   requireRule(g.players[id] && g.phase !== "over", "游戏未进行 / Game not active");
-  const before = { turn: g.turn, current: g.current, part: g.pairedTurn?.part || null };
+  const before = { turn: g.turn, current: g.current, part: g.pairedTurn?.part || null, alchemy: Boolean(g.cities?.alchemy) };
   const p = g.players[id], l = legal(g, id), type = a.type;
   requireRule(typeof type === "string", "无效行动 / Invalid action");
   if (Object.hasOwn(l.buildBlocked, type)) requireRule(false, l.buildBlocked[type]);
@@ -421,7 +436,10 @@ function act(g, id, a, rng = random) {
     a.resources.forEach((n, r) => take(g, p, r, n, "gold")); g.goldQueue.shift();
     log(g, `${p.name} 领取 ${l.gold} 张金矿资源 / collects gold-field resources`);
     limitGoldSupply(g);
-    if (!g.goldQueue.length || !sum(g.bank)) { g.goldQueue = []; g.phase = g.goldResume; }
+    if (!g.goldQueue.length || !sum(g.bank.slice(0,5))) {
+      g.goldQueue = []; g.phase = g.goldResume;
+      if (g.cities?.productionBefore) Cities.finishProduction(g, scenarioHelpers);
+    }
   } else if (type === "discard") {
     requireRule(g.phase === "discard" && l.discard > 0 && resourceArray(a.resources,g) && sum(a.resources) === l.discard && affordable(p, a.resources), "请弃掉指定数量的资源 / Discard the required resources");
     pay(g, p, a.resources); delete g.discard[id];
@@ -502,7 +520,7 @@ function act(g, id, a, rng = random) {
       else if (!Scenarios.rollPirate(g, number, scenarioHelpers, rng)) finishRoll(g, number);
     } else if (type === "robber" || type === "pirate") {
       requireRule(l[type].includes(a.tile), "必须移动到另一个合法地块 / Move to a different legal tile");
-      g.board[type] = a.tile; g.thief = type;
+      g.board[type] = a.tile; g.thief = type; if (g.cities) g.cities.chaseThief = null;
       const owners = type === "pirate" ? g.board.edges.filter((e) => e.tiles.includes(a.tile) && routeKind(e) === "ship").map((e) => e.owner) : g.board.tiles[a.tile].vertices.map((v) => g.board.vertices[v].owner);
       g.victims = [...new Set(owners)].filter((v) => v >= 0 && v !== id && (sum(g.players[v].resources) || Scenarios.is(g, "cloth") && type === "pirate" && g.players[v].cloth));
       log(g, `${p.name} ${type === "pirate" ? "移动海盗 / moves the pirate" : "移动强盗 / moves the robber"}`);
@@ -760,5 +778,5 @@ function chooseBotAction(g, id, rng = random) {
   return { type: "end" };
 }
 
-const scenarioHelpers = { affordable, resourceArray, pay, take, supplyShortage, recordRobbery: Statistics.robbed, pieceCount, longestRoad, score, updateAwards, checkWin, finishRoll, endTurn, log, roadSites, random };
-module.exports = { RES, COST, LABEL, makeBoard, createGame, act, legal, publicGame, chooseBotAction, canRespondToTrade, longestRoad, updateAwards, score, produce, tradeRate, settlementSites, roadSites, shipSites, movableShips, citySites, sum, random, requiredActors: g => g.cities && g.phase === "ckChoice" ? [g.cities.queue[0]?.player].filter(Number.isInteger) : Scenarios.requiredActors(g) };
+const scenarioHelpers = { affordable, resourceArray, pay, take, supplyShortage, recordRobbery: Statistics.robbed, pieceCount, longestRoad, score, updateAwards, checkWin, finishRoll, endTurn, log, roadSites, shipSites, openShips, goldProduction, random };
+module.exports = { RES, COST, LABEL, makeBoard, createGame, act, legal, publicGame, chooseBotAction, canRespondToTrade, longestRoad, updateAwards, score, produce, tradeRate, settlementSites, roadSites, shipSites, movableShips, openShips, citySites, sum, random, requiredActors: g => g.cities && g.phase === "ckChoice" ? [g.cities.queue[0]?.player].filter(Number.isInteger) : Scenarios.requiredActors(g) };

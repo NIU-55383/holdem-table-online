@@ -54,7 +54,7 @@
       unlock() { unlocked = true; suspended = false; sync(); },
       sync,
       stop() { suspended = true; pause(); },
-      setEdition(value) { const next = value === "cities" ? "cities" : value === "base" ? "base" : "seafarers"; if (next !== edition) { edition = next; sync(); changed(); } },
+      setEdition(value) { const next = value === "cities" || String(value).startsWith("cities-") ? "cities" : value === "base" ? "base" : "seafarers"; if (next !== edition) { edition = next; sync(); changed(); } },
       setEnabled(value) { enabled = Boolean(value); save("catan-music-enabled", enabled); sync(); changed(); },
       setVolume(value) { if (!Number.isFinite(value)) return; volume = Math.max(0, Math.min(1, value)); save("catan-music-volume", volume); sync(); changed(); },
       onChange(callback) { changed = callback; },

@@ -664,3 +664,19 @@
   .rules-development dt {font-size: 12px; gap: 4px;}
   .rules-development dt svg {width: 26px; height: 32px; flex-basis: 26px;}
 }
+
+#editionChoice{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}#editionChoice button{min-width:0;white-space:normal;line-height:1.5}#editionChoice small,#combinedSetupNote small{display:block;font-size:11px;font-weight:400}#combinedSetupNote{font-size:13px;line-height:1.65;padding:10px 12px;background:#fff3ce;border-left:3px solid #d5ae56;border-radius:4px;margin:12px 0}.combined-rule-list{padding-left:22px;font-size:14px;line-height:1.7}.combined-rule-list li{margin:10px 0}.combined-rule-list small{display:block;color:#658594;font-size:12px}
+
+#combinedSetupNote{color:#294f61}#combinedSetupNote small{color:#4a6a76}
+
+.score-breakdown-list,.score-rule-list {margin: 16px 0; padding-inline-start: 21px; line-height: 1.65;}
+.score-breakdown-list > li + li,.score-rule-list > li + li {margin-top: 12px;}
+.score-breakdown-list p,.score-rule-list p {margin: 0;}
+.score-breakdown-list > li::marker,.score-rule-list > li::marker {color: #527f8b;}
+#scoreInfoContent small {display: block; margin-top: 4px; font-size: 13px; line-height: 1.5; color: #527f8b;}
+#scoreInfoContent .score-total {margin-top: 0;}
+#scoreInfoContent .score-sum {border-top: 1px solid #527f8b44; margin-top: 18px; padding-top: 14px; font-weight: 700;}
+#scoreInfoContent .score-privacy {font-size: 13px;}
+#scoreDefenderRules {margin-top: 16px; border-top: 1px solid #527f8b44; padding-top: 12px;}
+#scoreDefenderRules summary {cursor: pointer; font-size: 13px; font-weight: 700;}
+#scoreDefenderRules .score-rule-list {font-size: 13px;}

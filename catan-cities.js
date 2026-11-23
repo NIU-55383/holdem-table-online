@@ -1,5 +1,6 @@
 "use strict";
 const D = require("./catan-cities-data");
+const Maps = require("./catan-maps");
 const sum = a => a.reduce((x,y) => x+y,0);
 const fail = (ok, message = "请选择可用操作 / Choose an available action") => { if (!ok) throw Error(message); };
 const knights = (g,id) => g.board.vertices.filter(v => v.knight && (id == null || v.knight.owner === id));
@@ -13,9 +14,13 @@ const titles = ["木材 / Lumber","砖 / Brick","羊毛 / Wool","麦 / Grain","�
 const branchName = i => D.branches[i].slice(0,2).join(" / ");
 const cardName = key => D.cards[key].slice(2,4).join(" / ");
 function initialize(g,rng,shuffle) {
-  g.target = 13; g.deck = []; g.board.robber = -1; g.board.citiesKnights = true;
+  const map = Maps.get(g.mapId), seafarers = Boolean(map?.cities);
+  const thiefStart = seafarers ? { robber:g.board.robber, pirate:g.board.pirate } : null;
+  g.target = seafarers ? map.target : 13; g.deck = []; g.board.robber = -1; g.board.citiesKnights = true;
+  if (seafarers) g.board.pirate = -1;
   g.bank = [19,19,19,19,19,12,12,12];
   g.cities = { ship:0, attacked:false, event:null, queue:[], after:"main", rollTotal:null, merchant:null, sequence:0,
+    seafarers, thiefStart, productionBefore:null, diplomacyKind:null, chaseThief:null,
     decks: [0,1,2].map(b => shuffle(Object.entries(D.cards).flatMap(([key,c]) => c[0] === b ? Array(c[1]).fill(key) : []),rng)),
     players: g.players.map(() => ({ levels:[0,0,0], cards:[], revealed:[], defenders:0 })),
     fleet:[], crane:0, medicine:0, harbor:[], alchemy:null, diplomacyPending:false };
@@ -90,7 +95,11 @@ function attack(g,H) {
     c.queue.push(...ordered(g).filter(id => strength[id] === lowest && eligible.some(p => p.id === id)).map(player => ({kind:"pillage",player})));
   }
   knights(g).forEach(v => { v.knight.active = false; }); c.ship = 0;
-  if (!c.attacked) { c.attacked = true; g.board.robber = g.board.tiles.find(t => t.resource === -1).id; }
+  if (!c.attacked) {
+    c.attacked = true;
+    g.board.robber = c.seafarers ? c.thiefStart.robber : g.board.tiles.find(t => t.resource === -1).id;
+    if (c.seafarers) g.board.pirate = c.thiefStart.pirate;
+  }
 }
 function roll(g,rng,H) {
   const c = g.cities, event = Math.floor(rng()*6);
@@ -106,7 +115,7 @@ function roll(g,rng,H) {
 }
 function produce(g,number,H) {
   const demand = g.players.map(() => Array(8).fill(0)), before = g.players.map(p => sum(p.resources));
-  for (const t of g.board.tiles.filter(t => t.number === number && t.id !== g.board.robber && t.resource >= 0)) for (const i of t.vertices) {
+  for (const t of g.board.tiles.filter(t => !t.noProduction && t.number === number && t.id !== g.board.robber && t.resource >= 0 && t.resource < 5)) for (const i of t.vertices) {
     const v = g.board.vertices[i]; if (v.owner < 0) continue;
     const commodity = ({0:5,2:6,4:7})[t.resource];
     demand[v.owner][t.resource] += v.level === 2 && commodity != null ? 1 : v.level;
@@ -116,6 +125,14 @@ function produce(g,number,H) {
     const wanted = sum(demand.map(d => d[r])), recipients = demand.filter(d => d[r]).length;
     demand.forEach((d,id) => { if (wanted <= n || recipients === 1) H.take(g,g.players[id],r,d[r],"production"); else if (d[r]) H.supplyShortage(g,id,r,d[r],0,"shared"); });
   });
+  g.cities.productionBefore = before;
+  if (g.cities.seafarers && H.goldProduction(g,number)) return;
+  finishProduction(g,H);
+}
+function finishProduction(g,H) {
+  const before = g.cities.productionBefore;
+  g.cities.productionBefore = null;
+  if (!before) return;
   const items = ordered(g).filter(id => g.cities.players[id].levels[0] >= 3 && sum(g.players[id].resources) === before[id]).map(player => ({kind:"aqueduct",player}));
   if (items.length) { begin(g,items); advance(g,H); }
 }
@@ -142,14 +159,15 @@ function canPromote(g,id,v,override=false) {
   return k.rank < 3 && k.promoted !== g.turn && capacity(g,id,k.rank+1) && (override || k.rank === 1 || g.cities.players[id].levels[2] >= 3);
 }
 function activate(g,v) { if (!v.knight.active) { v.knight.active = true; v.knight.activated = g.turn; } }
-function openRoads(g) {
-  return g.board.edges.filter(e => e.owner >= 0 && ![e.a,e.b].some(i => {
+function openRoads(g,H) {
+  const ships = new Set(g.cities.seafarers ? g.players.flatMap(p => H.openShips(g,p.id)) : []);
+  return g.board.edges.filter(e => e.owner >= 0 && (e.kind === "ship" ? ships.has(e.id) : ![e.a,e.b].some(i => {
     const v=g.board.vertices[i];
-    return v.knight?.owner===e.owner && v.edges.filter(j=>g.board.edges[j].owner===e.owner).length===1;
+    return v.knight?.owner===e.owner && v.edges.filter(j=>g.board.edges[j].owner===e.owner && g.board.edges[j].kind!=="ship").length===1;
   }) && [e.a,e.b].some(i => {
     const v = g.board.vertices[i];
-    return v.owner !== e.owner && v.knight?.owner !== e.owner && v.edges.filter(j => g.board.edges[j].owner === e.owner).length === 1;
-  }));
+    return v.owner !== e.owner && v.knight?.owner !== e.owner && v.edges.filter(j => g.board.edges[j].owner === e.owner && g.board.edges[j].kind!=="ship").length === 1;
+  })));
 }
 function cardPlayable(g,id,key,H) {
   const c = g.cities;
@@ -160,9 +178,9 @@ function cardPlayable(g,id,key,H) {
   if (key === "treason") return knights(g).some(v => v.knight.owner !== id);
   if (key === "espionage") return c.players.some((p,i) => i !== id && p.cards.length);
   if (key === "guild") return g.players.some(p => p.id !== id && H.score(g,p.id) > H.score(g,id) && sum(p.resources));
-  if (key === "diplomacy") return openRoads(g).length > 0;
-  if (key === "roads") return H.roadSites(g,id).length > 0;
-  if (key === "merchant") return g.board.tiles.some(t => t.resource >= 0 && t.vertices.some(i => g.board.vertices[i].owner === id));
+  if (key === "diplomacy") return openRoads(g,H).length > 0;
+  if (key === "roads") return H.roadSites(g,id).length > 0 || g.cities.seafarers && H.shipSites(g,id).length > 0;
+  if (key === "merchant") return g.board.tiles.some(t => t.resource >= 0 && t.resource < 5 && t.vertices.some(i => g.board.vertices[i].owner === id));
   return !["printing","constitution"].includes(key);
 }
 function play(g,id,key,H) {
@@ -235,16 +253,25 @@ function options(g,id,H) {
     else if(q.kind === "replaceRank") {
       for(let rank=1;rank<=q.rank;rank++) if(capacity(g,id,rank)) add(`rank:${rank}`,`等级 / Rank ${rank}`,() => replace({kind:"replaceKnight",player:id,rank,active:q.active}));
     } else if(q.kind === "replaceKnight") knightDrop(q.rank,q.active);
-    else if(q.kind === "merchant") g.board.tiles.filter(t => t.resource>=0 && t.vertices.some(i => g.board.vertices[i].owner===id)).forEach(t => add(`tile:${t.id}`,`${titles[t.resource]} · 地块 / Hex ${t.id+1}`,() => { c.merchant={owner:id,tile:t.id}; },"choice",{tile:t.id}));
+    else if(q.kind === "merchant") g.board.tiles.filter(t => t.resource>=0 && t.resource<5 && t.vertices.some(i => g.board.vertices[i].owner===id)).forEach(t => add(`tile:${t.id}`,`${titles[t.resource]} · 地块 / Hex ${t.id+1}`,() => { c.merchant={owner:id,tile:t.id}; },"choice",{tile:t.id}));
     else if(q.kind === "fleet") resource(0,8,r => { if(!c.fleet.includes(r)) c.fleet.push(r); });
     else if(["monopoly","tradeMonopoly"].includes(q.kind)) resource(q.kind === "monopoly" ? 0 : 5,q.kind === "monopoly" ? 5 : 8,r => { g.players.forEach(x => { if(x.id !== id) { const n=Math.min(x.resources[r],q.kind === "monopoly" ? 2 : 1); x.resources[r]-=n; p.resources[r]+=n; } }); });
     else if(q.kind === "intrigue") knights(g).filter(v => v.knight.owner !== id && touches(g,v,id)).forEach(v => vertex(v,"驱逐骑士 / Displace knight",() => relocate(g,v.id)));
-    else if(q.kind === "taxation") g.board.tiles.filter(t => t.id !== g.board.robber).forEach(t => add(`tile:${t.id}`,`强盗 / Robber · ${t.id+1}`,() => {
+    else if(q.kind === "taxation") g.board.tiles.filter(t => t.resource>=-1 && t.robberAllowed!==false && t.id !== g.board.robber).forEach(t => add(`tile:${t.id}`,`强盗 / Robber · ${t.id+1}`,() => {
       g.board.robber=t.id;
       const victims=[...new Set(t.vertices.map(i => g.board.vertices[i].owner))].filter(i => i>=0 && i!==id);
       for(const i of victims) { const hand=g.players[i].resources, n=sum(hand); if(!n) continue; let pick=Math.floor(H.random()*n),r=0; while(pick>=hand[r]) pick-=hand[r++]; hand[r]--; p.resources[r]++; H.recordRobbery(g,i,"theft"); }
     },"choice",{tile:t.id}));
-    else if(q.kind === "diplomacy") openRoads(g).forEach(e => add(`edge:${e.id}`,`道路 / Road ${e.id+1} · ${g.players[e.owner].name}`,() => { const ownRoad=e.owner===id; e.owner=-1; if(ownRoad) { g.freeRoads=1; g.resumePhase="main"; c.after="freeRoads"; if(!H.roadSites(g,id).length) c.after="main"; c.diplomacyPending=c.after==="freeRoads"; } },"choice",{edge:e.id}));
+    else if(q.kind === "diplomacy") openRoads(g,H).forEach(e => add(`edge:${e.id}`,`${e.kind === "ship" ? "船 / Ship" : "道路 / Road"} ${e.id+1} · ${g.players[e.owner].name}`,() => {
+      const ownRoute=e.owner===id, kind=e.kind === "ship" ? "ship" : "road";
+      e.owner=-1; delete e.kind; delete e.builtTurn;
+      if(ownRoute) {
+        g.freeRoads=1; g.resumePhase="main";
+        c.after=(kind === "ship" ? H.shipSites(g,id) : H.roadSites(g,id)).length ? "freeRoads" : "main";
+        c.diplomacyPending=c.after==="freeRoads"; c.diplomacyKind=c.diplomacyPending ? kind : null;
+        if (!c.diplomacyPending) g.freeRoads=0;
+      }
+    },"choice",{edge:e.id}));
     else if(q.kind === "harborPay") { for(let r=5;r<8;r++) if(p.resources[r]) add(`r:${r}`,titles[r],() => {p.resources[r]--;g.players[q.to].resources[r]++;p.resources[q.resource]++;g.players[q.to].resources[q.resource]--;}); }
     return out;
   }
@@ -265,7 +292,8 @@ function options(g,id,H) {
     if(canPromote(g,id,v) && H.affordable(p,knightCost)) add(`promote:${v.id}`,`晋升 / Promote ${k.rank} → ${k.rank+1} · 羊＋矿 / Wool + Ore`,() => {H.pay(g,p,knightCost);k.rank++;k.promoted=g.turn;},"promote",{vertex:v.id});
     if(!k.active || k.activated>=g.turn) return;
     if(moveSites(g,id,v).length) add(`move:${v.id}`,`移动骑士 / Move knight · ${v.id+1}`,() => begin(g,[{kind:"moveKnight",player:id,from:v.id}]),"move",{vertex:v.id});
-    if(c.attacked && v.tiles.includes(g.board.robber)) add(`chase:${v.id}`,"驱赶强盗 / Chase robber",() => {k.active=false;g.phase="robber";g.resumePhase="main";},"chase",{vertex:v.id});
+    if(c.attacked && v.tiles.includes(g.board.robber)) add(`chase:${v.id}`,"驱赶强盗 / Chase robber",() => {k.active=false;c.chaseThief="robber";g.phase="robber";g.resumePhase="main";},"chase",{vertex:v.id});
+    if(c.seafarers && c.attacked && v.tiles.includes(g.board.pirate)) add(`chasePirate:${v.id}`,"驱赶海盗 / Chase pirate",() => {k.active=false;c.chaseThief="pirate";g.phase="robber";g.resumePhase="main";},"chase",{vertex:v.id});
   });
   if(p.resources[1]>=2 && cities(g,id).filter(v => v.wall).length<3) cities(g,id).filter(v => !v.wall).forEach(v => add(`wall:${v.id}`,"建城墙 / Wall · 2 砖 / Brick",() => {H.pay(g,p,cost(1,2));v.wall=true;},"wall",{vertex:v.id}));
   c.harbor.forEach(target => { for(let r=0;r<5;r++) if(p.resources[r]) add(`harbor:${target}:${r}`,`${g.players[target].name} · 提供 / Give ${titles[r]}`,() => { c.harbor=c.harbor.filter(i=>i!==target); if(sum(g.players[target].resources.slice(5))) begin(g,[{kind:"harborPay",player:target,to:id,resource:r}]); else H.log(g,`${g.players[target].name} 没有商品 / has no commodities`); },"harbor"); });
@@ -274,8 +302,56 @@ function options(g,id,H) {
 function legal(g,id,H) {
   return options(g,id,H).map(({run,...o}) => o);
 }
+function selection(g,id) {
+  const c=g.cities,q=g.phase === "ckChoice" ? c?.queue[0] : null;
+  if(!q || q.player !== id) return null;
+  const model={kind:q.kind,required:1};
+  if(q.kind === "give") Object.assign(model,{required:Math.min(q.count,sum(g.players[id].resources)),resources:[...g.players[id].resources]});
+  else if(q.kind === "harborPay") model.resources=g.players[id].resources.map((n,r)=>r>=5?n:0);
+  else if(q.kind === "aqueduct") model.resources=g.bank.map((n,r)=>r<5?n:0);
+  else if(q.kind === "takeCards") Object.assign(model,{required:Math.min(q.remaining,sum(g.players[q.target].resources)),resources:[...g.players[q.target].resources]});
+  else if(q.kind === "discardProgress" || q.kind === "takeProgress") model.cards=c.players[q.kind === "discardProgress" ? id : q.target].cards.map(({id,key})=>({id,key}));
+  else return null;
+  return model.required>0 ? model : null;
+}
+function select(g,id,a,H) {
+  fail(Number.isSafeInteger(a.revision) && a.revision === g.revision,"选择已过期，请根据当前提示重新选择 / Selection expired; choose again from the current prompt");
+  const model=selection(g,id),q=g.cities.queue[0];
+  fail(model,"现在无需你选择这些牌 / This card choice is not yours to make now");
+  const field=model.resources ? "resources" : "cards", values=a[field];
+  fail(Object.keys(a).every(key=>["type","revision",field].includes(key)) && Array.isArray(values),"请选择所需的牌 / Choose the required cards");
+  if(model.resources) {
+    fail(values.length === 8 && model.resources.every((limit,r)=>Number.isSafeInteger(values[r]) && values[r]>=0 && values[r]<=limit) && sum(values) === model.required,
+      `请选择 ${model.required} 张可用物资 / Choose exactly ${model.required} available resource or commodity cards`);
+    if(q.kind === "harborPay") fail(Number.isInteger(q.resource) && q.resource>=0 && q.resource<5 && g.players[q.to]?.resources[q.resource]>0,"对方提供的资源已不可用 / The offered resource is no longer available");
+  } else {
+    fail(values.length === model.required && Array.from(values).every(card=>Number.isSafeInteger(card) && model.cards.some(c=>c.id === card)) && new Set(values).size === values.length,
+      `请选择 ${model.required} 张可用进步卡 / Choose exactly ${model.required} available progress cards`);
+  }
+  // Validate the complete selection before changing any inventory or advancing the queue.
+  const c=g.cities,p=g.players[id];
+  if(model.resources) {
+    if(q.kind === "aqueduct") values.forEach((n,r)=>{if(n)H.take(g,p,r,n);});
+    else {
+      const from=q.kind === "takeCards" ? g.players[q.target].resources : p.resources;
+      const to=q.kind === "takeCards" ? p.resources : q.to<0 ? g.bank : g.players[q.to].resources;
+      values.forEach((n,r)=>{from[r]-=n;to[r]+=n;});
+      if(q.kind === "harborPay") {p.resources[q.resource]++;g.players[q.to].resources[q.resource]--;}
+    }
+  } else {
+    const from=c.players[q.kind === "discardProgress" ? id : q.target].cards;
+    for(const cardId of values) {
+      const [card]=from.splice(from.findIndex(card=>card.id === cardId),1);
+      if(q.kind === "discardProgress") c.decks[D.cards[card.key][0]].push(card.key);
+      else c.players[id].cards.push(card);
+    }
+  }
+  c.queue.shift(); advance(g,H); H.updateAwards(g); return true;
+}
 function act(g,id,a,H) {
-  if(!g.cities || a.type !== "ck") return false;
+  if(!g.cities) return false;
+  if(a.type === "ckSelect") return select(g,id,a,H);
+  if(a.type !== "ck") return false;
   const option = options(g,id,H).find(o=>o.key===a.choice); fail(option);
   if(g.phase === "ckChoice") g.cities.queue.shift();
   option.run();
@@ -301,10 +377,10 @@ function publicState(g,id) {
   if(!g.cities) return null;
   const c=g.cities,q=c.queue[0];
   return {ship:c.ship,attacked:c.attacked,event:c.event,merchant:c.merchant,medicine:c.medicine,deckCounts:c.decks.map(d=>d.length),
-    choice:publicChoice(g,q),
+    choice:publicChoice(g,q),selection:selection(g,id),
     players:c.players.map((p,i)=>({levels:p.levels,revealed:p.revealed,defenders:p.defenders,count:p.cards.length,cards:i===id||g.phase==="over"?p.cards:null,strength:sum(knights(g,i).map(v=>v.knight.active?v.knight.rank:0))}))};
 }
-function resetTurn(g) { if(g.cities) Object.assign(g.cities,{fleet:[],crane:0,medicine:0,harbor:[],alchemy:null}); }
+function resetTurn(g) { if(g.cities) Object.assign(g.cities,{fleet:[],crane:0,medicine:0,harbor:[],alchemy:null,chaseThief:null}); }
 function bot(g,id,H) {
   if(!g.cities) return null;
   const choices=options(g,id,H);
@@ -319,7 +395,19 @@ function bot(g,id,H) {
 }
 function validate(g) {
   const c=g.cities,n=g.players.length,int=(x,a,b)=>Number.isSafeInteger(x)&&x>=a&&x<=b,actor=x=>int(x,0,n-1),arr=(x,max)=>Array.isArray(x)&&x.length<=max;
-  fail(n>=3&&n<=4&&g.target===13&&g.deck.length===0&&c&&int(g.turn,0,10000000)&&g.board.tiles.length===19);
+  const map=Maps.get(g.mapId), seafarers=Boolean(map?.cities);
+  fail(n>=3&&n<=4&&g.target===(seafarers?map.target:13)&&g.deck.length===0&&c&&int(g.turn,0,10000000));
+  fail(seafarers ? c.seafarers===true && g.board.tiles.length===map.tiles.length && g.board.mapId===g.mapId : !c.seafarers && g.board.tiles.length===19);
+  if(seafarers) {
+    fail(c.thiefStart && int(c.thiefStart.robber,0,g.board.tiles.length-1) && g.board.tiles[c.thiefStart.robber].resource>=-1);
+    fail(c.thiefStart.pirate===-1 || int(c.thiefStart.pirate,0,g.board.tiles.length-1) && g.board.tiles[c.thiefStart.pirate].resource===-2);
+    if(!c.attacked) fail(g.board.robber===-1 && g.board.pirate===-1);
+  }
+  if(c.productionBefore!=null) fail(seafarers && g.phase==="gold" && g.goldQueue.length>0 && arr(c.productionBefore,n) && c.productionBefore.length===n && c.productionBefore.every(x=>int(x,0,131)));
+  if(seafarers && g.phase==="gold" && g.goldResume==="main") fail(c.productionBefore!=null);
+  if(c.chaseThief!=null) fail(["robber","pirate"].includes(c.chaseThief) && g.phase==="robber" && (c.chaseThief!=="pirate" || seafarers));
+  if(c.diplomacyKind!=null) fail(["road","ship"].includes(c.diplomacyKind) && c.diplomacyPending && (c.diplomacyKind!=="ship" || seafarers));
+  if(seafarers && c.diplomacyPending) fail(["road","ship"].includes(c.diplomacyKind));
   fail(int(c.ship,0,6)&&typeof c.attacked==="boolean"&&[null,"ship","science","trade","politics"].includes(c.event));
   fail(arr(c.players,n)&&c.players.length===n&&arr(c.decks,3)&&c.decks.length===3&&int(c.sequence,0,10000000));
   const pool=[],ids=[];
@@ -335,7 +423,7 @@ function validate(g) {
   g.board.vertices.forEach(v=>{if(v.knight){fail(v.owner<0);checkKnight(v.knight);}if(v.wall)fail(v.level===2);if(v.metropolis!=null){fail(int(v.metropolis,0,2)&&v.level===2&&c.players[v.owner].levels[v.metropolis]>=4);metros.push(v.metropolis);}if(v.fallen)fail(v.level===1);});
   fail(new Set(metros).size===metros.length);
   for(let i=0;i<n;i++){for(let rank=1;rank<=3;rank++)fail(knights(g,i).filter(v=>v.knight.rank===rank).length<=2);fail(cities(g,i).filter(v=>v.wall).length<=3);}
-  fail(c.merchant===null||actor(c.merchant.owner)&&tile(c.merchant.tile)&&g.board.tiles[c.merchant.tile].resource>=0);
+  fail(c.merchant===null||actor(c.merchant.owner)&&tile(c.merchant.tile)&&g.board.tiles[c.merchant.tile].resource>=0&&g.board.tiles[c.merchant.tile].resource<5);
   fail(arr(c.fleet,8)&&c.fleet.every(x=>int(x,0,7))&&int(c.crane,0,2)&&int(c.medicine,0,2)&&arr(c.harbor,3)&&c.harbor.every(actor));
   fail(c.alchemy===null||arr(c.alchemy,2)&&c.alchemy.length===2&&c.alchemy.every(x=>int(x,1,6)));
   fail(c.rollTotal===null||int(c.rollTotal,2,12));fail(['roll','main','freeRoads'].includes(c.after));
@@ -366,4 +454,4 @@ function validate(g) {
   });
   fail(g.phase!=='ckChoice'||c.queue.length>0);
 }
-module.exports={initialize,points,rate,roll,produce,legal,act,publicState,resetTurn,bot,knights,cities,titles,resources:D.resources,validate};
+module.exports={initialize,points,rate,roll,produce,finishProduction,legal,act,publicState,resetTurn,bot,knights,cities,titles,resources:D.resources,validate};

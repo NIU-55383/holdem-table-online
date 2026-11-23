@@ -13,16 +13,18 @@ function alchemyFixture(rolled){
  g.cities.players[0].levels=[0,0,0];g.cities.players[2].levels=[0,0,0];
  return A.encode('catan',saved);
 }
-const cardDialog=page=>page.locator('dialog.cities-dialog:has([data-play])');
+const cardDialog=(page,playable=true)=>page.locator(playable?'#citiesConfirm':'#citiesCardInfoDialog');
 const snapshot=page=>page.evaluate(()=>({game:JSON.stringify(room.game),requests:actionRequests.length}));
-async function openCard(page,key){
- await page.locator(`[data-card="${key}"]`).click();await cardDialog(page).waitFor({state:'visible'});
- assert.match(await cardDialog(page).locator('h2').textContent(),key==='alchemy'?/Alchemy/:/Engineering/);
+async function openCard(page,key,playable=true){
+ await page.locator(`[data-card="${key}"]`).click();await cardDialog(page,playable).waitFor({state:'visible'});
+ assert.match(await cardDialog(page,playable).locator('h2').textContent(),key==='alchemy'?/Alchemy/:/Engineering/);
 }
 async function cancelCard(page,key,method,playable){
- const before=await snapshot(page);await openCard(page,key);const dialog=cardDialog(page);
- assert.equal(await dialog.locator('[data-play]').isEnabled(),playable);
- assert(await dialog.locator('.cities-confirm-details .cities-info-list > li').count()>=1,'card instructions use bullet points');
+ const before=await snapshot(page);await openCard(page,key,playable);const dialog=cardDialog(page,playable);
+ if(playable)assert(await dialog.locator('[data-play]').isEnabled());
+ else {assert.equal(await dialog.locator('[data-play]').count(),0,'unavailable card opens read-only help without Play');assert.equal(await cardDialog(page).isVisible(),false,'read-only help never opens the play confirmation');}
+ const content=dialog.locator(playable?'.cities-confirm-details':'[data-rules-body]');
+ assert(await content.locator('.cities-info-list > li').count()>=1,'card instructions use bullet points');
  assert(await dialog.evaluate(d=>{const r=d.getBoundingClientRect();return d.scrollWidth<=d.clientWidth+1&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1;}));
  if(method==='Escape')await page.keyboard.press('Escape');
  else if(method==='Enter')await dialog.locator('[data-close]').press('Enter');
@@ -44,9 +46,9 @@ async function checkMain(context,port,width,errors){
  await cancelCard(page,'engineering',width===320?'tap':'click',true);
  await cancelCard(page,'alchemy','Escape',false);
  await cancelCard(page,'engineering','Enter',true);
- await openCard(page,'alchemy');
- await cardDialog(page).screenshot({path:path.join(__dirname,`test-results/catan-alchemy-main-${width}.png`)});
- await cardDialog(page).locator('[data-close]').click();
+ await openCard(page,'alchemy',false);
+ await cardDialog(page,false).screenshot({path:path.join(__dirname,`test-results/catan-alchemy-main-${width}.png`)});
+ await cardDialog(page,false).locator('[data-close]').click();
  const before=await page.evaluate(()=>({requests:actionRequests.length,current:room.game.current,turn:room.game.turn}));
  await page.locator('#actions [data-action="end"]').click();
  await page.waitForFunction(before=>room.game.turn>before.turn&&room.game.current!==before.current,before);

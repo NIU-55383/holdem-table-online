@@ -18,12 +18,20 @@ test("all game entries load the same rules reader and styling", () => {
   }
   assert.match(read("AGENTS.md"), /Every existing and future game must provide complete Chinese and English rules/);
 });
-test("Bridge keeps complete bilingual rules but no teaching UI, modules or test scripts", () => {
+test("Bridge keeps complete bilingual rules and opt-in bidding hints without retired lesson modules", () => {
   const html = read("bridge.html"), rules = html.match(/<dialog id="rulesDialog"[\s\S]*?<\/dialog>/)[0];
   assert.equal([...html.matchAll(/<dialog[^>]*data-rules-dialog/g)].length, 1);
   for (const title of ["Partners & goal", "The auction", "Lead, dummy & play", "Scoring & vulnerability", "Bots & room"]) assert(rules.includes(title), title);
   assert.equal([...rules.matchAll(/<section>/g)].length, 5);
   assert.equal([...rules.matchAll(/<p lang="en">/g)].length, 11);
+  const guide = rules.match(/<section id="biddingGuide"[\s\S]*?<\/section>/)[0];
+  assert.match(guide, /A 算 4 点、K 算 3 点、Q 算 2 点、J 算 1 点/);
+  assert.match(guide, /15–17 点且均型/);
+  assert.match(guide, /你和搭档的合计牌力/);
+  assert.match(guide, /public calls/);
+  assert.equal([...guide.matchAll(/<li>/g)].length, [...guide.matchAll(/<small lang="en">/g)].length);
+  assert.match(html, /id="biddingHintsCreate" type="checkbox"/);
+  assert.match(html, /src="bridge-bidding.js"/);
   for (const file of ["bridge.html", "bridge.js", "bridge-server.js", "package.json"]) assert.doesNotMatch(read(file), /lesson|tutorial|教学|教程/i, file);
   const retired = JSON.parse(read("retired-files.json"));
   for (const file of ["bridge-lesson.js", "bridge-lesson-ui.js", "bridge-lesson.css", "bridge-lesson-test.js", "bridge-lesson-ui-test.js"]) {
@@ -166,4 +174,19 @@ test("barbarian and wall bullets explain strength, ties, losses and whole-hand d
   for (const concept of [/7\s*格/, /普通城市/, /已激活/, /并列/, /1\s*分/, /1\s*(bonus\s*)?VP/i, /城墙/, /metropol/i, /deactivat/i, /起点|归零/]) assert.match(attack, concept);
   for (const threshold of ['7', '9', '11', '13']) assert(walls.includes(threshold), 'Wall threshold ' + threshold);
   for (const concept of [/资源/, /商品/, /一半/, /向下取整/, /resources/i, /commodities/i, /half/i, /round.*down/i]) assert.match(walls, concept);
+});
+
+
+test("combined Catan exposes only the four recommended layouts with bilingual rules and 16 VP", () => {
+  const maps=require("./catan-maps"),cities=require("./catan-cities-data");
+  assert.equal(maps.maps.length,13);
+  assert.deepEqual(maps.combinedMaps.map(m=>m.id),["cities-shores-1","cities-shores-2","cities-desert-1","cities-desert-2"]);
+  for(const m of maps.combinedMaps){assert.equal(m.target,16);assert(m.cities);assert(["shores","desert"].includes(m.family));assert.equal(m.players,maps.get(m.baseMapId).players);}
+  assert(cities.combinedRules.length>=15);
+  for(const [zh,en] of cities.combinedRules){assert.match(zh,/[\u4e00-\u9fff]/);assert.match(en,/[A-Za-z]/);}
+  const content=cities.combinedRules.flat().join(" ");
+  for(const pattern of [/16 VP/,/gold/,/pirate/,/Diplomacy/,/Taxation/,/ship/,/not.*commodities/])assert.match(content,pattern);
+  for(const key of ["roads","diplomacy","merchant","taxation"])assert.equal(cities.combinedCardDetails[key][0].length,4);
+  for(const [,url] of cities.combinedSources)assert.equal(new URL(url).hostname,"www.catan.com");
+  assert.match(read("catan.html"),/data-edition="combined"/);
 });

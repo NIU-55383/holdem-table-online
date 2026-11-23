@@ -13,7 +13,7 @@
     printing: [0,1,"印刷术","Printing","立即公开，获得 1 分。","Reveal immediately for 1 VP."],
     roads: [0,2,"道路建设","Road Building","免费建至多两条道路，遵守连接和棋子上限。","Build up to two roads for free, obeying connections and piece limits."],
     smithing: [0,2,"锻造","Smithing","免费晋升至多两名不同骑士；仍遵守等级、库存和每回合晋升一次限制。","Promote up to two different knights for free, within rank, supply and once-per-turn limits."],
-    harbor: [1,2,"商业港","Commercial Harbor","本回合可向每名对手各提供一次 1 资源，换其自选 1 商品；没有商品的对手不用交换。","This turn offer each opponent 1 resource once, for 1 commodity of their choice; no commodity means no exchange."],
+    harbor: [1,2,"商业港","Commercial Harbor","每打出 1 张商业港，可在当前回合向每名对手各提供一次 1 资源，换其自选 1 商品；机会在回合结束时失效。","Each Commercial Harbor played lets you offer each opponent 1 resource once during this turn for 1 commodity of their choice; unused exchanges expire at turn end."],
     guild: [1,2,"行会税","Guild Dues","查看一名分数比你高的对手的资源和商品，自选两张拿走。","Inspect a higher-scoring opponent's resources and commodities and take any two."],
     merchant: [1,6,"商人","Merchant","将商人放在自己建筑旁的资源地块，获得该资源 2:1 兑换和 1 分，直到别人夺走商人。","Place the merchant beside your building: 2:1 trade for that resource and 1 VP until another player takes control."],
     fleet: [1,2,"商船队","Merchant Fleet","指定一种资源或商品，本回合可按 2:1 兑换。","Choose one resource or commodity to trade at 2:1 this turn."],
@@ -41,7 +41,7 @@
     ["七点与城墙 / Seven & Walls", "掷七时手牌超过 7 张须弃一半（向下取整），每道城墙提高 2 张上限，最多 13。首次入侵前七点只弃牌，不移动强盗或偷牌；此后照常移动并偷一名相邻对手。城墙花 2 砖，每城最多一道，不加分，也不能防止蛮族摧毁城市。", "On seven, discard half your resources and commodities (round down) if above 7 cards; each wall raises the limit by 2, up to 13. Before the first attack, seven only causes discards, not robber movement or theft. Afterwards move the robber and steal from one adjacent opponent. A wall costs 2 brick, one per city, scores nothing and does not protect against barbarians."],
     ["城市改良与都会 / Improvements & Metropolises", "纸发展科学，布发展贸易，币发展政治。五级依次支付 1、2、3、4、5 张对应商品，必须拥有城市。科学三级：非七点且本次生产完全未领到资源或商品，任选 1 普通资源。贸易三级：所有商品可 2:1 交易。政治三级：可晋升三级骑士。每条路线首个四级者在自己的城市放都会，多 2 分。若对手比你先将同一项改良升到五级，就会拿走你的都会标记和额外 2 分，把标记放到自己的城市上；你的城市仍归你。你先升到五级，则能保住这类都会，别人之后升到五级也抢不走。平级不夺取，新都会需要一座未占用的城市。失去全部城市不会失去改良与能力，但不能继续改良。", "Spend paper on science, cloth on trade and coin on politics. Levels 1–5 cost 1–5 corresponding commodities and require a city. Science 3: choose 1 normal resource when a non-seven production gives you nothing. Trade 3: trade any commodity at 2:1. Politics 3: promote to mighty knights. First to level 4 claims that branch's metropolis (+2 VP). If an opponent reaches level 5 in that same branch before you, they move your metropolis marker to their own city and take its 2 bonus VP from you. Your city remains yours. If you reach level 5 first, you keep that metropolis even when others later reach level 5. Ties do not take it. A new metropolis requires a free city. Losing all cities preserves improvements and abilities, but prevents further improvements."],
     ["骑士 / Knights", "招募一级骑士或晋升一次均花羊＋矿；激活花 1 麦。骑士放在自己道路端点的空交叉点，不受村庄距离限制，也不生产或计分。每名骑士每回合最多晋升一次，晋升保留激活状态。之前回合已激活的骑士可沿自己的连续道路移动、赶走较弱对手骑士，或移走相邻强盗并偷一张；行动后失活，可再次花麦激活，但不能再次行动。新激活的骑士要等下回合才能行动。被驱逐者由主人沿自己的道路迁移，无位置则收回；保留激活状态。骑士无论激活与否都阻断对手道路与最长道路。", "Recruit a basic knight or promote one for wool + ore; activate for 1 grain. Place on an empty intersection touching your road, ignoring settlement distance. Knights produce nothing and score no VP. Promote each knight at most once per turn, retaining activation. Knights activated on a previous turn may move along your roads, displace a weaker opposing knight, or chase an adjacent robber and steal. Acting deactivates them; they may reactivate but cannot act again that turn. Displaced knights relocate along their owner's roads, keeping activation, or return to supply if no site exists. Active and inactive knights block opponents' roads and Longest Road."],
-    ["蛮族入侵 / Barbarian Attack", "船每前进一步，走到第 7 格就入侵。蛮族强度＝全岛城市和都会总数；防守强度＝全部已激活骑士的等级之和。防守不低于蛮族则成功：贡献唯一最多者得 1 分；最高并列者各自选一类进步卡抽一张，不得分。失败时，在拥有普通城市的人中，贡献最少者各选一座城市降为村庄，城墙也失去；都会不会被毁。没有村庄棋子时用倒放的城市代替，之后必须先重建它。无论胜负，所有骑士失活，船回起点；首次入侵后把强盗放到沙漠。最后才处理这次数字骰的生产或七点。", "The ship attacks on its seventh advance. Barbarian strength equals all cities and metropolises; defense is the sum of all active knights' ranks. If defense is at least attack, the sole highest contributor gains 1 VP; tied highest contributors each choose a progress-card category and draw one instead. If defense fails, among players with ordinary cities, each lowest contributor downgrades one city and loses its wall. Metropolises cannot be destroyed. If all settlement pieces are used, a city on its side represents the settlement and must be rebuilt first. Afterwards all knights deactivate and the ship resets; after the first attack the robber enters the desert. Only then resolve production or seven."],
+    ["蛮族入侵 / Barbarian Attack", "船每前进一步，走到第 7 格就入侵。蛮族强度＝全岛城市和都会总数；防守强度＝全部已激活骑士的等级之和。防守不低于蛮族则成功：贡献唯一最多者得 1 分；最高并列者各自选一类进步卡抽一张，不得分。失败时，在拥有普通城市的人中，贡献最少者各选一座城市降为村庄，城墙也失去；都会不会被毁。没有村庄棋子时用倒放的城市代替，之后必须先重建它。无论胜负，所有骑士失活，船回起点；首次入侵后把强盗放到沙漠。最后才处理这次数字骰的生产或七点。", "The ship attacks on its seventh advance. Barbarian strength equals all cities and metropolises; defense is the sum of all active knights' ranks. If defense is at least attack, the sole highest contributor gains 1 VP; tied highest contributors each choose a progress-card category and draw one instead. If defense fails, among players with ordinary cities, each lowest contributor downgrades one city and loses its wall. Metropolises cannot be destroyed. If all settlement pieces are used, a city on its side represents the settlement and must be rebuilt first. Afterwards all knights deactivate and the ship resets; after the first attack the robber enters its scenario starting hex. Only then resolve production or seven."],
     ["进步卡 / Progress Cards", "事件骰出现城门颜色时，该路线至少一级且红骰不高于改良级别＋1 的玩家，按当前玩家起顺时针各抽一张。三类各 18 张。加分卡立即公开，不计手牌上限。其余最多持 4 张；别人回合拿到第 5 张须立即弃一张，自己回合可先使用，到回合结束不得超过 4 张。新抽卡可立即使用，可在自己掷骰后连续使用多张；只有炼金术在掷骰前使用。用过或弃掉的卡放回对应牌堆底，不洗牌。进步卡不能交易或被强盗偷。", "A colored gate gives a progress card to each player with at least level 1 in that branch whose improvement level + 1 is at least the red die, clockwise from the current player. Each category has 18 cards. VP cards reveal immediately and do not count toward the 4-card hand limit. On another player's turn discard immediately if above 4; on your own turn you may play cards first, but must finish with at most 4. Newly drawn cards can be played immediately; play any number after rolling, except Alchemy before rolling. Return played/discarded cards to the bottom of their deck without shuffling. Progress cards cannot be traded or stolen by the robber."],
     ["库存与结算 / Shortages & Scoring", "银行资源和商品不足时，同种物资有多名领取者则该种全部不发；仅一人领取则给剩余数量。科学三级按实际领取结果判断。商品的 3:1 港口与 4:1 银行交易照常，但资源专用 2:1 港口不适用于商品。商人、保卫卡坦分数和公开加分卡均计入总分。", "If multiple players claim an item and the bank cannot supply all, none receive that item; a sole claimant gets what remains. Aqueduct checks actual receipts. Generic 3:1 harbors and 4:1 bank trades apply to commodities, but resource-specific 2:1 harbors do not. Merchant, Defender of Catan and revealed VP cards all count toward victory."]
   ];
@@ -708,16 +708,22 @@
         "This turn, offer 1 normal resource of your choice for 1 commodity of the opponent's choice: paper, cloth or coin. Your offered card must be a normal resource."
       ],
       [
-        "每人一次",
-        "Once per opponent",
-        "每名对手最多交换一次。对方有商品就必须选择 1 张给你；没有商品则不交换，你也不支付资源。",
-        "Exchange at most once with each opponent. If they have a commodity, they must choose one to give you. If they have none, no exchange occurs and you keep your offered resource."
+        "本张卡：每名对手一次",
+        "Once per opponent for this card",
+        "每打出 1 张「商业港」，你可在自己的当前回合内，向每名对手各发起最多 1 次交换。次数按本次出牌计算，不是整局每人只能一次。",
+        "Each Commercial Harbor you play lets you offer at most one exchange to each opponent during your current turn. This limit applies to this card, not once per opponent for the whole game."
+      ],
+      [
+        "对方是否必须交换",
+        "Must the opponent exchange?",
+        "对方有商品，就必须选择 1 张给你；没有商品则不交换，你也不支付资源。",
+        "If the opponent has a commodity, they must choose one to give you. If they have none, no exchange occurs and you keep your offered resource."
       ],
       [
         "回合结束失效",
         "Expires at turn end",
-        "未使用的交换机会不会留到下回合。",
-        "Unused exchanges do not carry into your next turn."
+        "这张卡的交换机会在你的当前回合结束时全部失效。之后想再交换，必须再次打出「商业港」；不会每回合自动获得交换机会。",
+        "All exchanges granted by this card expire at the end of your current turn. To exchange again later, you must play another Commercial Harbor; new turns do not automatically grant exchanges."
       ]
     ],
     "guild": [
@@ -953,6 +959,37 @@
       ]
     ]
   };
-  const data = { branches, resources, cards, rules, knightPlacement, ruleSections, cardDetails, source: "https://www.catan.com/sites/default/files/2025-03/CN3087%20CATAN%E2%80%93Cities%26Knights_%20Rulebook.pdf" };
+  const combinedRules = [
+    ["官方允许把城市与骑士和航海家组合游玩。本模式提供官方明确推荐的「扬帆出海 1／2」和「穿越荒漠 1／2」，供 3–4 人选择相应布局。", "CATAN officially supports combining Cities & Knights with Seafarers. This mode offers the explicitly recommended New Shores 1/2 and Through the Desert 1/2 layouts for three or four players."],
+    ["地图选择：官方不推荐未知海域这类探索隐藏区域的地图，也不推荐四岛群岛这类分散在许多小岛上的地图，因为蛮族威胁会明显加重。本模式的四张地图是已支持的范围，不表示官方禁止所有其他地图。", "Map choice: hidden-area exploration such as Fog Islands and scattered-island maps such as Four Islands are not recommended because they amplify the barbarian threat. The four supported layouts are this mode's scope, not a claim that all other maps are officially forbidden."],
+    ["胜利目标：在原航海家地图目标上加 2 分。这四张地图原为 14 分，组合模式均为 16 分；必须在自己的回合达到目标。", "Victory: add 2 VP to the Seafarers scenario's target. These four layouts normally require 14 VP, so the combined mode requires 16 VP on your own turn."],
+    ["初始放置：依座位顺序各放 1 个村庄，再按相反顺序各放 1 座城市；每次放建筑后，再放 1 条道路或 1 艘船。建筑须位于地图允许的起始区域，船须放在海岸或海洋边。", "Setup: place one settlement each in seat order, then one city each in reverse order. Add one road or ship after each building. Use the map's permitted starting area; ships must lie on coastal or sea edges."],
+    ["初始物资：只按初始城市相邻的产资源地块各领 1 张普通资源，不翻倍，也不领纸、布、币。之后正常生产时，城市才按城市与骑士规则领取资源和商品。", "Starting cards: take one normal resource per producing hex beside your starting city, with no doubling and no commodities. Later production uses the usual Cities & Knights resource-and-commodity rules."],
+    ["保留城市与骑士的三颗骰子、商品、改良、骑士、城墙、都会和进步卡。使用航海家的船、金矿、发现岛屿奖励及地图特殊规则；不用基础版发展卡和最大军队奖励。", "Keep the three dice, commodities, improvements, knights, walls, metropolises and progress cards from Cities & Knights. Add Seafarers ships, gold fields, island bonuses and scenario rules. Base development cards and Largest Army are not used."],
+    ["船与道路：造船花 1 木＋1 羊，每人最多 15 艘。道路与船在计算最长商路时，仍须通过自己的村庄或城市连接；骑士不能代替这个连接建筑。", "Ships and roads: a ship costs one lumber and one wool, with 15 ships per player. A road and a shipping route join for Longest Trade Route only through your own settlement or city; a knight cannot replace that building."],
+    ["海上骑士：可在自己道路或船旁的空交叉点招募骑士，包括海上交叉点。已能行动的骑士可沿自己连续的道路和船移动，不能穿过对手的建筑或骑士；移动后失去激活状态。", "Knights at sea: recruit on an empty intersection beside your road or ship, including at sea. An eligible active knight may move along your continuous roads and ships, without passing an opponent's building or knight, and deactivates after moving."],
+    ["骑士与船的移动：骑士位于航线末端时，会封闭该航线。不能移动导致自己的骑士失去连接的船。对手骑士会截断你计算最长商路的连续路线，但不会因此让它旁边的船变成可移动的开放船。", "Knights and ship movement: a knight closes a route at its endpoint. Do not move a ship that would disconnect your knight. An enemy knight splits your route for Longest Trade Route, but does not make adjacent ships open and movable."],
+    ["蛮族同时攻击所有岛屿：把全图所有城市和都会合计为蛮族强度，把全图所有已激活骑士的等级相加作为防守力。不会按岛屿分别结算；奖励、城市降级及骑士失活照常处理。", "Barbarians attack all islands together. Count all cities and metropolises for their strength and all active knights' ranks for defense. Resolve rewards, city losses and knight deactivation once for the whole board, not island by island."],
+    ["首次入侵前：强盗和海盗都不入场，不能移动或用骑士驱赶它们。掷出 7 时，超过手牌上限的人仍须弃掉一半资源和商品；不执行移动强盗／海盗或偷牌。", "Before the first barbarian attack, neither robber nor pirate is in play, so neither can move or be chased. A seven still makes players above their hand limit discard half their resource and commodity cards, but causes no robber/pirate move or theft."],
+    ["首次入侵后：强盗进入本图规定的起始地块，海盗进入本图规定的起点（可能在棋盘外）。此后掷 7 可按航海家规则选择移动强盗或海盗。", "After the first attack, the robber enters its scenario starting hex and the pirate takes the scenario's starting position, which may be off the board. Later sevens allow the usual Seafarers choice of moving the robber or pirate."],
+    ["驱赶海盗：首次入侵后，能行动且紧邻海盗所在海格的已激活骑士，可像驱赶强盗一样驱赶海盗。驱赶后该骑士失活；本回合刚激活的骑士不能这样行动。", "Chasing the pirate: after the first attack, an eligible active knight bordering the pirate's sea hex may chase it as it would the robber. The knight deactivates; a knight activated this turn cannot take this action."],
+    ["金矿只产普通资源：村庄领取 1 张，城市领取 2 张，可选择不同种类；不能选纸、布或币。商人也不能放在金矿上。", "Gold fields yield only normal resources: one for a settlement or two for a city, which may be different types. Never take paper, cloth or coins from gold fields, and never place the merchant there."],
+    ["道路建设进步卡：可免费建至多 2 条道路、2 艘船，或各 1 个；仍须满足连接、地形、海盗封锁和棋子数量限制。", "Road Building: build up to two roads, two ships, or one of each for free, following connection, terrain, pirate-blocking and piece limits."],
+    ["外交进步卡：也可移除开放的船，包括海盗旁的开放船。移除自己的道路，只能免费另建道路；移除自己的船，只能免费另建船。移除对手的棋子则交还对手，不能换成自己的。", "Diplomacy also removes open ships, even beside the pirate. Removing your road permits a replacement road; removing your ship permits a replacement ship. An opponent's piece returns to their supply and does not become yours."],
+    ["征税进步卡：只能移动强盗，从新地块旁每名对手各偷 1 张资源或商品；不能用它移动海盗。其他进步卡继续遵守各自的城市与骑士规则。", "Taxation moves only the robber and steals one resource or commodity from each opponent beside the new hex; it cannot move the pirate. Other progress cards retain their Cities & Knights effects."]
+  ];
+  const combinedCardDetails = {
+    roads: [["组合模式：道路和船合计至多两个", "Combined mode: up to two roads and/or ships", "可把免费道路换成免费船：两条道路、两艘船，或道路和船各一个，合计最多两个。船仍须符合建造位置、海盗封锁和每人 15 艘的上限。", "The two free pieces may be roads, ships, or one of each, never more than two total. Ships must obey placement rules, pirate blocking and the 15-ship limit."]],
+    diplomacy: [["组合模式：也能移除开放的船", "Combined mode: open ships are eligible", "可移除开放的船，即使它紧邻海盗。移除自己的船后只能免费另建船，移除自己的道路后只能免费另建道路；不能互换类型。对手的棋子交还对手。骑士不能因此失去连接。", "An open ship may be removed even beside the pirate. Your removed ship can only be replaced by a ship, and your road by a road; the types cannot be swapped. Opponents reclaim their own pieces. No knight may be disconnected."]],
+    merchant: [["组合模式：不能放在金矿", "Combined mode: no merchant on gold", "商人仍须放在自己村庄或城市旁的普通资源地块，不能放在金矿或海洋上。金矿也不能作为商人的 2:1 兑换种类。", "Place the merchant on a normal resource hex beside your settlement or city, never on gold fields or sea. Gold fields cannot supply a merchant 2:1 trading type."]],
+    taxation: [["组合模式：只能移动强盗", "Combined mode: robber only", "征税只能移动强盗，不能移动海盗。仍须等首次蛮族入侵后才能使用，并从强盗新地块旁每名对手各偷一张资源或商品。", "Taxation moves the robber, never the pirate. It remains unavailable before the first barbarian attack and steals one resource or commodity from each opponent beside the robber's new hex."]]
+  };
+  const combinedSources = [
+    ["CATAN 官方：城市与骑士 2025 规则，第 12 页组合规则 / Official 2025 Cities & Knights rules, p. 12", "https://www.catan.com/sites/default/files/2025-03/CN3087%20CATAN%E2%80%93Cities%26Knights_%20Rulebook.pdf"],
+    ["CATAN 官方：城市与骑士与航海家组合说明 / Official expansion combination guidance", "https://www.catan.com/cities-knights"],
+    ["CATAN 官方：城市与骑士常见问题 / Official Cities & Knights FAQ", "https://www.catan.com/faq/cities-knights"],
+    ["CATAN 官方：航海家常见问题 / Official Seafarers FAQ", "https://www.catan.com/faq/seafarers"]
+  ];
+  const data = { branches, resources, cards, rules, knightPlacement, ruleSections, cardDetails, combinedRules, combinedCardDetails, combinedSources, source: "https://www.catan.com/sites/default/files/2025-03/CN3087%20CATAN%E2%80%93Cities%26Knights_%20Rulebook.pdf" };
   if (typeof module === "object") module.exports = data; else root.CatanCitiesData = data;
 })(typeof window === "object" ? window : globalThis);

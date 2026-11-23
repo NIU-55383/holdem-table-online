@@ -18,6 +18,92 @@ async function fixture(t) {
   }
   return { server, api, client };
 }
+
+test("bidding hints default off; the host can change a boolean only before starting", async (t) => {
+  const { api, client } = await fixture(t), a = await client(), b = await client();
+  await a.request({ type: "create", name: "Host" });
+  const code = a.state.code, room = api.rooms.get(code);
+  assert.equal(a.state.biddingHints, false); assert.equal(room.biddingHints, false);
+  for (const biddingHints of [null, 1, "true", {}, []]) {
+    await a.request({ type: "create", name: "Host", biddingHints }, v => v.type === "error");
+    assert.equal(api.rooms.size, 1); assert.equal(a.state.code, code); assert.equal(room.biddingHints, false);
+  }
+  await b.request({ type: "join", name: "Guest", code });
+  await b.request({ type: "biddingHints", enabled: true }, v => v.type === "error");
+  assert.equal(room.biddingHints, false);
+  for (const enabled of [undefined, null, 0, "false", {}]) {
+    await a.request({ type: "biddingHints", enabled }, v => v.type === "error"); assert.equal(room.biddingHints, false);
+  }
+  await a.request({ type: "biddingHints", enabled: true });
+  await until(() => b.state.biddingHints === true); assert.equal(room.biddingHints, true);
+  await a.request({ type: "biddingHints", enabled: false });
+  await until(() => b.state.biddingHints === false);
+  await a.request({ type: "biddingHints", enabled: true });
+  await a.request({ type: "fillBots" }); await a.request({ type: "start" });
+  const before = structuredClone(room.game);
+  await a.request({ type: "biddingHints", enabled: false }, v => v.type === "error");
+  assert.equal(room.biddingHints, true); assert.deepEqual(room.game, before);
+  await until(() => b.state.game);
+  for (const c of [a, b]) {
+    assert.equal(c.state.biddingHints, true);
+    assert.equal(c.state.game.hands.filter(Boolean).length, 1);
+    assert.deepEqual(c.state.game.hands[c.state.you], room.game.hands[c.state.you]);
+    assert.equal(c.state.game.originalHands, null);
+    assert.equal(Object.hasOwn(c.state.game, "biddingHints"), false);
+  }
+});
+
+test("bidding hints survive reconnect, every board and rematch without changing the deal", async (t) => {
+  const { api, client } = await fixture(t), a = await client();
+  await a.request({ type: "create", name: "Host", biddingHints: true });
+  await a.request({ type: "fillBots" }); await a.request({ type: "start" });
+  const room = api.rooms.get(a.state.code), originalHand = a.state.game.hands[0];
+  const back = await client(a.token); await until(() => back.state);
+  assert.equal(back.state.biddingHints, true); assert.deepEqual(back.state.game.hands[0], originalHand);
+  for (let board = 1; board <= 4; board++) {
+    for (let pass = 0; pass < 4; pass++) E.act(room.game, E.controller(room.game), { type: "call", call: "P" });
+    api.broadcast(room); await until(() => back.state.game.phase === "over");
+    assert.equal(back.state.biddingHints, true);
+    if (board < 4) { await back.request({ type: "next" }); assert.equal(back.state.biddingHints, true); }
+  }
+  await back.request({ type: "rematch" });
+  assert.equal(back.state.game, null); assert.equal(back.state.biddingHints, true);
+  await back.request({ type: "biddingHints", enabled: false });
+  await back.request({ type: "start" }); assert.equal(back.state.biddingHints, false);
+});
+
+test("bidding hints persist in archives; old saves default off and malformed flags are rejected", async (t) => {
+  const { api, client } = await fixture(t), a = await client();
+  const { encode, decode } = require("./room-archive");
+  await a.request({ type: "create", name: "Host", biddingHints: true });
+  await a.request({ type: "fillBots" }); await a.request({ type: "start" });
+  const room = api.rooms.get(a.state.code);
+  const exported = await a.request({ type: "archiveExport" }, v => v.type === "archiveExported");
+  assert.equal(exported.archive.config.biddingHints, true);
+  for (const enabled of [false, true]) {
+    const archive = structuredClone(exported.archive); archive.config.biddingHints = enabled;
+    const restored = decode(archive, ["bridge"]).room;
+    assert.equal(restored.biddingHints, enabled);
+    assert.equal(encode("bridge", restored).config.biddingHints, enabled);
+    assert.deepEqual(restored.game.hands, room.game.hands);
+  }
+  const legacy = structuredClone(exported.archive); delete legacy.config.biddingHints;
+  assert.equal(decode(legacy, ["bridge"]).room.biddingHints, false);
+  for (const value of [null, 1, "true", {}, []]) {
+    const archive = structuredClone(exported.archive); archive.config.biddingHints = value;
+    assert.throws(() => decode(archive, ["bridge"]), /unsupported/);
+  }
+  const b = await client();
+  const lobby = await b.request({ type: "archiveImport", name: "New host", archive: exported.archive }, v => v.type === "archiveLobby");
+  assert.equal(Object.hasOwn(lobby, "hands"), false); assert.equal(typeof lobby.game, "string");
+  await b.request({ type: "archiveClaim", seat: 2 });
+  assert.equal(b.state.biddingHints, true); assert.equal(b.state.control.paused, true);
+  assert.equal(b.state.game.hands.filter(Boolean).length, 1);
+  assert.deepEqual(b.state.game.hands[2], room.game.hands[2]);
+  await b.request({ type: "biddingHints", enabled: false }, v => v.type === "error");
+  assert.equal(b.state.biddingHints, true);
+});
+
 test("Bridge has no teaching protocol; normal rooms and bots continue without lesson steps", async (t) => {
   const { api, client } = await fixture(t), a = await client();
   const removed = ["createTutorial", "lessonContinue", "lessonRestart"];

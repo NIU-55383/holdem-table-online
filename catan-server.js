@@ -250,11 +250,11 @@ function attachCatan(server) {
   }, 30000);
   heartbeat.unref();
   server.on("close", () => { archives.close(); control.close(); clearInterval(heartbeat); rooms.forEach((r) => clearTimeout(r.timer)); wss.clients.forEach((ws) => ws.terminate()); wss.close(); });
-  const previews = new Map([["base", E.makeBoard()], ...Maps.maps.map((map) => [map.id, E.makeBoard(undefined, map.id)])]);
+  const previews = new Map([["base", E.makeBoard()], ...Maps.allMaps.map((map) => [map.id, E.makeBoard(undefined, map.id)])]);
   previews.set("base:5-6", E.makeBoard(undefined, "base", "default", 6));
   previews.set("cities", E.makeBoard(undefined,"cities"));
   previews.set("cities:random", E.makeBoard(undefined,"cities","random"));
-  Maps.maps.forEach((map) => previews.set(`${map.id}:random`, E.makeBoard(undefined, map.id, "random")));
+  Maps.allMaps.forEach((map) => previews.set(`${map.id}:random`, E.makeBoard(undefined, map.id, "random")));
   return { upgrade(request, socket, head) { wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request)); }, rooms, preview: previews.get("base"), previews };
 }
 module.exports = { attachCatan };

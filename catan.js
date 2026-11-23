@@ -551,7 +551,11 @@
     send(value === "cancel" ? { type: "cancelSeatSwap", id } : { type: "respondSeatSwap", id, accept: value === "accept" });
   });
   document.querySelectorAll("[data-leave]").forEach((b) => { b.onclick = () => $("leaveDialog").showModal(); });
-  document.querySelectorAll("[data-close]").forEach((b) => { b.onclick = () => $(b.dataset.close).close(); });
+  // Component-owned dialogs use empty data-close and keep their own handlers.
+  document.querySelectorAll("[data-close]").forEach((b) => {
+    const target = $(b.dataset.close);
+    if (target) b.onclick = () => target.close();
+  });
   $("confirmLeave").onclick = () => { send({ type: "leave" }); $("leaveDialog").close(); };
   $("helpButton").onclick = () => Maps.get(state.room?.mapId || state.mapId) ? showSailingRules(state.room?.mapId || state.mapId, true) : showBaseRules();
   $("autoButton").onclick = () => send({ type: "auto", enabled: !state.room.seats[state.room.you].auto });
@@ -929,10 +933,17 @@
     const paragraphs = [[`${p.name}：${otherPoints} + ${bonusPoints} = ${p.score} 分。`, `${p.name}: ${otherPoints} + ${bonusPoints} = ${p.score} VP.`]];
     if (cardPoints) paragraphs.push([`${g.citiesKnights ? "胜利点进步卡" : "胜利点发展卡"}：${cardPoints} 分。`, `Victory point ${g.citiesKnights ? "progress" : "development"} cards: ${cardPoints} VP.`]);
     if (tribePoints) paragraphs.push([`部落胜利点标记：${tribePoints} 分。`, `Tribe victory point tokens: ${tribePoints} VP.`]);
-    if (defenderPoints) paragraphs.push([`保卫卡坦奖励：${defenderPoints} 分。`, `Defender of Catan awards: ${defenderPoints} VP.`]);
+    if (defenderPoints) {
+      paragraphs.push([`保卫卡坦奖励：${defenderPoints} 分。`, `Defender of Catan awards: ${defenderPoints} VP.`]);
+      paragraphs.push([`获奖原因：该玩家曾在成功抵御蛮族时，提供了全场唯一最高的防守贡献。每次获得 1 分，已累计获奖 ${defenderPoints} 次；骑士失活后不会扣回。`, `Why it was awarded: this player was the sole highest contributor when Catan successfully repelled the barbarians. Each award grants 1 VP; this player has earned ${defenderPoints} in total. These points remain after knights deactivate.`]);
+      paragraphs.push(["怎么算防守贡献：蛮族入侵时，把该玩家所有已激活骑士的等级相加。例如一个一级骑士加一个二级骑士，共贡献 3 点防守力。", "How contribution is counted: add the ranks of this player's active knights when the barbarians attack. One rank-1 knight plus one rank-2 knight contributes 3 defense strength."]);
+      paragraphs.push(["怎样算守住：全体玩家的防守贡献相加，不少于全岛城市数（含都会），就成功抵御蛮族。", "When defense succeeds: all players' total contribution must be at least the number of cities on the island, including metropolises."]);
+      paragraphs.push(["最高贡献并列时：并列者各选一类进步卡，抽 1 张；这次不获得保卫卡坦分数。", "When the highest contribution is tied: each tied player draws 1 progress card from a category of their choice; no Defender of Catan VP is awarded for that attack."]);
+    }
     paragraphs.push([`前面的 ${otherPoints} 分是其他得分；后面的 +${bonusPoints} 分来自以上奖励，已计入 ${p.score} 分，不用再加一次。`, `The first ${otherPoints} points come from other sources. The +${bonusPoints} comes from the bonuses above and is already included in ${p.score} VP; do not add it again.`]);
     if (cardPoints === null) paragraphs.push(["这里只显示公开得分，不包含对方未公开的胜利点卡。", "Only public points are shown. This opponent's hidden victory point cards are not included."]);
-    $("scoreInfoContent").innerHTML = paragraphs.map(([zh, en]) => `<p>${B.escape(zh)}<small>${B.escape(en)}</small></p>`).join("");
+    const scoreItems=paragraphs.map(([zh,en])=>`<p>${B.escape(zh)}<small>${B.escape(en)}</small></p>`);
+    $("scoreInfoContent").innerHTML=g.citiesKnights?`<ul class="cities-info-list">${scoreItems.map(item=>`<li>${item}</li>`).join("")}</ul>`:scoreItems.join("");
     if (!$("scoreInfoDialog").open) $("scoreInfoDialog").showModal();
   }
   $("players").addEventListener("click", event => {
@@ -1048,7 +1059,7 @@
       const selected = type === "merchant" ? placingMerchant : type === "wall" ? citiesUI.selectedGroup === "wall" : knightActions[type] ? citiesUI.selectedGroup === knightActions[type] : state.mode === type;
       const hasInfo=g.citiesKnights&&["knight","wall","paper","cloth","coin","merchant"].includes(image),improvement=g.citiesKnights&&/^improve[0-2]$/.test(type)?["science","trade","politics"][Number(type.slice(-1))]:null;
       const button=`<button data-action="${type}" title="${B.escape(reason || `${zh} / ${en} · ${cost}`)}" class="${reason ? "build-unavailable" : selected ? "selected" : ""}" ${type === "help" || (enabled || reason) && !state.pending && !state.room.control?.paused ? "" : "disabled"}>${hasInfo?"":icon(image)}<span>${zh}<small>${en}</small><small class="action-cost">${cost}</small></span></button>`;
-      return hasInfo?`<div class="cities-action-item${improvement?" cities-improvement-item":type==="merchant"?" cities-help-item":""}">${CK.infoButton(improvement||image,"cities-action-info")}${button}${improvement||type==="merchant"?CK.helpButton(improvement||image):""}</div>`:button;
+      return hasInfo?`<div class="cities-action-item${improvement?" cities-improvement-item":""}">${CK.infoButton(improvement||image,"cities-action-info")}${button}</div>`:button;
     }).join("")
       + `<button class="turn-action" data-action="${l.roll ? "roll" : "end"}" ${!state.pending && !state.room.control?.paused && (l.roll || l.end) ? "" : "disabled"}><span>${l.roll ? "掷骰子" : g.pairedTurn?.part === 2 ? "结束补充建造" : "结束回合"}<small>${l.roll ? "Roll Dice" : g.pairedTurn?.part === 2 ? "End Paired Build" : "End Turn"}</small></span><span aria-hidden="true">→</span></button>`;
     if(g.citiesKnights)window.lucide?.createIcons();

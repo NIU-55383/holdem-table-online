@@ -91,7 +91,7 @@ async function main(){
   assert(timing.max<1000,'merchant help must not stall the main thread');
   await cdp.send('Emulation.setCPUThrottlingRate',{rate:1});
   fs.mkdirSync(path.join(__dirname,'test-results'),{recursive:true});
-  const mainButton='#actions [data-action="merchant"]',help='#actions .cities-action-help[data-cities-info="merchant"]';
+  const mainButton='#actions [data-action="merchant"]',help='#actions .cities-action-info[data-cities-info="merchant"]';
   assert.equal(await page.locator('[data-card="merchant"]').count(),0);
   for(const width of [1600,390,320]){
    await page.setViewportSize({width,height:900});assert(await page.locator(mainButton).isDisabled());assert.match(await page.locator(mainButton).textContent(),/Cards × 1/);

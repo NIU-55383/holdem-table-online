@@ -103,20 +103,67 @@ test("Cities & Knights uses the shared bilingual reader and all 54 official prog
   assert.match(read('game-rules.js'),/play continues without pausing/);
 });
 
-test("metropolis rules explain the marker, bonus points and retained city in both languages", () => {
-  const rules = require('./catan-cities-data').rules.find(([title])=>title.startsWith('城市改良与都会'));
-  for (const text of [rules.slice(1).join(' '), read('catan-cities-ui.js')]) {
-    for (const detail of ['同一项改良升到五级', '都会标记和额外 2 分', '你的城市仍归你', '之后升到五级也抢不走', 'same branch before you', '2 bonus VP from you', 'Your city remains yours', 'even when others later reach level 5']) assert(text.includes(detail),detail);
-    assert(!text.includes('别人先到五级可夺走并保有'));
+function citiesSection(key) {
+  const section = require('./catan-cities-data').ruleSections.find(section => section.key === key);
+  assert(section, 'Missing Cities & Knights rule section: ' + key);
+  return section;
+}
+
+function citiesText(key) { return citiesSection(key).items.flat().join(' '); }
+
+test("Cities & Knights introductions and every progress card have bilingual bullet content", () => {
+  const cities = require('./catan-cities-data'), keys = new Set();
+  assert(cities.ruleSections.length >= cities.rules.length);
+  function checkItems(items, name) {
+    assert(Array.isArray(items) && items.length >= 2, name + ' must have separate rule points');
+    for (const item of items) {
+      assert(Array.isArray(item) && (item.length === 4 || item.length === 5), name + ' has bilingual labels and bodies');
+      assert(item.slice(0, 4).every(text => typeof text === 'string' && text.trim()), name);
+      for (const index of [0, 2]) assert.match(item[index], /[\u4e00-\u9fff]/, name);
+      for (const index of [1, 3]) assert.match(item[index], /[A-Za-z]/, name);
+      if (item.length === 5) assert.equal(typeof item[4], 'boolean', name + ' table flag');
+    }
+  }
+  for (const section of cities.ruleSections) {
+    assert.equal(typeof section.key, 'string');
+    assert(!keys.has(section.key), 'Duplicate rule section: ' + section.key); keys.add(section.key);
+    assert.match(Array.isArray(section.title) ? section.title.join(' ') : section.title, /[\u4e00-\u9fff]/);
+    assert.match(Array.isArray(section.title) ? section.title.join(' ') : section.title, /[A-Za-z]/);
+    checkItems(section.items, section.key);
+  }
+  for (const key of ['knight', 'barbarians', 'walls']) assert(keys.has(key), key);
+  assert.deepEqual(Object.keys(cities.cardDetails).sort(), Object.keys(cities.cards).sort());
+  for (const [key, items] of Object.entries(cities.cardDetails)) checkItems(items, key);
+  const ui = read('catan-cities-ui.js');
+  assert.match(ui, /D\.ruleSections/);
+  assert.match(ui, /D\.cardDetails/);
+  for (const [entry, section] of [['knight', 'knight'], ['barbarians', 'barbarians'], ['wall', 'walls']]) {
+    assert.match(ui, new RegExp(entry + ':\\s*"' + section + '"'));
   }
 });
 
-test("knight help and rules explain blocked roads and exclusive building sites", () => {
+test("metropolis rules retain marker transfers, bonus points and the original city", () => {
   const cities = require('./catan-cities-data');
-  const rules = cities.rules.find(([title])=>title==='骑士 / Knights');
-  assert.equal(cities.knightPlacement.length,2);
-  for (const [zh,en] of cities.knightPlacement) { assert(rules[1].includes(zh)); assert(rules[2].includes(en)); }
-  const text = cities.knightPlacement.flat().join(' ');
-  for (const detail of ['骑士未激活也一样', '另一端已经连着', '不能跳过骑士凭空新起一段路', '即使都是自己的也不行', '下一个自己的回合', 'even if the knight is inactive', 'already connects', 'cannot share an intersection', 'wait until your next turn']) assert(text.includes(detail),detail);
-  assert.match(read('catan-cities-ui.js'), /if\(name==="knight"\)paragraphs\.push\(\.\.\.D\.knightPlacement\)/);
+  const legacy = cities.rules.find(([title]) => title.startsWith('城市改良与都会'));
+  assert(legacy && legacy[1] && legacy[2]);
+  const text = cities.ruleSections.filter(section => /improve|metropol/i.test(section.key)).map(section => section.items.flat().join(' ')).join(' ');
+  assert(text, 'Improvement or metropolis bullets are present');
+  for (const concept of [/都会/, /metropolis/i, /2\s*(分|胜利点)/, /2\s*(bonus\s*)?VP/i, /5\s*级|五级/, /level\s*5/i, /城市.{0,12}(仍|保留|归)/, /city.{0,35}(remain|keep|yours|belongs|stays theirs)/i]) assert.match(text, concept);
+  assert.doesNotMatch(text, /别人先到五级可夺走并保有/);
+});
+
+test("knight help retains promotion limits, blocked roads and exclusive building sites", () => {
+  const cities = require('./catan-cities-data');
+  const legacy = cities.rules.find(([title]) => title === '骑士 / Knights');
+  assert.equal(cities.knightPlacement.length, 2);
+  for (const [zh, en] of cities.knightPlacement) { assert(legacy[1].includes(zh)); assert(legacy[2].includes(en)); }
+  const text = citiesText('knight');
+  for (const concept of [/政治.{0,16}(3\s*级|三级)/, /Politics.{0,16}(level\s*3|3)/i, /每.{0,8}骑士.{0,8}每回合.{0,12}(一次|1\s*次)/, /once per turn/i, /晋升.{0,20}(不要求|不需要|无需).{0,12}激活/, /inactive/i, /最长道路/, /Longest (Road|Route)/i, /(不能.{0,20}(同一个|同一).{0,12}(交叉点|路口)|一个交叉点只能放一名骑士或一座建筑)/, /cannot share|cannot occupy|may not share/i, /下一个自己的回合|下次自己的回合/, /next (own |your )?turn/i]) assert.match(text, concept);
+});
+
+test("barbarian and wall bullets explain strength, ties, losses and whole-hand discards", () => {
+  const attack = citiesText('barbarians'), walls = citiesText('walls');
+  for (const concept of [/7\s*格/, /普通城市/, /已激活/, /并列/, /1\s*分/, /1\s*(bonus\s*)?VP/i, /城墙/, /metropol/i, /deactivat/i, /起点|归零/]) assert.match(attack, concept);
+  for (const threshold of ['7', '9', '11', '13']) assert(walls.includes(threshold), 'Wall threshold ' + threshold);
+  for (const concept of [/资源/, /商品/, /一半/, /向下取整/, /resources/i, /commodities/i, /half/i, /round.*down/i]) assert.match(walls, concept);
 });

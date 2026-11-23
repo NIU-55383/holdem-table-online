@@ -54,6 +54,40 @@ async function checkCosts(page,cities,ship){
   await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>[room.game.revision,actionRequests.length]),before);
  }
 }
+async function checkBulletBody(dialog,body,minItems=2){
+ const bullets=body.locator(':scope > .cities-info-list > li');
+ assert(await bullets.count()>=minItems,'rules must use separate bullet points');
+ assert(await bullets.evaluateAll(items=>items.every(item=>item.querySelector('p strong')&&item.querySelector('small')?.textContent.trim())),'every bullet needs a label and matching English');
+ assert.equal(await body.locator(':scope > p:visible').count(),0,'no unstructured explanation paragraph remains');
+ const bounds=async()=>assert(await dialog.evaluate(d=>{
+  const r=d.getBoundingClientRect(),close=d.querySelector('[data-close]').getBoundingClientRect();
+  return d.scrollWidth<=d.clientWidth+1&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1&&close.top>=r.top&&close.bottom<=r.bottom;
+ }),'dialog and close button must fit the viewport');
+ await bounds();const closeTop=await dialog.locator('[data-close]').evaluate(button=>button.getBoundingClientRect().top);
+ await body.evaluate(el=>{el.scrollTop=el.scrollHeight;});
+ assert(await body.evaluate(el=>Math.abs(el.scrollHeight-el.clientHeight-el.scrollTop)<=2),'long explanations must scroll to the last bullet');
+ assert.equal(await dialog.locator('[data-close]').evaluate(button=>button.getBoundingClientRect().top),closeTop,'close remains fixed while reading');
+ await bounds();await body.evaluate(el=>{el.scrollTop=0;});
+}
+async function checkRulesBullets(page){
+ const before=await page.evaluate(()=>[JSON.stringify(room.game),actionRequests.length]);
+ await page.locator('#gameBaseRules').click();const dialog=page.locator('#citiesRules[open]');await dialog.waitFor();
+ const body=dialog.locator('[data-rules-body]');
+ const sections=body.locator(':scope > section[data-cities-rule],:scope > #citiesBuildingCosts');assert.equal(await sections.count(),D.ruleSections.length+1,'all rule chapters plus build costs remain accessible');
+ for(let i=0;i<await sections.count();i++){
+  const section=sections.nth(i);assert(await section.locator(':scope > ul.cities-info-list > li').count()>=2,'every rule chapter uses bullets');
+  assert.equal(await section.locator(':scope > p').count(),0);
+ }
+ const cards=body.locator('.cities-rule-cards section');assert.equal(await cards.count(),Object.keys(D.cards).length);
+ for(let i=0;i<await cards.count();i++){
+  const card=cards.nth(i);assert(await card.locator('ul.cities-info-list > li').count()>=1,'every progress card uses bullets');
+  assert(await card.locator('li').evaluateAll(items=>items.every(item=>item.querySelector('small')?.textContent.trim())));
+ }
+ await body.evaluate(el=>{el.scrollTop=el.scrollHeight;});
+ assert(await body.evaluate(el=>Math.abs(el.scrollHeight-el.clientHeight-el.scrollTop)<=2));
+ assert(await dialog.evaluate(d=>{const r=d.getBoundingClientRect(),c=d.querySelector('[data-close]').getBoundingClientRect();return d.scrollWidth<=d.clientWidth+1&&r.top>=0&&r.bottom<=innerHeight+1&&c.top>=0&&c.bottom<=innerHeight+1;}));
+ await dialog.locator('[data-close]').click();assert.deepEqual(await page.evaluate(()=>[JSON.stringify(room.game),actionRequests.length]),before);
+}
 async function checkFleet(page){
  const before=await page.evaluate(()=>[JSON.stringify(room),actionRequests.length]);
  const fleet=page.locator('#citiesFleet');assert(await fleet.isVisible());
@@ -67,7 +101,7 @@ async function checkFleet(page){
  assert(await fleet.evaluate(el=>{const r=el.getBoundingClientRect(),ship=el.querySelector('.cities-fleet-ship').getBoundingClientRect(),route=el.querySelector('.cities-fleet-route').getBoundingClientRect();return el.scrollWidth<=el.clientWidth+1&&r.left>=0&&r.right<=innerWidth+1&&ship.left>=r.left&&ship.right<=r.right&&Math.abs(ship.x+ship.width/2-(route.x+route.width*6.5/8))<2;}));
  await fleet.screenshot({path:path.join(__dirname,`test-results/catan-barbarian-fleet-${page.viewportSize().width}.png`)});
  if(page.viewportSize().width===1440)await fleet.press('Enter');else await fleet.locator('svg.cities-fleet-ship').click();
- const dialog=page.locator('#citiesInfoDialog[open]');await dialog.waitFor();const text=await dialog.textContent();assert.match(text,/事件骰/);assert.match(text,/7 advances/);assert.match(text,/sum of all active knights/);assert.match(text,/city and loses its wall/);assert.equal(await dialog.locator('[data-play]').count(),0);assert(await dialog.evaluate(d=>d.scrollWidth<=d.clientWidth+1));await page.keyboard.press('Escape');
+ const dialog=page.locator('#citiesInfoDialog[open]');await dialog.waitFor();const text=await dialog.textContent();assert.match(text,/事件骰/);assert.match(text,/7/);assert.match(text,/防守/);assert.match(text,/城墙/);assert.match(text,/并列/);await checkBulletBody(dialog,dialog.locator('.cities-info-body'),6);await dialog.screenshot({path:path.join(__dirname,`test-results/catan-barbarian-bullets-${page.viewportSize().width}.png`)});assert.equal(await dialog.locator('[data-play]').count(),0);assert(await dialog.evaluate(d=>d.scrollWidth<=d.clientWidth+1));await page.keyboard.press('Escape');
  for(const kind of ['pillage','reward']){
   await page.evaluate(kind=>{const r=structuredClone(room);r.game.citiesKnights.ship=0;r.game.citiesKnights.choice={kind,player:1};testCities.render(r);},kind);
   assert.equal(await fleet.getAttribute('data-position'),'7');assert.match(await fleet.textContent(),/正在结算/);assert(!/7 advances until/.test(await fleet.textContent()));
@@ -85,30 +119,30 @@ async function checkEventDie(page,event){
  assert(await dice.evaluate(el=>{const bounds=el.getBoundingClientRect(),banner=el.closest('.turn-banner').getBoundingClientRect(),prompt=document.getElementById('turnPrompt'),faces=[...el.querySelectorAll('.die')].map(d=>d.getBoundingClientRect());return bounds.right<=banner.right&&bounds.left>=prompt.getBoundingClientRect().right&&prompt.scrollWidth<=prompt.clientWidth+1&&faces.every(f=>Math.abs(f.top-faces[0].top)<1);}));
  await page.locator('.turn-banner').screenshot({path:path.join(__dirname,`test-results/catan-event-die-${event||'unrolled'}-${page.viewportSize().width}.png`)});
  const before=await page.evaluate(()=>[JSON.stringify(room),actionRequests.length]);if(page.viewportSize().width===1440)await button.press('Enter');else await button.click();
- const dialog=page.locator('#citiesInfoDialog[open]');await dialog.waitFor();const text=await dialog.textContent();assert.match(text,event==='ship'?/7 advances/:event?/red die/:/three faces|Three faces/);assert.match(text,event==='ship'?/蛮族/:event?/红骰/:/事件骰/);assert.equal(await dialog.locator('[data-play]').count(),0);assert(await dialog.evaluate(d=>d.scrollWidth<=d.clientWidth+1));await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>[JSON.stringify(room),actionRequests.length]),before);
+ const dialog=page.locator('#citiesInfoDialog[open]');await dialog.waitFor();const text=await dialog.textContent();assert.match(text,event==='ship'?/7/:event?/red die/i:/three|Three|3/);await checkBulletBody(dialog,dialog.locator('.cities-info-body'));if(event&&event!=='ship')assert.equal(await dialog.locator('.cities-draw-table tbody tr').count(),6,'colored events explain every eligible red-die range');assert.match(text,event==='ship'?/蛮族/:event?/红骰/:/事件骰/);assert.equal(await dialog.locator('[data-play]').count(),0);assert(await dialog.evaluate(d=>d.scrollWidth<=d.clientWidth+1));await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>[JSON.stringify(room),actionRequests.length]),before);
 }
 async function checkActionIconStates(page){
  const states=await page.locator('#actions [data-action]').evaluateAll(buttons=>buttons.flatMap(button=>{
   const item=button.closest('.cities-action-item'),icon=item?.querySelector('.cities-action-info svg')||button.querySelector('svg');
   if(!icon)return [];
-  const unavailable=button.disabled||button.classList.contains('build-unavailable'),style=getComputedStyle(icon),info=item?.querySelector('.cities-action-info'),help=item?.querySelector('.cities-action-help');
-  return [{action:button.dataset.action,unavailable,filter:style.filter,opacity:style.opacity,separate:!!item,infoEnabled:!info?.disabled,helpEnabled:!help?.disabled,helpOpacity:help?getComputedStyle(help).opacity:'1'}];
+  const unavailable=button.disabled||button.classList.contains('build-unavailable'),style=getComputedStyle(icon),info=item?.querySelector('.cities-action-info');
+  return [{action:button.dataset.action,unavailable,filter:style.filter,opacity:style.opacity,separate:!!item,infoEnabled:!info?.disabled}];
  }));
  for(const state of states){
   assert.equal(state.filter,state.unavailable?'grayscale(1)':'none',`${state.action}: icon follows action availability`);
-  if(state.separate){assert.equal(Number(state.opacity),state.unavailable ? 0.4 : 1);assert(state.infoEnabled);assert(state.helpEnabled);assert.equal(Number(state.helpOpacity),1);}
+  if(state.separate){assert.equal(Number(state.opacity),state.unavailable ? 0.4 : 1);assert(state.infoEnabled);}
  }
 }
 async function checkKnightHelp(page){
  const before=await page.evaluate(()=>[room.game.revision,actionRequests.length]);
  await page.locator('#board [data-cities-info="knight"]').first().click();
  const dialog=page.locator('#citiesInfoDialog[open]');await dialog.waitFor();
- const body=dialog.locator('.cities-info-body');assert.equal(await body.locator('p').count(),3);
+ const body=dialog.locator('.cities-info-body');await checkBulletBody(dialog,body,6);
  const text=await body.textContent();
- for(const detail of ['另一端已经连着','不能跳过骑士凭空新起一段路','即使都是自己的也不行','already connects','cannot share an intersection'])assert(text.includes(detail),detail);
+ for(const detail of [/政治/,/3/,/每.*骑士.*每回合.*(?:一次|1 次)/,/另一端/,/交叉点/,/cannot share|same intersection|share an intersection/])assert.match(text,detail);
  assert(await dialog.evaluate(d=>d.scrollWidth<=d.clientWidth+1));
  await body.evaluate(el=>el.scrollTop=el.scrollHeight);
- assert(await body.locator('p').last().evaluate(el=>{const r=el.getBoundingClientRect(),b=el.parentElement.getBoundingClientRect();return r.bottom<=b.bottom+1;}));
+ assert(await body.evaluate(el=>Math.abs(el.scrollHeight-el.clientHeight-el.scrollTop)<=2));
  await page.screenshot({path:path.join(__dirname,`test-results/catan-knight-help-${page.viewportSize().width}.png`)});
  await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>[room.game.revision,actionRequests.length]),before);
 }
@@ -156,7 +190,7 @@ async function checkImprovementIcons(page){
   const bounds=row.getBoundingClientRect(),cells=[...row.children].map(c=>c.getBoundingClientRect());
   return row.scrollWidth<=row.clientWidth+1&&cells.every((c,i)=>c.left>=bounds.left&&c.right<=bounds.right+1&&(!i||c.left>=cells[i-1].right))&&[...row.querySelectorAll('.cities-level')].every(c=>c.scrollWidth<=c.clientWidth+1);
  })),`Improvement rows fit at ${page.viewportSize().width}px`);
- await page.locator('.cities-status').screenshot({path:path.join(__dirname,`test-results/catan-improvement-levels-${page.viewportSize().width}.png`)});
+ await page.locator('.player-overview').screenshot({path:path.join(__dirname,`test-results/catan-improvement-levels-${page.viewportSize().width}.png`)});
  if(page.viewportSize().width===1440)await page.locator('#board [data-cities-info="merchant"]').screenshot({path:path.join(__dirname,'test-results/catan-merchant-token.png')});
 }
 async function main(){
@@ -188,7 +222,7 @@ async function main(){
   assert.equal(await page.evaluate(()=>actionRequests.length),beforeWall+1);assert.equal(await page.evaluate(()=>room.game.players[0].resources[1]),1);assert.equal(await page.locator('.cities-dialog[open]').count(),0);assert(await wall.isDisabled());assert.equal(await page.locator('[data-ck-choice]').count(),0);assert(!/selected/.test(await wall.getAttribute('class')));
   await checkActionIconStates(page);
   await page.click('[data-action="improve0"]');await page.locator('.cities-dialog [data-play]').click();await page.waitForFunction(()=>room.game.citiesKnights.players[0].levels[0]===3);
-  await page.click('[data-card="engineering"]');assert.match(await page.locator('.cities-dialog p').textContent(),/wall/);await page.locator('.cities-dialog [data-play]').click();await page.waitForFunction(()=>room.game.phase==='ckChoice');assert.equal(await page.locator('[data-ck-choice]').count(),1);await page.locator('[data-ck-choice]').first().press('Enter');await page.waitForFunction(()=>room.game.board.vertices.filter(v=>v.owner===0&&v.wall).length===2);assert.equal(await page.locator('.cities-dialog[open]').count(),0);assert.equal(await page.evaluate(()=>room.game.players[0].resources[1]),1);
+  await page.click('[data-card="engineering"]');assert.match(await page.locator('.cities-dialog .cities-confirm-details').textContent(),/wall/);await page.locator('.cities-dialog [data-play]').click();await page.waitForFunction(()=>room.game.phase==='ckChoice');assert.equal(await page.locator('[data-ck-choice]').count(),1);await page.locator('[data-ck-choice]').first().press('Enter');await page.waitForFunction(()=>room.game.board.vertices.filter(v=>v.owner===0&&v.wall).length===2);assert.equal(await page.locator('.cities-dialog[open]').count(),0);assert.equal(await page.evaluate(()=>room.game.players[0].resources[1]),1);
   await page.click('[data-action="moveKnight"]');assert.match(await page.locator('#turnPrompt').textContent(),/Choose a highlighted knight/);
   const moving=page.locator('.cities-knight-move-target').first(),moveKey=await moving.getAttribute('data-ck-choice'),from=Number(moveKey.split(':')[1]);const beforeMove=await page.evaluate(()=>({board:room.game.board,resources:room.game.players[0].resources}));
   await moving.click();await page.waitForFunction(()=>room.game.citiesKnights.choice?.kind==='moveKnight');assert.equal(await page.locator('.cities-dialog[open]').count(),0);assert.match(await page.locator('#turnPrompt').textContent(),/Choose the knight's destination/);
@@ -218,20 +252,29 @@ async function main(){
   fs.mkdirSync(path.join(__dirname,'test-results'),{recursive:true});
   for(const width of [1440,390,320]){
    await page.setViewportSize({width,height:1000});await checkCosts(page,true,false);await checkFleet(page);await checkEventDie(page,'science');
-   for(const [name,text] of [['paper','forest'],['cloth','pasture'],['coin','mountain'],['knight','barbarians'],['merchant','2:1'],['wall','discarding'],['metropolis','4 total'],['science','Aqueduct'],['trade','2 identical commodities'],['politics','mighty']]){
+   for(const [name,text] of [['paper','forest'],['cloth','pasture'],['coin','mountain'],['knight','barbarians'],['merchant','2:1'],['wall','discard'],['metropolis','4'],['science','Aqueduct'],['trade','2 identical commodities'],['politics','mighty']]){
     const before=await page.evaluate(()=>[room.game.revision,actionRequests.length]);
     const target=page.locator(`${['merchant','wall','metropolis'].includes(name)?'#board':['paper','cloth','coin'].includes(name)?'#bank':'#actions'} [data-cities-info="${name}"]`).first();assert.equal(await target.evaluate(el=>getComputedStyle(el).cursor),'help');if(['merchant','wall','metropolis'].includes(name))await target.click();else await target.press('Enter');
-    const dialog=page.locator('#citiesInfoDialog[open]');await dialog.waitFor();assert.match(await dialog.textContent(),new RegExp(text));assert.equal(await dialog.locator('[data-play]').count(),0);assert(await dialog.evaluate(d=>d.scrollWidth<=d.clientWidth+1));await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>[room.game.revision,actionRequests.length]),before);
+    const dialog=page.locator('#citiesInfoDialog[open]');await dialog.waitFor();assert.match(await dialog.textContent(),new RegExp(text,'i'));await checkBulletBody(dialog,dialog.locator('.cities-info-body'));assert.equal(await dialog.locator('[data-play]').count(),0);assert(await dialog.evaluate(d=>d.scrollWidth<=d.clientWidth+1));await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>[room.game.revision,actionRequests.length]),before);
    }
-   assert.equal(await page.locator('#actions .cities-action-help svg').count(),4);
-   assert(await page.locator('#actions .cities-improvement-item [data-action]').evaluateAll(bs=>bs.every(b=>b.scrollWidth<=b.clientWidth+1)));
+   assert.equal(await page.locator('#actions .cities-action-help').count(),0);
+   assert(await page.locator('#actions [data-action^="improve"]').evaluateAll(bs=>bs.every(b=>b.scrollWidth<=b.clientWidth+1)));
    await page.locator('#actions').screenshot({path:path.join(__dirname,`test-results/catan-improvement-help-${width}.png`)});
    await checkImprovementIcons(page);await checkMapWalls(page);await checkKnightHelp(page);
-   for(const selector of ['#board [data-cities-info="knight"]','#resources [data-cities-info="cloth"]','#bank [data-cities-info="coin"]','#citiesPanel [data-cities-info="science"]','#actions [data-cities-info="wall"]']){
+   for(const selector of ['#board [data-cities-info="knight"]','#resources [data-cities-info="cloth"]','#bank [data-cities-info="coin"]','#citiesStatus [data-cities-info="science"]','#actions [data-cities-info="wall"]']){
     const before=await page.evaluate(()=>[room.game.revision,actionRequests.length]);await page.locator(selector).first().click();await page.locator('#citiesInfoDialog[open]').waitFor();assert(await page.locator('#citiesInfoDialog').evaluate(d=>{const r=d.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight+1;}));await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>[room.game.revision,actionRequests.length]),before);
    }
-   await page.screenshot({path:path.join(__dirname,`test-results/catan-cities-${width}.png`),fullPage:true});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert(await wall.evaluate(b=>b.scrollWidth<=b.clientWidth+1));await page.click('#gameBaseRules');await page.locator('#citiesRules[open]').waitFor();assert(await page.locator('#citiesRules').evaluate(d=>d.scrollWidth<=d.clientWidth+1));const before=await page.evaluate(()=>room.game.revision);await page.keyboard.press('Escape');assert.equal(await page.evaluate(()=>room.game.revision),before);
+   await page.screenshot({path:path.join(__dirname,`test-results/catan-cities-${width}.png`),fullPage:true});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));assert(await wall.evaluate(b=>b.scrollWidth<=b.clientWidth+1));await checkRulesBullets(page);
   }
+  await page.setViewportSize({width:844,height:390});
+  for(const name of ['barbarians','knight','science']){
+   const before=await page.evaluate(()=>[JSON.stringify(room.game),actionRequests.length]);
+   const opener=name==='barbarians'?page.locator('#citiesFleet'):page.locator(`#actions [data-cities-info="${name}"]`).first();
+   await opener.click();const dialog=page.locator('#citiesInfoDialog[open]');await dialog.waitFor();await checkBulletBody(dialog,dialog.locator('.cities-info-body'),6);
+   if(name==='barbarians')await dialog.screenshot({path:path.join(__dirname,'test-results/catan-barbarian-bullets-landscape.png')});
+   await dialog.locator('[data-close]').click();assert.deepEqual(await page.evaluate(()=>[JSON.stringify(room.game),actionRequests.length]),before);
+  }
+  await checkRulesBullets(page);await page.setViewportSize({width:1440,height:1000});
   for(const [event,rolled] of [['ship',true],['trade',true],['politics',true],['science',false]]){
    const dicePage=await context.newPage();dicePage.on('pageerror',e=>errors.push(e.message));await dicePage.goto(`http://127.0.0.1:${port}/catan.html?edition=cities`);await dicePage.waitForFunction(()=>window.sock?.readyState===1);await importRoom(dicePage,fixture(false,false,{event,rolled}));
    for(const width of [1440,390,320]){await dicePage.setViewportSize({width,height:900});await checkEventDie(dicePage,rolled?event:'');}

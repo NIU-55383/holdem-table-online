@@ -37,17 +37,12 @@
 .action-grid .cities-action-info{width:100%;height:100%;padding:4px;justify-content:center;opacity:1}
 .action-grid .cities-action-info svg{width:26px;height:30px}
 .action-grid .cities-action-item:has(> [data-action]:is(:disabled,.build-unavailable)) > .cities-action-info svg{filter:grayscale(1);opacity:.4}
-.cities-improvement-item,.cities-help-item{grid-template-columns:36px minmax(0,1fr) 28px}
-.action-grid .cities-action-help{width:100%;height:100%;padding:4px;justify-content:center;color:#527f8b;opacity:1}
-.action-grid .cities-action-help svg{width:18px;height:18px}
 .cities-action-item:has([data-action].selected){border-color:#bc9c3e;background:#fff0c0}
 #game[data-cities="true"] .action-grid button.turn-action{grid-column:auto}
 .cities-knight-move-target{animation:ship-glow 1.4s ease-in-out infinite}
 @media(prefers-reduced-motion:reduce){.cities-knight-move-target{animation:none}}
 @media(max-width:740px){
   .cities-action-item{grid-template-columns:28px minmax(0,1fr)}
-  .cities-improvement-item,.cities-help-item{grid-template-columns:24px minmax(0,1fr) 22px}
-  .action-grid .cities-action-help{padding:2px}.action-grid .cities-action-help svg{width:16px;height:16px}
   .action-grid .cities-action-item>[data-action]{padding:5px 3px 5px 0}
   .action-grid .cities-action-info{padding:2px}.action-grid .cities-action-info svg{width:22px;height:24px}
   #game[data-cities="true"] .action-grid button.turn-action{grid-column:span 2}
@@ -63,3 +58,10 @@
 @media(max-width:740px){.cities-event-die{width:38px}.cities-event-caption{font-size:9px}.cities-event-caption small{font-size:8px}}
 #game[data-cities="true"] .bank-resources{flex-wrap:wrap}#editionChoice{flex-wrap:wrap}
 @media(max-width:740px){.cities-player{grid-template-columns:minmax(50px,1fr) repeat(3,50px) 34px;gap:4px;font-size:12px}.cities-controls{gap:6px}.cities-controls button{font-size:12px}.cities-progress{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.cities-info-list{margin:0;padding-inline-start:22px;line-height:1.65}.cities-info-list>li+li{margin-top:18px}.cities-info-list p{margin:0}.cities-info-list small{font-size:14px;line-height:1.55;margin-top:6px}.cities-info-list>li::marker{color:#527f8b}
+.cities-draw-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px;table-layout:fixed}.cities-draw-table th,.cities-draw-table td{padding:8px;border:1px solid #a8c7c5;text-align:left;overflow-wrap:anywhere}.cities-draw-table th:first-child{width:35%}.cities-draw-table tbody th{font-variant-numeric:tabular-nums}.cities-draw-table small{font-size:12px;margin-top:2px}
+.cities-dialog.is-description[open]{display:flex;flex-direction:column;gap:16px;max-height:calc(100dvh - 32px);overflow:hidden}.cities-dialog.is-description .dialog-heading,.cities-dialog.is-description .cities-dialog-actions{flex:0 0 auto;margin:0}.cities-confirm-details{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-right:6px}.cities-dialog.is-description h2{font-size:20px;overflow-wrap:anywhere}.cities-dialog.is-description .dialog-heading .icon-button{width:44px;height:44px;flex:0 0 44px}.cities-dialog.is-description .cities-dialog-actions button{min-height:44px}
+
+.cities-info-dialog[open]{max-height:calc(100dvh - 32px)}
+#citiesBuildingCosts .cities-info-list,.cities-rule-cards .cities-info-list{margin-top:12px}

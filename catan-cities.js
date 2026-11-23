@@ -134,7 +134,7 @@ function upgradeChoices(g,id,H,add) {
       H.pay(g,g.players[id],cost(5+b,price)); if(c.crane) c.crane--; p.levels[b]++;
       H.log(g,`${g.players[id].name} · ${branchName(b)} ${next}`);
       if (claim) { if(existing) delete existing.metropolis; begin(g,[{kind:"metropolis",player:id,branch:b}]); }
-    },"improvement");
+    },"improvement",null,"",{branch:b,from:level,to:next,cost:price,discount:next-price,metropolis:claim?(existing?"take":"claim"):existing?.owner===id&&next===5?"secure":"none"});
   });
 }
 function canPromote(g,id,v,override=false) {
@@ -184,7 +184,7 @@ function play(g,id,key,H) {
 function options(g,id,H) {
   if (!g.cities || !g.players[id] || g.phase === "over") return [];
   const c = g.cities, own = c.players[id], p = g.players[id], out = [];
-  const add = (key,label,run,group="choice",position=null,detail="") => out.push({key,label,run,group,position,detail});
+  const add = (key,label,run,group="choice",position=null,detail="",improvement=null) => out.push({key,label,run,group,position,detail,...(improvement?{improvement}:{})});
   const vertex = (v,label,run,group) => add(`v:${v.id}`,label,run,group,{vertex:v.id});
   const resource = (from,to,callback) => { for(let r=from;r<to;r++) add(`r:${r}`,titles[r],() => callback(r)); };
   const q = g.phase === "ckChoice" ? c.queue[0] : null;

@@ -10,6 +10,12 @@
 
 城市与骑士为独立 3–4 人模式，依据 CATAN 官网 2025 年说明书及 FAQ，不与航海家或 5–6 人扩展混用。同步上传全部 `catan-cities*` 文件、`catan-engine.js`、`catan-server.js`、`catan.js/html`、`catan-stats.js`、`catan-music.js`、`room-archive.js`，以及 `audio/peritune-strategy.mp3` 和 `audio/CREDITS.md`。新局选择城市与骑士，旧局规则不变。测试初始城市、三种商品、骑士、城墙、都会、蛮族、54 张进步卡和所有选择阶段的存档恢复；核对手机和桌面棋盘标记、规则阅读器与音乐切换。部署重启前先保存现有房间。
 
+卡坦岛全部进步卡弹窗修复：同步更新 `catan.js`、`catan-cities-ui.js`、`catan-alchemy-ui-test.js`、`catan-progress-dialog-ui-test.js` 和 `package.json`。检查全部 25 种进步卡：22 种普通手牌在掷骰前后均能关闭说明或取消确认；商人专用说明及印刷术、宪法的规则说明也可退出。重点核对掷骰前灌溉、掷骰后炼金术，以及可用卡和不可用卡快速切换时按钮状态不串用；查看和取消不耗牌、不改变回合，之后仍能正常掷骰或结束回合。运行 `npm run test:cities-ui`，包含桌面、手机触摸、键盘和完整炼金术出牌流程；本次没有后端协议或存档格式变更。
+
+城市改良说明与升级确认更新：一并部署 `catan-cities-ui.js`、`catan-cities.css`、`catan-cities.js`、`catan-cities-test.js`、`catan-improvement-ui-test.js` 和 `package.json`。三种改良介绍使用分条说明和 0—5 级红骰对照表；确认弹窗按后端提供的等级、实际费用、起重机减费和都会归属显示本次收益，不能仅更新前端。检查免费升级、三级能力、四级没有拿到都会、五级夺取和保住都会的不同提示；阅读和取消不得发送出牌请求。运行 `npm run test:cities` 和 `npm run test:cities-ui`；更新服务前先保存现有对局。
+
+城市与骑士全部新增机制说明改用中英配对的 bullet point：一起更新 `catan-cities-data.js`、`catan-cities-ui.js`、`catan-cities.css`、`catan.js` 与对应浏览器、规则测试。覆盖蛮族船、骑士、城墙、商人、都会、事件骰、商品、全部 25 种进步卡、保卫卡坦得分说明和完整规则页；升级条件与红骰表保持明确。检查桌面、320px 手机及横屏阅读，长内容仅在正文区域滚动，关闭按钮与出牌按钮保持可见；查看或关闭说明不消耗卡牌、不改变游戏。运行 `npm run test:rules`、`npm run test:cities-ui` 与 `node --test catan-score-info-ui-test.js`。
+
 百万美金 2024 与 2016 共用 `million.html`、`million.js/css` 和共享规则阅读器，不另建新版页面。同步部署 `million-2024.js`、`million-bot.js`、`million-data.js`、`million-engine.js`、`million-server.js`、`room-archive.js`、规则数据、`package.json` 及相关测试。检查版本切换后人数上限（旧版 8、新版 9）、角色列表、规则入口和角色详情均对应所选版本；新版不显示旧版威胁卡、禁止连选或暴徒不分赃选项，旧版问号帮助仍可用。
 
 本馆沿用2016模式的赃款数值与奖励配置。2024 每轮仍随机使用 800-1200 万赃款和 100 万角色奖励，旧告密者／恶棍／谋士奖励分别映射技术员／读心者／新版谋士；没有存活匹配就不加奖励。保证金固定每角 200 万，留下的保证金和角色奖励加入中央，按新版顺序取款后向上取整平分。检查六种角色、三人双角色、全体玩家（含退出者）半数投票、最穷带头人及顺时针打破平局，不把旧版分赃方式带入新版。

@@ -15,7 +15,60 @@ test('colored event uses red die, enforces off-turn progress cap before producti
 test('barbarian failure downgrades lowest contributors, deactivates knights and introduces robber',()=>{const g=setup();g.cities.ship=6;let seq=[0,0,0];E.act(g,0,{type:'roll'},()=>seq.shift());assert.equal(g.phase,'ckChoice');assert.equal(g.cities.queue[0].kind,'pillage');const restored=archive(g);assert.deepEqual(restored.cities.queue,g.cities.queue);finishChoices(g);assert.equal(g.board.vertices.filter(v=>v.level===2).length,0);assert.equal(g.cities.ship,0);assert.equal(g.cities.attacked,true);assert.equal(g.board.tiles[g.board.robber].resource,-1);});
 test('unique defender gains VP and tied defenders draw their chosen deck',()=>{for(const tie of [false,true]){const g=setup();const v=g.board.vertices.filter(v=>v.owner<0);v[0].knight={owner:0,rank:3,active:true,activated:0,promoted:-1};if(tie)v[1].knight={owner:1,rank:3,active:true,activated:0,promoted:-1};g.cities.ship=6;let seq=[0,0,0];E.act(g,0,{type:'roll'},()=>seq.shift());finishChoices(g);assert.equal(g.cities.players[0].defenders,tie?0:1);if(tie)assert(g.cities.players[0].cards.length+g.cities.players[0].revealed.length===1);assert(C.knights(g).every(v=>!v.knight.active));}});
 test('knights recruit, activate, promote once, and cannot move on activation turn',()=>{const g=setup();g.phase='main';hand(g,0,2,5);hand(g,0,4,5);hand(g,0,3,5);let o=E.legal(g,0).citiesKnights.find(o=>o.group==='recruit');E.act(g,0,{type:'ck',choice:o.key});const v=C.knights(g,0)[0];E.act(g,0,{type:'ck',choice:`activate:${v.id}`});assert(!E.legal(g,0).citiesKnights.some(o=>o.group==='move'));E.act(g,0,{type:'ck',choice:`promote:${v.id}`});assert.equal(v.knight.rank,2);assert(v.knight.active);assert(!E.legal(g,0).citiesKnights.some(o=>o.key===`promote:${v.id}`));assert.throws(()=>E.act(g,0,{type:'ck',choice:`activate:${v.id}`}));});
-test('improvement discounts, metropolis claims and transfer at five',()=>{const g=setup();g.phase='main';g.cities.players[0].levels[0]=3;hand(g,0,5,4);E.act(g,0,{type:'ck',choice:'upgrade:0'});assert.equal(g.phase,'ckChoice');choose(g);assert.equal(C.cities(g,0)[0].metropolis,0);assert.equal(E.score(g,0),5);g.current=1;g.cities.players[1].levels[0]=4;hand(g,1,5,5);E.act(g,1,{type:'ck',choice:'upgrade:0'});choose(g);assert.equal(C.cities(g,0)[0].metropolis,undefined);assert.equal(C.cities(g,1)[0].metropolis,0);C.validate(g);});
+test('improvement confirmations match every branch, level and actual crane-discounted payment',()=>{
+  for(let branch=0;branch<3;branch++)for(let from=0;from<5;from++)for(const discounted of [false,true]){
+    const g=setup();g.phase='main';g.current=0;g.cities.players[0].levels[branch]=from;
+    if(from===4)C.cities(g,0)[0].metropolis=branch;
+    hand(g,0,5+branch,from+1);
+    if(discounted)play(g,0,'crane');
+    grant(g,0,'engineering');
+    const options=E.publicGame(g,0).legal.citiesKnights,option=options.find(o=>o.key==='upgrade:'+branch);
+    assert(option,'upgrade exists for branch '+branch+' level '+from);
+    const expected={branch,from,to:from+1,cost:from+1-Number(discounted),discount:Number(discounted),metropolis:from===3?'claim':from===4?'secure':'none'};
+    assert.deepEqual(option.improvement,expected);
+    assert(options.some(o=>o.group==='progress'));
+    assert(options.every(o=>Object.hasOwn(o,'improvement')===(o.group==='improvement')),'only upgrade options expose improvement metadata');
+    const resources=[...g.players[0].resources],bank=g.bank[5+branch];
+    E.act(g,0,{type:'ck',choice:option.key});
+    assert.deepEqual(g.players[0].resources,resources.map((n,r)=>n-(r===5+branch?expected.cost:0)),'actual payment equals the confirmation cost');
+    assert.equal(g.bank[5+branch],bank+expected.cost);
+    assert.equal(g.cities.players[0].levels[branch],expected.to);
+    assert.equal(g.cities.crane,0,'a crane is consumed even when the first upgrade costs zero');
+    finishChoices(g);
+    if(from>=3)assert.equal(C.cities(g,0)[0].metropolis,branch);
+    C.validate(g);
+  }
+});
+
+test('improvement confirmations distinguish claiming, taking, securing and no metropolis reward',()=>{
+  const scenarios=[
+    {from:3,owner:null,ownerLevel:null,metropolis:'claim',holder:0,ownGain:2,otherGain:0},
+    {from:3,owner:1,ownerLevel:4,metropolis:'none',holder:1,ownGain:0,otherGain:0},
+    {from:3,owner:1,ownerLevel:5,metropolis:'none',holder:1,ownGain:0,otherGain:0},
+    {from:4,owner:1,ownerLevel:4,metropolis:'take',holder:0,ownGain:2,otherGain:-2},
+    {from:4,owner:1,ownerLevel:5,metropolis:'none',holder:1,ownGain:0,otherGain:0},
+    {from:4,owner:0,ownerLevel:4,metropolis:'secure',holder:0,ownGain:0,otherGain:0}
+  ];
+  for(let branch=0;branch<3;branch++)for(const scenario of scenarios){
+    const g=setup();g.phase='main';g.current=0;g.cities.players[0].levels[branch]=scenario.from;
+    const ownCity=C.cities(g,0)[0],otherCity=C.cities(g,1)[0];
+    if(scenario.owner!==null){C.cities(g,scenario.owner)[0].metropolis=branch;g.cities.players[scenario.owner].levels[branch]=scenario.ownerLevel;}
+    hand(g,0,5+branch,scenario.from+1);
+    const option=E.publicGame(g,0).legal.citiesKnights.find(o=>o.key==='upgrade:'+branch);
+    assert(option);assert.equal(option.improvement.metropolis,scenario.metropolis);
+    const scores=[E.score(g,0),E.score(g,1)],before=g.players[0].resources[5+branch];
+    E.act(g,0,{type:'ck',choice:option.key});
+    assert.equal(g.players[0].resources[5+branch],before-option.improvement.cost);
+    assert.equal(g.cities.players[0].levels[branch],option.improvement.to);
+    assert.equal(g.phase,['claim','take'].includes(scenario.metropolis)?'ckChoice':'main');
+    finishChoices(g);
+    const metropolis=g.board.vertices.find(v=>v.metropolis===branch);
+    assert.equal(metropolis.owner,scenario.holder);
+    assert.equal(E.score(g,0),scores[0]+scenario.ownGain);assert.equal(E.score(g,1),scores[1]+scenario.otherGain);
+    assert.equal(ownCity.owner,0);assert.equal(otherCity.owner,1);assert.equal(ownCity.level,2);assert.equal(otherCity.level,2);
+    C.validate(g);
+  }
+});
 test('Aqueduct gives only ordinary resources, commodities trade at 2:1 with trade level three',()=>{const g=setup();g.phase='main';g.cities.players[0].levels[0]=3;E.produce(g,99);assert.equal(g.phase,'ckChoice');assert(E.legal(g,0).citiesKnights.every(o=>Number(o.key.split(':')[1])<5));choose(g);g.cities.players[0].levels[1]=3;hand(g,0,6,2);const before=g.players[0].resources[7];E.act(g,0,{type:'bankTrade',give:6,get:7});assert.equal(g.players[0].resources[6],0);assert.equal(g.players[0].resources[7],before+1);});
 test('every progress card resolves and its phase survives portable save',()=>{for(const key of Object.keys(D.cards).filter(k=>!['printing','constitution'].includes(k))){const g=setup();g.phase=key==='alchemy'?'roll':'main';g.cities.attacked=true;g.board.robber=g.board.tiles.find(t=>t.resource===-1).id;g.cities.players[1].defenders=3;grant(g,1,'crane');for(let id=0;id<3;id++)for(let r=0;r<8;r++)hand(g,id,r,2);const vs=g.board.vertices.filter(v=>v.owner<0);vs[0].knight={owner:0,rank:1,active:false,activated:-1,promoted:-1};const target=g.board.vertices.find(v=>v.owner<0&&v.edges.some(i=>g.board.edges[i].owner===0)&&v.id!==vs[0].id);target.knight={owner:1,rank:1,active:true,activated:0,promoted:-1};const card=grant(g,0,key),o=E.legal(g,0).citiesKnights.find(o=>o.key===`play:${card.id}`);assert(o,key);E.act(g,0,{type:'ck',choice:o.key});for(let i=0;g.phase==='ckChoice'&&i<100;i++){archive(g);choose(g);}assert.notEqual(g.phase,'ckChoice',key);C.validate(g);}});
 test('malformed city saves and mismatched edition are rejected',()=>{const g=setup();for(const mutate of [g=>g.cities.decks[0].push('crane'),g=>g.cities.players[0].levels[0]=99,g=>g.bank[5]=100,g=>{g.phase='ckChoice';g.cities.queue=[{kind:'relocate',player:0,sites:[999]}];}]){const bad=structuredClone(g);mutate(bad);assert.throws(()=>archive(bad));}});

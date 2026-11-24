@@ -53,7 +53,7 @@ function recordedDiceGame(mapId,names,kind){
   assert.deepEqual(g.statistics.dice,expected.all,'Actual engine roll records match the controlled samples');
   return{g,expected};
 }
-async function assertDiceSeries(page,key,counts){
+async function assertDiceSeries(page,key,counts,sources=null){
   const series=page.locator(`[data-dice-series="${key}"]`),total=E.sum(counts);assert.equal(await series.count(),1);
   assert.equal(Number(await series.getAttribute('data-dice-total')),total,`${key}: independent sample count`);
   const columns=await series.locator('[data-dice-sum]').evaluateAll(nodes=>nodes.map(n=>({sum:Number(n.dataset.diceSum),count:Number(n.dataset.diceCount),expected:Number(n.dataset.diceExpected),bar:parseFloat(n.querySelector('.stats-dice-bar').style.height),line:parseFloat(n.querySelector('.stats-dice-track i').style.bottom)})));
@@ -62,6 +62,28 @@ async function assertDiceSeries(page,key,counts){
     const chance=(6-Math.abs(5-i))/36;assert.equal(c.sum,i+2);assert.equal(c.count,counts[i]);assert(Math.abs(c.expected-total*chance)<1e-8,`${key} sum ${i+2}: expected count uses this sample N`);
     assert(Math.abs(c.bar-counts[i]/scale*100)<1e-4);assert(Math.abs(c.line-total*chance/scale*100)<1e-4);
   });
+  if(sources){
+    const bins=await series.locator('[data-dice-sum]').evaluateAll(nodes=>nodes.map(n=>{
+      const bar=n.querySelector('.stats-dice-bar'),box=bar.getBoundingClientRect();
+      return{sum:Number(n.dataset.diceSum),top:box.top,bottom:box.bottom,height:box.height,label:n.querySelector('.stats-dice-track').getAttribute('aria-label'),parts:[...bar.querySelectorAll('[data-dice-source]')].map(s=>{const r=s.getBoundingClientRect();return{source:s.dataset.diceSource,count:Number(s.dataset.diceCount),top:r.top,bottom:r.bottom,height:r.height,color:getComputedStyle(s).background};})};
+    }));
+    const colors=await series.locator('[data-dice-legend]').evaluateAll(nodes=>Object.fromEntries(nodes.map(n=>[n.dataset.diceLegend,getComputedStyle(n).background])));
+    assert(colors.random&&colors.alchemy&&colors.random!==colors.alchemy,'Random and Alchemy have distinct legend colors');
+    assert.equal(Boolean(colors.unknown),E.sum(sources.unknown)>0,'Unknown historical rolls have their own legend');
+    bins.forEach((b,i)=>{
+      assert.equal(b.parts.reduce((n,p)=>n+p.count,0),counts[i],'Stacked sources sum to total rolls');
+      for(const source of ['random','unknown','alchemy']){
+        const expected=sources[source][i],part=b.parts.find(p=>p.source===source);
+        assert.equal(part?.count||0,expected,'Each source shows the recorded count');
+        if(!expected)continue;
+        assert.equal(part.color,colors[source],'Segment color matches its legend');
+        assert(Math.abs(part.height-b.height*expected/counts[i])<1,'Segment height is proportional to source count');
+        if(source==='alchemy')assert(Math.abs(part.top-b.top)<1,'Alchemy is the top of the stack');
+        if(source==='random')assert(Math.abs(part.bottom-b.bottom)<1,'Random rolls are the base of the stack');
+      }
+      assert.match(b.label,new RegExp('Alchemy: '+sources.alchemy[i]),'Accessible chart names include Alchemy counts');
+    });
+  }else assert.equal(await series.locator('[data-dice-source]').count(),0,'The separate random chart has no Alchemy segment');
   const table=series.locator('.stats-data');await table.locator('summary').press('Enter');assert(await table.evaluate(e=>e.open));
   const headers=await table.locator('thead th').allTextContents();assert.equal(headers.length,5);assert.match(headers[2],/占比|Actual/);assert.match(headers[3],/理论次数|Expected.*count/i);assert.match(headers[4],/理论概率|Expected.*%/);
   const rows=await table.locator('tbody tr').evaluateAll(nodes=>nodes.map(n=>[...n.children].map(c=>c.textContent.trim())));assert.equal(rows.length,11);
@@ -89,7 +111,7 @@ async function checkAlchemyDiceUI(host,send){
         await host.setViewportSize({width,height});await host.locator('#statsTab-scores').focus();await host.keyboard.press('ArrowRight');assert.equal(await host.locator('#statsTab-dice').getAttribute('aria-selected'),'true');
         const before=await host.evaluate(()=>JSON.stringify(statsTestSent));
         assert.equal(await host.locator('[data-dice-series]').count(),2,`${mapId}/${kind}: two separate series`);
-        await assertDiceSeries(host,'all',expected.all);
+        await assertDiceSeries(host,'all',expected.all,expected);
         if(kind==='legacy-unknown'){
           const random=host.locator('[data-dice-series="random"]');assert.equal(await random.locator('.stats-dice-column').count(),0,'Unknown historical source must not fabricate a zero random histogram');
           assert.equal(await random.locator('.stats-data').count(),0,'Unknown historical source must not fabricate a random data table');

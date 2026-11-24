@@ -135,10 +135,20 @@
         const total = sum(counts), scale = Math.max(1, ...counts, total / 6);
         const heading = `<header class="stats-dice-heading"><h3>${bilingual(titleZh, titleEn)}</h3><p class="stats-note">${bilingual(`${kind === "random" && unknownTotal ? "已记录随机" : "统计"} ${total} 次`, `${kind === "random" && unknownTotal ? "Recorded random rolls" : "Rolls counted"}: ${total}`)}</p></header>`;
         const empty = !total && !unavailable ? `<p class="stats-note">${bilingual(kind === "random" ? "本局没有随机掷骰。" : "本局尚未掷骰。", kind === "random" ? "No random rolls in this match." : "No dice were rolled in this match.")}</p>` : "";
-        const plot = unavailable ? "" : `<div class="stats-dice-key"><span class="stats-swatch" style="--swatch:#4298b5"></span>实际 / Actual <span class="stats-expected-key"></span>随机理论参考 / Random-dice reference</div>
+        const stacked = hasAlchemy && kind === "all";
+        const sources = [
+          ["random", "随机", "Random", random],
+          ["unknown", "来源未记录", "Source unknown", unknown],
+          ["alchemy", "炼金术", "Alchemy", alchemy],
+        ];
+        const legend = stacked ? sources.filter(([source]) => source !== "unknown" || unknownTotal).map(([source, zh, en]) => `<span class="stats-dice-key-item"><span class="stats-swatch stats-dice-source-${source}" data-dice-legend="${source}"></span>${zh} / ${en}</span>`).join("") : '<span class="stats-dice-key-item"><span class="stats-swatch" style="--swatch:#4298b5"></span>实际 / Actual</span>';
+        const plot = unavailable ? "" : `<div class="stats-dice-key">${legend}<span class="stats-dice-key-item"><span class="stats-expected-key"></span>随机理论参考 / Random-dice reference</span></div>
           <div class="stats-dice-chart" role="group" aria-label="${titleZh} / ${titleEn}">${counts.map((n, i) => {
             const number = i + 2, chance = (6 - Math.abs(7 - number)) / 36, expected = total * chance;
-            return `<div class="stats-dice-column" data-dice-sum="${number}" data-dice-count="${n}" data-dice-expected="${expected}" title="${number}: ${n} 次 / rolls · 随机理论次数 / Expected random count: ${expected.toFixed(1)}"><strong>${n}</strong><div class="stats-dice-track"><span class="stats-dice-bar ${number === 7 ? "is-seven" : ""}" style="height:${n / scale * 100}%"></span><i style="bottom:${expected / scale * 100}%"></i></div><b>${number}</b></div>`;
+            const detail = stacked ? " · " + sources.filter(([source]) => source !== "unknown" || unknownTotal).map(([, zh, en, values]) => `${zh} / ${en}: ${values[i]}`).join(" · ") : "";
+            const label = `${number}: ${n} 次 / rolls${detail} · 随机理论次数 / Expected random count: ${expected.toFixed(1)}`;
+            const segments = stacked ? sources.map(([source, , , values]) => values[i] ? `<span class="stats-dice-segment stats-dice-source-${source}" data-dice-source="${source}" data-dice-count="${values[i]}" style="height:${values[i] / n * 100}%"></span>` : "").join("") : "";
+            return `<div class="stats-dice-column" data-dice-sum="${number}" data-dice-count="${n}" data-dice-expected="${expected}" title="${label}"><strong>${n}</strong><div class="stats-dice-track" role="img" aria-label="${label}"><span class="stats-dice-bar ${stacked ? "is-stacked" : number === 7 ? "is-seven" : ""}" style="height:${n / scale * 100}%" aria-hidden="true">${segments}</span><i style="bottom:${expected / scale * 100}%"></i></div><b>${number}</b></div>`;
           }).join("")}</div>`;
         const table = unavailable ? "" : dataTable(["点数 / Sum", "次数 / Rolls", "占比 / Actual %", "理论次数 / Expected rolls", "理论概率 / Expected %"], counts.map((n, i) => {
           const chance = (6 - Math.abs(5 - i)) / 36;

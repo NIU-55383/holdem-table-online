@@ -918,7 +918,7 @@
     if (state.mode && !g.phase.startsWith("setup") && g.phase === "main") { const mode = { road: ["选择道路", "Choose a road"], city: ["选择村庄升级", "Choose a settlement to upgrade"], settlement: ["选择村庄位置", "Choose a settlement site"] }[state.mode]; if (mode) { zh = mode[0]; en = mode[1]; } }
     if (citiesUI.selectedGroup === "wall" && own && g.phase === "main") { zh = "选择城市建墙"; en = "Choose a city for a wall"; }
     if (own && g.phase === "main") {
-      const prompt={recruit:["选择招募骑士的位置","Choose a site for your knight"],activate:["选择要激活的骑士","Choose a knight to activate"],promote:["选择要晋升的骑士","Choose a knight to promote"],move:["选择发光的骑士","Choose a highlighted knight"]}[citiesUI.selectedGroup];
+      const prompt={recruit:["选择招募骑士的位置","Choose a site for your knight"],activate:["选择要激活的骑士","Choose a knight to activate"],promote:["选择要晋升的骑士","Choose a knight to promote"],move:["选择发光的骑士","Choose a highlighted knight"],chase:["选择骑士驱赶强盗","Choose a knight to chase the robber"],chasePirate:["选择骑士驱赶海盗","Choose a knight to chase the pirate"]}[citiesUI.selectedGroup];
       if(prompt)[zh,en]=prompt;
     }
     if (own && g.citiesKnights?.choice?.kind === "moveKnight") { zh = "选择骑士的新位置"; en = "Choose the knight's destination"; }
@@ -992,7 +992,7 @@
       const length = g.roadLengths[p.id];
       const routeTitle = `${longestLabel}: ${routeUnavailable ? "不可用 / Not available" : `${length}${g.longest === p.id ? " · 最长奖 +2 分 / Award +2 VP" : ""}`}`;
       const { items: scoreItems, publicOnly, bonusPoints, otherPoints } = scoreDetails(g, p);
-      const scoreText = bonusPoints ? `${otherPoints}+${bonusPoints}` : `${p.score}`;
+      const scoreText = !g.citiesKnights && bonusPoints ? `${otherPoints}+${bonusPoints}` : `${p.score}`;
       const scoreTitle = `${publicOnly ? "公开得分" : "总分"} ${p.score} / ${publicOnly ? "Public score" : "Total"}: ${p.score} VP · ${scoreItems.map(item => item.zh + " / " + item.en).join("；")}${publicOnly ? "（不含未公开胜利点卡 / Hidden VP cards excluded）" : ""}`;
       return `<tr data-render-key="player:${p.id}" data-player-id="${p.id}" class="summary-player ${p.id === g.current && g.phase !== "over" ? "current" : ""}" style="--player:${B.COLORS[p.id]}"><th scope="row"><div class="summary-identity">${numberedAvatar({ name: p.name, avatar: seats[p.id]?.avatar }, p.id, "player-portrait")}<div class="summary-person"><strong title="${B.escape(p.name)} · ${status}">${B.escape(p.name)}</strong><span class="summary-meta" title="${B.escape(scoreTitle)}" aria-label="${B.escape(scoreTitle)}"><i class="player-color"></i><b>${scoreText}</b> VP<button type="button" class="score-info-button" data-score-info="${p.id}" title="得分明细 / Score breakdown" aria-label="${B.escape(p.name)} · 得分明细 / Score breakdown"><i data-lucide="circle-help" aria-hidden="true"></i></button></span>${p.id === you || p.id === state.room.host ? `<small>${p.id === state.room.host ? "房主 / Host" : "你 / You"}</small>` : ""}</div></div><span class="player-speech" data-chat-bubble="${p.id}" aria-label="${B.escape(p.name)} 说 / says" hidden><span class="player-speech-text"></span></span></th>
         ${seafarers ? `<td class="island-points" title="登岛奖励，已包含在总分中 / Island bonus, included in total VP" aria-label="登岛奖励 / Island bonus: ${p.islandPoints} VP"><b>${p.islandPoints}</b><small>VP</small></td>` : ""}

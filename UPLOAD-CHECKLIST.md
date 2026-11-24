@@ -6,6 +6,14 @@
 
 ## 上传步骤
 
+卡坦岛操作按钮紧凑布局：同步部署 `catan.css` 和 `catan-cities.css`。所有卡坦模式的建造、船只、骑士、升级、交易、费用及回合操作统一缩减图标和留白；保留双语字号及手机至少 44px 的按钮高度。运行 `node catan-cities-ui-test.js`，检查桌面/手机的操作、费用入口及开局造船选择。
+
+赛后骰子来源分层：同步部署 `catan-stats-ui.js`、`catan-stats.css` 和 `catan-stats-ui-test.js`。城市与骑士的全部掷骰图按来源堆叠：蓝色随机、顶部紫色炼金术，旧记录中来源不明的次数单独显示为灰色斜纹；保留总次数及独立随机分布图。运行 `npm run test:catan-stats-ui`，检查两类城市模式、桌面/手机和旧存档来源不明的情况。
+
+城市与骑士总分显示：同步部署 `catan.js`。独立城市与骑士及城市与骑士＋航海家模式的玩家分数直接显示总分，问号继续提供全部得分来源；基础版与单独航海家的暗分显示规则不变。运行 `npm run test:catan-score`，核对各模式得分明细、暗分隐私及桌面和手机布局。
+
+卡坦岛待处理提示与海盗驱赶：同步部署 `catan-cities-ui.js`、`catan.js`、`catan-choice-layout-chase-ui-test.js` 和 `package.json`。炼金术、破坏等待处理提示及操作入口统一显示在进步卡栏上方；组合模式分别显示「驱赶强盗」与「驱赶海盗」，骑士说明补充两种驱赶的条件和步骤。运行 `npm run test:catan-choices`，核对桌面、320px 手机、两种驱赶同时可用时的目标，以及提示切换时手牌图标不闪烁。本次没有后端协议或存档格式变更。
+
 城市与骑士＋航海家：一并部署 `catan-maps.js`、`catan-engine.js`、`catan-cities.js`、`catan-server.js`、`room-archive.js`、`catan.js/html/css`、`catan-cities-data.js`、`catan-cities-ui.js`、`catan-music.js`、首页与相关测试。新入口使用独立 `cities-shores-1/2`、`cities-desert-1/2` 地图 ID，分别提供三、四人默认与随机布局，目标 16 分；原有模式与存档保持原规则。本次只开放官方推荐的扬帆出海、穿越荒漠，不声称其他组合一律被官方禁止。检查海上骑士及船只连接、金矿只领普通资源和水渠先后结算、首次入侵前无强盗和海盗、外交同类型替换、进步卡免费造船、商品隐私、重连和金矿选择中途保存恢复。运行 `npm run test:combined`、`npm run test:combined-ui`、`npm run test:cities`、`npm run test:archives`、`npm run test:rules` 和 `npm run test:rules-ui`。组合模式规则使用共享阅读器与中英分条说明；同步更新全部前后端文件，重启服务前先保存已有对局。
 
 桥牌可选叫牌提示：一并部署 `bridge-bidding.js`、`bridge.js/html/css`、`bridge-server.js`、`room-archive.js` 和对应测试及 `package.json`。创建房间时可选，默认关闭；房主可在开局前修改，开局后本场保持不变。每位玩家仅使用自己的 13 张牌与公开叫牌显示 A/K/Q/J 点数、牌型和简化自然叫牌建议；读取提示不会代叫，也不读取其他座位的暗牌。旧存档默认关闭，新存档、刷新和下一副保留选择。运行 `npm run test:bridge`、`npm run test:bridge-ui`、`npm run test:archives`、`npm run test:rules` 和 `npm run test:rules-ui`，检查桌面与 320px 手机、房主权限、存档恢复及开关关闭后的隐藏。更新服务前先保存现有对局。

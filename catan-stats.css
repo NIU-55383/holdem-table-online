@@ -52,6 +52,12 @@
 .stats-dice-track{position:relative;width:100%;height:260px;border-bottom:1px solid var(--line);background:#799ba00c}
 .stats-dice-bar{position:absolute;bottom:0;width:100%;background:#4298b5;border-radius:3px 3px 0 0;min-height:0}
 .stats-dice-bar.is-seven{background:#c48c49}
+.stats-dice-key-item{display:inline-flex;align-items:center;gap:6px}
+.stats-dice-bar.is-stacked{display:flex;flex-direction:column-reverse;overflow:hidden;background:transparent}
+.stats-dice-segment{display:block;width:100%;flex:none}
+.stats-dice-source-random{background:#4298b5}
+.stats-dice-source-alchemy{background:#ae86d5}
+.stats-dice-source-unknown{background:repeating-linear-gradient(135deg,#8c9da4 0 4px,#667e88 4px 8px)}
 .stats-dice-track i{position:absolute;width:100%;border-top:2px dashed var(--ink)}
 .stats-bar-legend{display:flex;flex-wrap:wrap;gap:12px 22px;margin:22px 0}
 .stats-bar-legend>span{display:grid;grid-template-columns:12px auto;align-items:center;column-gap:7px;font-size:13px}

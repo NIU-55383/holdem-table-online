@@ -11,6 +11,153 @@
     ["悔棋撤回最后一步，求和与换边再来都需在同一设备确认双方同意。认输针对当前行棋方。刷新可恢复本机进度；保存并退出会下载通用存档，之后可导入联机房间重新选座。", "Undo takes back the last move. Undo, draw and rematch ask for both players' agreement on the shared device. Resignation applies to the side to move. Refresh restores local progress; Save & leave downloads a portable file, which can later be imported into an online room with fresh seat selection."]
   ] };
   const data = {
+    coup: {
+  "title": [
+    "政变规则",
+    "Coup Rules"
+  ],
+  "sections": [room,
+    {
+      "id": "goal",
+      "title": [
+        "目标与开局",
+        "Goal & setup"
+      ],
+      "items": [
+        [
+          "2–6 人。每人两张暗牌，失去两张即出局；最后还有暗牌的人获胜。",
+          "2–6 players. Start with two hidden cards; losing both eliminates you. The last player with influence wins."
+        ],
+        [
+          "五种角色各 3 张，共 15 张。通常每人 2 金币；双人局先手 1 金币。金币与失效牌公开，暗牌仅自己可见。",
+          "Three copies of each of five roles make 15 cards. Start with two coins, except the first player in a duel gets one. Coins and lost cards are public; hidden cards are private."
+        ]
+      ]
+    },
+    {
+      "id": "turn",
+      "title": [
+        "每回合怎么进行",
+        "Turn sequence"
+      ],
+      "items": [
+        [
+          "按座位依次行动，跳过出局者。每回合必须选择一个行动；需要目标时，选择一名存活的对手。",
+          "Act in seat order, skipping eliminated players. Choose one action each turn and a surviving opponent for targeted actions."
+        ],
+        [
+          "可以声称拥有任何角色，无须真的持有。角色行动先处理质疑，再处理反制；反制也可被质疑。",
+          "You may claim any role, truthfully or as a bluff. Resolve action challenges before blocks; blocks can also be challenged."
+        ],
+        [
+          "失去影响力时，自己选一张暗牌公开。公开牌不能再证明身份，也不能交换。",
+          "When losing influence, choose a hidden card to reveal. Lost cards cannot prove claims or be exchanged."
+        ]
+      ]
+    },
+    {
+      "id": "actions",
+      "title": [
+        "行动、效果与费用",
+        "Actions, effects & costs"
+      ],
+      "items": [
+        [
+          "收入：拿 1 金币，不可质疑或反制。",
+          "Income: gain one coin; cannot be challenged or blocked."
+        ],
+        [
+          "外国援助：拿 2 金币；任意其他存活玩家可声称公爵反制。援助不可质疑，公爵反制可质疑。",
+          "Foreign aid: gain two coins. Any other survivor may block as Duke. Aid cannot be challenged; its Duke block can."
+        ],
+        [
+          "政变：付 7 金币，让目标失去一张暗牌；不可质疑或反制。回合开始已有 10 金币或更多时必须政变。",
+          "Coup: pay seven coins; the target loses influence. Cannot be challenged or blocked. With ten or more coins at turn start, you must coup."
+        ],
+        [
+          "公爵征税：拿 3 金币。可质疑，不可反制。",
+          "Duke — Tax: gain three coins. Challengeable, unblockable."
+        ],
+        [
+          "刺客暗杀：先付 3 金币，成功则目标失去一张暗牌。可质疑刺客；只有目标能声称女伯爵反制。",
+          "Assassin — Assassinate: pay three coins; success costs the target one influence. The Assassin can be challenged; only the target may block as Contessa."
+        ],
+        [
+          "队长偷窃：从目标拿最多 2 金币，不足就拿剩余的。可质疑队长；只有目标能声称队长或大使反制。",
+          "Captain — Steal: take up to two coins from the target. The Captain can be challenged; only the target may block as Captain or Ambassador."
+        ],
+        [
+          "大使交换：抽 2 张，与自己的暗牌一起选择保留；保留数量等于原有暗牌数，另外 2 张洗回牌堆。可质疑，不可反制。",
+          "Ambassador — Exchange: draw two, combine with your hidden cards and keep your original influence count. Shuffle the other two back. Challengeable, unblockable."
+        ],
+        [
+          "女伯爵没有独立回合行动，只反制针对自己的暗杀。",
+          "Contessa has no turn action; she blocks an assassination against you."
+        ]
+      ]
+    },
+    {
+      "id": "challenge",
+      "title": [
+        "质疑、反制与退款",
+        "Challenges, blocks & refunds"
+      ],
+      "items": [
+        [
+          "声明属实：亮出对应的有效暗牌，洗回牌堆并抽替代牌；质疑者失去一张暗牌，原行动或反制继续。",
+          "True claim: show a live matching card, shuffle it into the deck and draw a replacement. The challenger loses influence; the action or block continues."
+        ],
+        [
+          "虚假行动被揭穿：行动者失去一张暗牌，取消行动，已付费用退还。",
+          "Exposed false action: the actor loses influence, the action is cancelled and its cost is refunded."
+        ],
+        [
+          "反制成立：行动失败，已付费用不退。虚假反制被揭穿：反制者失去一张暗牌，原行动继续。",
+          "A successful block cancels the action without refunding its cost. An exposed false block costs its claimant influence; the original action continues."
+        ],
+        [
+          "暗杀可能连续失去两张：错误质疑刺客或假女伯爵被揭穿，先因质疑扣一张，再结算暗杀。已出局的目标不再扣牌。",
+          "Assassination can cost two influence: one for a failed challenge or exposed false Contessa, then one for the assassination. Eliminated targets lose no further cards."
+        ]
+      ]
+    },
+    {
+      "id": "club",
+      "title": [
+        "本馆的联机方式",
+        "Club implementation"
+      ],
+      "items": [
+        [
+          "五角色基础版，不含宗教改革和双人选牌变体。首局第一座先手，开局后座位固定。",
+          "Five-role base game, without Reformation or the duel card-selection variant. The first seat starts; seats stay fixed during play."
+        ],
+        [
+          "真人点击放行、质疑或反制；默认没有回应倒计时。同阶段先送达的有效质疑或反制先处理，不能补交已结束阶段的操作。",
+          "Humans explicitly pass, challenge or block with no default countdown. The first valid challenge or block received resolves first; closed phases cannot be revisited."
+        ],
+        [
+          "持有对应角色时，系统自动证明并换牌；否则选择损失的影响力。本馆不提供有真身份却主动放弃证明的选项。",
+          "A matching live role is proved and replaced automatically; otherwise choose influence to lose. Voluntarily declining to prove a true claim is not offered."
+        ],
+        [
+          "可以邀请好友或加机器人。机器人只参考自己的牌和公开信息。出局后可观战，别人的暗牌仍然保密。",
+          "Invite friends or bots. Bots use their own cards and public information. Eliminated players may watch; others' hidden cards remain private."
+        ]
+      ]
+    }
+  ],
+  "sources": [
+    [
+      "Indie Boards & Cards · Coup",
+      "https://indieboardsandcards.com/our-games/coup/"
+    ],
+    [
+      "Coup 官方说明书（镜像） / Publisher rulebook (mirror)",
+      "https://officialgamerules.org/wp-content/uploads/2025/02/Coup-Rulebook.pdf"
+    ]
+  ]
+},
     million: {
       "title": [
         "百万美金规则",

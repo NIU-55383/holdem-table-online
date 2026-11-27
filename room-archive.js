@@ -11,7 +11,7 @@ const integer = (v, low, high) => Number.isSafeInteger(v) && v >= low && v <= hi
 const CONFIG = {
   catan: ["mapId", "layout", "thieves", "maxPlayers", "skins"], bridge: ["boards", "scores", "biddingHints"],
   gomoku: ["difficulty"], xiangqi: ["difficulty"], truth: ["level", "mode", "rounds", "maxPlayers", "selection", "skipLimit"],
-  million: ["capacity", "settings", "edition"], poker: ["maxPlayers", "startingStack", "blindInterval", "practiceMode"]
+  million: ["capacity", "settings", "edition"], coup: ["capacity"], poker: ["maxPlayers", "startingStack", "blindInterval", "practiceMode"]
 };
 const POKER = ["status", "handNumber", "dealer", "smallBlind", "bigBlind", "blindLevel", "smallBlindAmount", "bigBlindAmount", "street", "board", "burned", "deck", "pot", "currentBet", "minRaise", "raiseCount", "lastAggressor", "actor", "message", "log", "winners", "wasShowdown", "autoNext"];
 const POKER_SEAT = ["chips", "hand", "bet", "totalBet", "folded", "showCards", "allIn"];
@@ -39,6 +39,25 @@ function clearMillionConsents(g) {
     g.vote.open = false;
     g.vote.votes = g.players.map(() => null);
   }
+}
+
+function anonymizeCoup(g) {
+  // Text logs may still name former occupants; portable saves retain game assets, not their identities.
+  g.log = []; g.logSequence = 0;
+  if (g.phase === "lose") {
+    const c = g.choice, p = g.pending;
+    if (c.next === "afterClaim" || c.next === "finish" && p.block) {
+      c.reason = "你的质疑失败：对方已证明所声明的角色。请公开 1 张角色牌，失去 1 点影响力。";
+      c.reasonEn = "Your challenge failed: the claimed role was proved. Reveal one influence card and lose one influence.";
+    } else if (c.next === "resolve" || c.playerId === p.actorId) {
+      c.reason = `你的${c.next === "resolve" ? "反制" : "行动"}声明被揭穿。请公开 1 张角色牌，失去 1 点影响力。`;
+      c.reasonEn = `Your ${c.next === "resolve" ? "block" : "action"} claim was exposed as a bluff. Reveal one influence card and lose one influence.`;
+    } else {
+      c.reason = `你受到一次${p.action === "coup" ? "政变" : "暗杀"}。请公开 1 张角色牌，失去 1 点影响力。`;
+      c.reasonEn = `You were targeted by ${p.action === "coup" ? "a coup" : "an assassination"}. Reveal one influence card and lose one influence.`;
+    }
+  }
+  g.players.forEach((p, i) => { p.name = `座位 ${i + 1} / Seat ${i + 1}`; });
 }
 
 function anonymizeMillion(g) {
@@ -205,6 +224,7 @@ function encode(kind, room) {
   } else {
     progress = copy(room.game);
     if (kind === "million") anonymizeMillion(progress);
+    else if (kind === "coup") anonymizeCoup(progress);
     else if (progress.players) progress.players.forEach((p, i) => { p.name = `座位 ${i + 1} / Seat ${i + 1}`; });
     // Pending offers and ready acknowledgements belong to the departing people.
     if (kind === "catan") progress.trade = null;
@@ -314,6 +334,11 @@ function validateProgress(kind, g, count, config) {
       config.rounds = 0;
     } else Object.assign(config, { selection: "dice", skipLimit: -1 });
     E.resumeEndless(g);
+  } else if (kind === "coup") {
+    fail(integer(config.capacity, 2, 6) && integer(count, 2, config.capacity));
+    fail(Array.isArray(g.players) && g.players.length === count);
+    require("./coup-engine").validateRestore(g);
+    anonymizeCoup(g);
   } else if (kind === "million") {
     const edition = g.edition === undefined && g.version === 2 ? "2016" : g.edition;
     fail((edition === "2016" && g.version === 2) || (edition === "2024" && g.version === 3));
@@ -336,12 +361,12 @@ function decode(input, allowed) {
   checkTree(input);
   fail(input?.format === FORMAT && input.version === 1 && allowed.includes(input.game));
   const a = copy(input), kind = a.game, count = a.positions?.length;
-  const bounds = { catan: [3, 6], bridge: [4, 4], gomoku: [2, 2], xiangqi: [2, 2], truth: [2, 12], million: [3, 9], poker: [2, 8] }[kind];
+  const bounds = { catan: [3, 6], bridge: [4, 4], gomoku: [2, 2], xiangqi: [2, 2], truth: [2, 12], million: [3, 9], coup: [2, 6], poker: [2, 8] }[kind];
   fail(Array.isArray(a.positions) && integer(count, ...bounds) && new Set(a.positions).size === count && a.positions.every(p => integer(p, 0, 11)));
   fail(a.config && typeof a.config === "object" && !Array.isArray(a.config));
   const config = pick(a.config, CONFIG[kind]);
   const progress = validateProgress(kind, a.progress, count, config);
-  if (kind === "million") fail(a.positions.every(p => p < config.capacity));
+  if (["million", "coup"].includes(kind)) fail(a.positions.every(p => p < config.capacity));
   const seats = a.positions.map((position, i) => ({ token: crypto.randomUUID(), name: `座位 ${i + 1} / Seat ${i + 1}`, position, avatar: null, bot: false, auto: false, vacant: true, ready: false, ws: null }));
   const room = { ...config, host: "", seats, game: progress, chat: [], pending: null, seatSwap: null, job: null, timer: null, timerKey: null, updated: Date.now(), archiveRestoring: true };
   if (["gomoku", "xiangqi"].includes(kind)) room.kind = kind;
@@ -399,7 +424,7 @@ function createRoomArchive(options) {
       const { kind, room: r } = decode(data.archive, allowed);
       // Exercise the engine's private/public view before registering untrusted state.
       options.validate(r);
-      const prefix = { catan: "C", bridge: "B", gomoku: "G", xiangqi: "X", truth: "T", million: "M", poker: "P" }[kind];
+      const prefix = { catan: "C", bridge: "B", gomoku: "G", xiangqi: "X", truth: "T", million: "M", coup: "Q", poker: "P" }[kind];
       do { r.code = prefix + crypto.randomBytes(3).toString("hex").slice(0, kind === "catan" || poker ? 4 : 5).toUpperCase(); } while (rooms.has(r.code));
       watch(r, s, connection, data); rooms.set(r.code, r); return true;
     }

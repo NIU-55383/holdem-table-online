@@ -11,7 +11,7 @@ function fixture(kind) {
   r.game = ["gomoku", "xiangqi"].includes(kind) ? E.createGame(kind) : kind === "truth" ? E.createGame(count) : E.createGame(r.seats.map(p => p.name));
   return r;
 }
-for (const kind of ["catan", "bridge", "gomoku", "xiangqi", "truth", "million"]) test(`${kind}: portable progress without identities, fresh vacant seats`, () => {
+for (const kind of ["catan", "bridge", "gomoku", "xiangqi", "truth", "million", "coup"]) test(`${kind}: portable progress without identities, fresh vacant seats`, () => {
   const r = fixture(kind);
   if (["gomoku", "xiangqi"].includes(kind)) {
     const E = require("./duel-engine"); for (let i = 0; i < 5; i++) E.move(r.game, r.game.current, E.legal(r.game)[0]);
@@ -127,7 +127,7 @@ async function launch() {
   return { client, port, async close() { sockets.forEach(s => s.terminate()); server.kill(); await once(server, "exit"); assert.equal(errors, ""); } };
 }
 
-for (const kind of ["bridge", "truth", "million"]) test(`${kind}: every phase and ongoing or final progress can be restored`, () => {
+for (const kind of ["bridge", "truth", "million", "coup"]) test(`${kind}: every phase and ongoing or final progress can be restored`, () => {
   const r = fixture(kind), E = require(`./${kind}-engine`);
   for (let step = 0; step < 250 && r.game.phase !== "over"; step++) {
     const { room } = decode(encode(kind, r), [kind]);
@@ -165,10 +165,10 @@ test("a save survives a completely new server process", { timeout: 30000 }, asyn
   } finally { await second.close(); }
 });
 
-test("seven adapters: save/cancel/export/evict/import/choose/resume, host checks and hidden-data isolation", { timeout: 120000 }, async () => {
+test("eight adapters: save/cancel/export/evict/import/choose/resume, host checks and hidden-data isolation", { timeout: 120000 }, async () => {
   const app = await launch();
   try {
-    for (const kind of ["catan", "bridge", "gomoku", "xiangqi", "truth", "million", "poker"]) {
+    for (const kind of ["catan", "bridge", "gomoku", "xiangqi", "truth", "million", "coup", "poker"]) {
       let a = await app.client(kind);
       const duel = ["gomoku", "xiangqi"].includes(kind);
       await a.request({ type: "create", name: "Host", kind, difficulty: "easy", side: 0, ai: duel, seats: 3, maxPlayers: 3, capacity: 3, boards: 4 });
@@ -217,6 +217,75 @@ test("seven adapters: save/cancel/export/evict/import/choose/resume, host checks
       a.ws.close(); b.ws.close();
     }
   } finally { await app.close(); }
+});
+
+test("Coup: each challenge, block, influence loss, private exchange and end state round-trips", () => {
+  const E = require("./coup-engine"), cases = [];
+  const game = () => E.createGame(["Alice", "Bob", "Carol"], { seed: 120 });
+  const save = g => cases.push(structuredClone(g));
+  let g = game(); save(g);
+  E.act(g, 0, { type: "action", action: "tax" }); save(g);
+  E.act(g, 1, { type: "challenge" }); save(g);
+  g = game(); E.act(g, 0, { type: "action", action: "aid" }); save(g);
+  E.act(g, 1, { type: "block", role: "Duke" }); save(g);
+  g = game(); E.act(g, 0, { type: "action", action: "exchange" });
+  while (g.phase !== "exchange") E.act(g, E.requiredActors(g)[0], { type: "pass" });
+  save(g);
+  E.endGame(g); save(g);
+  g = game();
+  for (let steps = 0; g.phase !== "over" && steps < 700; steps++) {
+    const actor = E.requiredActors(g)[0]; E.act(g, actor, E.chooseBotAction(g, actor));
+  }
+  assert.equal(g.phase, "over"); save(g);
+  assert.deepEqual([...new Set(cases.map(g => g.phase))].sort(), ["turn", "actionChallenge", "block", "blockChallenge", "lose", "exchange", "over"].sort());
+  for (const progress of cases) {
+    const room = { seats: seats(3), capacity: 6, game: progress }, a = encode("coup", room);
+    const restored = decode(a, ["coup"]).room;
+    assert.deepEqual(restored.game, a.progress, progress.phase); assert.equal(restored.capacity, 6);
+    assert.equal(restored.game.phase, progress.phase); E.validateRestore(restored.game);
+    for (const oldName of ["Alice", "Bob", "Carol"]) assert(!JSON.stringify(a).includes(oldName), `${progress.phase}: no ${oldName} in the save`);
+    for (let viewer = 0; viewer < 3; viewer++) {
+      const view = E.publicGame(restored.game, viewer); assert(!Object.hasOwn(view, "deck")); assert(!Object.hasOwn(view, "rng"));
+      for (const p of view.players) if (p.id !== viewer) assert(p.cards.every(c => c.revealed || c.role === null));
+      if (progress.phase === "exchange" && viewer !== progress.choice.playerId) assert(!Object.hasOwn(view.choice, "choices"));
+    }
+    const again = encode("coup", restored); assert.deepEqual(again.progress, a.progress);
+  }
+});
+
+test("Coup: malformed files cannot forge hands, deck, phase, capacity, positions or hidden identity keys", () => {
+  const r = fixture("coup"), good = encode("coup", r);
+  const invalid = [
+    a => { a.game = "million"; }, a => { a.version = 2; }, a => { a.config.capacity = 1; },
+    a => { a.config.capacity = 7; }, a => { a.config.capacity = 2; }, a => { a.positions[2] = 3; },
+    a => { a.positions[2] = a.positions[1]; }, a => { a.progress.players.pop(); },
+    a => { a.progress.players[0].coins = -1; }, a => { a.progress.players[0].cards[0].role = "Wizard"; },
+    a => { a.progress.deck[0] = structuredClone(a.progress.deck[1]); }, a => { a.progress.deck.pop(); },
+    a => { a.progress.phase = "exchange"; }, a => { a.progress.current = 99; },
+    a => { a.progress.players[0].token = "must-not-import"; }, a => { a.progress.players[0].socialId = "must-not-import"; },
+    a => { a.progress.players[0].cards = []; }, a => { a.progress.winner = 0; }
+  ];
+  for (const mutate of invalid) {
+    const a = structuredClone(good); mutate(a); assert.throws(() => decode(a, ["coup"]));
+  }
+  assert.throws(() => decode(JSON.parse(JSON.stringify(good).replace('"progress":{', '"progress":{"__proto__":{},')), ["coup"]));
+  assert.throws(() => decode({ ...good, unknown: "x".repeat(2 * 1024 * 1024) }, ["coup"]));
+  const restarted = decode(good, ["coup"]).room;
+  assert(restarted.seats.every(p => p.vacant && !p.auto && !p.bot && p.avatar === null && p.ws === null));
+  assert.equal(restarted.host, ""); assert.equal(restarted.archiveRestoring, true);
+});
+
+test("Coup: portable saves omit historical occupant names and rebuild loss reasons without identifiers", () => {
+  const E = require("./coup-engine"), g = E.createGame(["a", "I", "你"], { seed: 3 });
+  E.act(g, 0, { type: "action", action: "tax" }); E.act(g, 1, { type: "challenge" });
+  // Text may name a removed occupant who is no longer in players[].name.
+  g.log[0].en = "Former occupant SecretOldPerson declared tax.";
+  g.choice.reason = "SecretOldPerson 质疑了你。"; g.choice.reasonEn = "SecretOldPerson challenged you."; E.validateRestore(g);
+  const a = encode("coup", { game: g, capacity: 3, seats: seats(3) });
+  const restored = decode(a, ["coup"]).room;
+  assert(!JSON.stringify(a).includes("SecretOldPerson")); assert.deepEqual(restored.game.log, []); assert.equal(restored.game.logSequence, 0);
+  assert.match(restored.game.choice.reasonEn, /influence/); E.validateRestore(restored.game);
+  assert.deepEqual(encode("coup", restored).progress, a.progress);
 });
 
 module.exports = { fixture, launch };

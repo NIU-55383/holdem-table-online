@@ -198,7 +198,7 @@ window.CatanCitiesUI = (() => {
       const held=g.citiesKnights.players[q.player]?.count;
       return {heading:[`进步卡超限：还需弃 ${remaining} 张`,`Progress-card limit: discard ${remaining}`],prompt:[`${own?"你":"等待 "+player.name} · 进步卡超限：还需弃 ${remaining} 张`,`${own?"You":"Waiting for "+player.name} · Progress-card limit: discard ${remaining}`],items:[
         ["为什么要弃牌","Why a discard is required",`${who}${Number.isSafeInteger(held)?`当前持有 ${held} 张进步卡，超过 4 张上限` : "持有的进步卡超过 4 张上限"}。公开的印刷术、宪法不计入这个上限；资源和商品也不算。`,`${whoEn} ${own?"have":"has"} ${Number.isSafeInteger(held)?`${held} progress cards, above the limit of 4`:"more than the limit of 4 progress cards"}. Revealed Printing and Constitution cards do not count; resources and commodities are separate.`],
-        ["弃几张、弃到哪里","How many and where",`本次还需弃 ${remaining} 张进步卡，放回对应类别的牌堆底。`,`Discard ${remaining} more progress card(s) to the bottom of their matching decks.`],
+        ["弃几张、弃到哪里","How many and where",`本次还需弃 ${remaining} 张进步卡，放回对应类别的牌堆底。现在是其他玩家的回合，须立即弃牌，不能先用牌代替。`,`Discard ${remaining} more progress card(s) to the bottom of their matching decks. It is another player\'s turn, so discard immediately; playing a card instead is not allowed.`],
       ]};
     }
 
@@ -372,7 +372,7 @@ window.CatanCitiesUI = (() => {
       monopoly:["每名对手交出至多 2 张选定资源。","Each opponent gives you up to 2 of the selected resource."],
       tradeMonopoly:["每名对手交出至多 1 张选定商品。","Each opponent gives you up to 1 of the selected commodity."],
       harbor:["提供 1 张普通资源，换取对方自选的 1 张商品；对方没有商品则不交换。","Offer 1 normal resource for 1 commodity of their choice. No exchange occurs if they have no commodities."],
-      discard:["选择 1 张进步卡，放回对应牌堆底。","Choose 1 progress card to return to the bottom of its deck."]
+      discard:["这是你的回合，可以关闭此窗口先用牌；减到 4 张或以下就不用弃。若选择弃牌，选 1 张放回对应牌堆底。","It is your turn: you may close this window and play cards first. At 4 or fewer, no discard is needed. To discard instead, choose 1 card to return to the bottom of its deck."]
     };
     function pickerModel(){
       const g=room?.game,c=g?.citiesKnights;if(!c)return null;
@@ -593,7 +593,14 @@ window.CatanCitiesUI = (() => {
       if(c.choice?.kind==="moveKnight"){if(c.choice.from!=null)moveSource=c.choice.from;}else if(!pending)moveSource=null;
       const key=`${r.code}:${r.you}:${g.revision}`;if(key!==revision){revision=key;group="";if(dialog.open)dialog.close();}
       const all=available(), q=c.choice, opts=q?.player===r.you?all:all.filter(o=>inGroup(o,group));
-      const description=choiceDescription(g,r.you),heading=description?.heading||(q?choices[q.kind]||[q.kind,q.kind]:groups[group]?.slice(0,2));
+      const ownDiscard=!q&&group==="discard"&&g.phase==="main"&&g.current===r.you&&c.players[r.you].cards.length>4;
+      const description=choiceDescription(g,r.you)||(ownDiscard?{
+        heading:["进步卡超限：可先用牌","Above hand limit: you may play first"],
+        items:[
+          ["结束回合前","Before ending your turn",`当前有 ${c.players[r.you].cards.length} 张进步卡，结束回合前最多保留 4 张。`,`You have ${c.players[r.you].cards.length} progress cards. Keep at most 4 when ending your turn.`],
+          ["怎么处理","Your options","可以先使用可用的进步卡；减到 4 张或以下就不用弃。也可以选择弃掉多出的牌。","You may play usable progress cards first; at 4 or fewer, no discard is needed. You may instead discard the excess cards."]
+        ]
+      }:null),heading=description?.heading||(q?choices[q.kind]||[q.kind,q.kind]:groups[group]?.slice(0,2));
       const disabled=blocked(),picker=pickerModel();
       const launch=(attribute,title,graphic)=>`<button type="button" class="primary cities-choice-launch" ${attribute} ${disabled?"disabled":""}>${graphic}<span>${esc(title[0])}<small>${esc(title[1])}</small></span></button>`;
       const batch=c.selection&&q?.player===r.you;

@@ -9,6 +9,7 @@ const { attachDuel } = require("./duel-server");
 const { attachBridge } = require("./bridge-server");
 const { attachTruth } = require("./truth-server");
 const { attachMillion } = require("./million-server");
+const { attachCoup } = require("./coup-server");
 const AvatarData = require("./avatar-data");
 const Social = require("./game-social");
 
@@ -1508,11 +1509,13 @@ const duel = attachDuel(server);
 const bridge = attachBridge(server);
 const truth = attachTruth(server);
 const million = attachMillion(server);
+const coup = attachCoup(server);
 
 server.on("upgrade", (request, socket, head) => {
   if (request.url === "/duel-ws") { duel.upgrade(request, socket, head); return; }
   if (request.url === "/bridge-ws") { bridge.upgrade(request, socket, head); return; }
   if (request.url === "/truth-ws") { truth.upgrade(request, socket, head); return; }
+  if (request.url === "/coup-ws") { coup.upgrade(request, socket, head); return; }
   if (request.url === "/million-ws") { million.upgrade(request, socket, head); return; }
   if (request.url === "/catan-ws") {
     catan.upgrade(request, socket, head);

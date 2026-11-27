@@ -4,13 +4,13 @@ const { spawn } = require("node:child_process"), { once } = require("node:events
 let playwright; try { playwright = require("playwright"); } catch { playwright = require(path.resolve(path.dirname(process.execPath), "../node_modules/playwright")); }
 async function main() {
   const probe = http.createServer(); probe.listen(0, "127.0.0.1"); await once(probe, "listening"); const port = probe.address().port; await new Promise(r => probe.close(r));
-  const server = spawn(process.execPath, [require.resolve("./server")], { windowsHide: true, env: { ...process.env, PORT: String(port), LOCAL_ONLY: "1", AUTO_OPEN: "0", CATAN_BOT_DELAY: "600000", BRIDGE_BOT_DELAY: "600000", MILLION_BOT_DELAY: "600000", TRUTH_BOT_DELAY: "600000" }, stdio: ["ignore", "pipe", "pipe"] });
+  const server = spawn(process.execPath, [require.resolve("./server")], { windowsHide: true, env: { ...process.env, PORT: String(port), LOCAL_ONLY: "1", AUTO_OPEN: "0", CATAN_BOT_DELAY: "600000", BRIDGE_BOT_DELAY: "600000", MILLION_BOT_DELAY: "600000", COUP_BOT_DELAY: "600000", TRUTH_BOT_DELAY: "600000" }, stdio: ["ignore", "pipe", "pipe"] });
   let backendErrors = "", browser; server.stderr.on("data", c => { backendErrors += c; });
   const errors = [], result = path.join(__dirname, "test-results"); fs.mkdirSync(result, { recursive: true });
   try {
     await once(server.stdout, "data");
     browser = await playwright.chromium.launch({ executablePath: process.env.CHROME_PATH || "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true });
-    for (const kind of ["catan", "bridge", "gomoku", "xiangqi", "truth", "million", "poker"]) {
+    for (const kind of ["catan", "bridge", "gomoku", "xiangqi", "truth", "million", "coup", "poker"]) {
       const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, acceptDownloads: true });
       await context.addInitScript(() => {
         localStorage.setItem("catan-music-enabled", "false"); const Native = WebSocket;

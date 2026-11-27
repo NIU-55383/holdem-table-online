@@ -190,3 +190,11 @@ test("combined Catan exposes only the four recommended layouts with bilingual ru
   for(const [,url] of cities.combinedSources)assert.equal(new URL(url).hostname,"www.catan.com");
   assert.match(read("catan.html"),/data-edition="combined"/);
 });
+
+
+test("Coup explains costs, response sequence, private cards and club differences", () => {
+  assert.deepEqual(data.coup.title, ["政变规则", "Coup Rules"]);
+  const text = JSON.stringify(data.coup);
+  for (const phrase of ["ten or more", "refunded", "without refunding", "two influence", "first seat", "Voluntarily declining", "hidden cards remain private"]) assert(text.includes(phrase), phrase);
+  assert.match(read("index.html"), /class="club-game coup-game" href="coup.html"/);
+});

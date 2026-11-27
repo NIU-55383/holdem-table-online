@@ -2,14 +2,15 @@
   "name": "holdem-table-online",
   "version": "1.0.0",
   "private": true,
-  "description": "Bilingual board game club with Hold'em, Catan, Gomoku, Xiangqi, Bridge, Truth or Dare and Millions of Dollars.",
+  "description": "Bilingual board game club with Hold'em, Catan, Gomoku, Xiangqi, Bridge, Truth or Dare Millions of Dollars and Coup.",
   "main": "server.js",
   "scripts": {
     "postinstall": "node engine-setup.js",
     "test:ai": "node --test duel-bot-test.js duel-test.js",
     "benchmark:ai": "node duel-ai-benchmark.js",
     "start": "node server.js",
-    "test": "node integration-test.js && node --test four-game-test.js game-rules-test.js million-test.js million-network-test.js million-rules-test.js truth-test.js truth-turns-test.js truth-network-test.js bridge-test.js bridge-bot-test.js bridge-network-test.js bridge-score-test.js bridge-bidding-test.js catan-test.js catan-score-test.js catan-cities-test.js catan-card-selection-test.js catan-combined-test.js catan-combined-network-test.js catan-stats-test.js catan-extension-test.js catan-audio-test.js catan-music-test.js game-audio-test.js avatar-test.js social-test.js seafarers-test.js seafarers-expansion-test.js catan-scenario-maps-test.js catan-scenario-engine-test.js catan-scenario-network-test.js duel-test.js room-control-test.js room-archive-test.js && node --test duel-bot-test.js",
+    "test": "node integration-test.js && node --test four-game-test.js coup-test.js coup-network-test.js game-rules-test.js million-test.js million-network-test.js million-rules-test.js truth-test.js truth-turns-test.js truth-network-test.js bridge-test.js bridge-bot-test.js bridge-network-test.js bridge-score-test.js bridge-bidding-test.js catan-test.js catan-bot-trade-test.js catan-score-test.js catan-cities-test.js catan-card-selection-test.js catan-combined-test.js catan-combined-network-test.js catan-stats-test.js catan-extension-test.js catan-audio-test.js catan-music-test.js game-audio-test.js avatar-test.js social-test.js seafarers-test.js seafarers-expansion-test.js catan-scenario-maps-test.js catan-scenario-engine-test.js catan-scenario-network-test.js duel-test.js room-control-test.js room-archive-test.js && node --test duel-bot-test.js",
+    "test:catan-trades": "node --test catan-bot-trade-test.js",
     "test:combined": "node --test catan-combined-test.js catan-combined-network-test.js",
     "test:combined-ui": "node catan-combined-ui-test.js",
     "test:cities": "node --test catan-cities-test.js",
@@ -31,7 +32,9 @@
     "test:city-selections": "node --test catan-card-selection-test.js",
     "test:catan-render": "node catan-render-test.js && node catan-render-ui-test.js",
     "test:catan-score": "node --test catan-score-test.js catan-score-info-ui-test.js && node catan-score-ui-test.js",
-    "test:catan-choices": "node --test catan-graphical-choice-ui-test.js catan-choice-layout-chase-ui-test.js && node catan-give-choice-ui-test.js && node catan-progress-dialog-ui-test.js"
+    "test:catan-choices": "node --test catan-graphical-choice-ui-test.js catan-choice-layout-chase-ui-test.js && node catan-give-choice-ui-test.js && node catan-progress-dialog-ui-test.js",
+    "test:coup": "node --test coup-test.js coup-network-test.js",
+    "test:coup-ui": "node coup-ui-test.js"
   },
   "engines": {
     "node": ">=20"

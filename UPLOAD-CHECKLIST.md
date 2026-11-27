@@ -1,10 +1,16 @@
 # 网站部署检查表
 
-当前仓库包含七款游戏：德州扑克、卡坦岛（基础版、航海家十三张地图、城市与骑士）、桥牌、五子棋、中国象棋、真心话大冒险、百万美金。代码直接维护在本 GitHub 仓库，不再通过解压上传包更新。
+当前仓库包含八款游戏：德州扑克、卡坦岛（基础版、航海家十三张地图、城市与骑士）、桥牌、五子棋、中国象棋、真心话大冒险、百万美金、政变（Coup）。代码直接维护在本 GitHub 仓库，不再通过解压上传包更新。
 
 大富翁的入口、联机服务、程序、图片、专用库、研究资料和测试已移除。
 
 ## 上传步骤
+
+政变（Coup）新增入口：同步部署 `coup.html`、`coup.js`、`coup.css`、`coup-art.svg`、`coup-engine.js`、`coup-server.js`，以及首页、`club.css`、`server.js`、共享规则、存档和 `package.json` 的修改。支持 2–6 人、机器人、角色声明/质疑/反制、私密换牌、房主结束/重开确认、统一头像互动和文件存档。保存保留牌、金币和当前步骤，不保留聊天、对局记录或旧玩家身份；导入后重新认领，房主确认继续。运行 `npm run test:coup`、`npm run test:coup-ui`、`npm run test:archives`、`npm run test:archives-ui`、`npm run test:rules`、`npm run test:rules-ui`；部署重启前先保存现有对局。原界面参考和核查范围见 `COUP-REVIEW.md`。
+
+卡坦岛机器人交易估价：同步部署 `catan-engine.js`、`catan-bot-trade-test.js` 和 `package.json`。报价同时评估多种建造/升级目标、自有产能、全场公开产能、银行库存与手牌余量；商品有需求时优先估值，满级与囤积时降值，保留临近胜利、防守缺粮和银行/港口更优兑换的拒绝判断。金矿产能仅计普通资源，回合外机器人不借用当前玩家的起重机减费。运行 `npm run test:catan-trades` 及 `node --test catan-test.js catan-cities-test.js catan-combined-test.js seafarers-test.js catan-scenario-engine-test.js`。这是服务端逻辑更新，部署后生效；重启前保存现有对局。
+
+进步卡超限提示：同步部署 `catan-cities-ui.js` 和 `catan-engine.js`。自己的回合注明可先使用进步卡，降到最多 4 张就无需弃牌；只有结束回合时仍超限才需要弃掉多出的牌。回合外强制弃牌明确不能用牌代替。保留原有规则及后端结束回合校验，运行 `node --test catan-cities-test.js catan-graphical-choice-ui-test.js`，检查两模式桌面/手机的可选弃牌与关闭弹窗。
 
 卡坦岛操作按钮紧凑布局：同步部署 `catan.css` 和 `catan-cities.css`。所有卡坦模式的建造、船只、骑士、升级、交易、费用及回合操作统一缩减图标和留白；保留双语字号及手机至少 44px 的按钮高度。运行 `node catan-cities-ui-test.js`，检查桌面/手机的操作、费用入口及开局造船选择。
 

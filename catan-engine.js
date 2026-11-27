@@ -391,7 +391,7 @@ function legal(g, id) {
     out.cities = affordable(p, g.cities?.medicine ? [0,0,0,1,2] : COST.city) ? citySites(g, id) : [];
     out.buy = affordable(p, COST.development) && g.deck.length > 0;
     out.end = true; out.trade = true; out.playerTrade = g.pairedTurn?.part !== 2;
-    if(g.cities && g.cities.players[id].cards.length>4) {out.end=false;out.buildBlocked.end="回合结束前，进步卡须减至 4 张 / Reduce your progress hand to 4 before ending.";}
+    if(g.cities && g.cities.players[id].cards.length>4) {out.end=false;out.buildBlocked.end="回合结束前，先使用或弃掉进步卡，直到不超过 4 张 / Play or discard down to at most 4 progress cards before ending.";}
   }
   Scenarios.filterLegal(g, id, out);
   return out;
@@ -618,11 +618,11 @@ function publicGame(g, id) {
 }
 
 function production(g, id) {
-  const rates = g.players[id].resources.map(()=>0);
-  g.board.vertices.filter((v) => v.owner === id).forEach((v) => v.tiles.forEach((tId) => {
+  const rates = Array(g.bank.length).fill(0);
+  g.board.vertices.filter((v) => v.owner >= 0 && (id == null || v.owner === id)).forEach((v) => v.tiles.forEach((tId) => {
     const t = g.board.tiles[tId], commodity = g.cities && v.level === 2 ? ({0:5,2:6,4:7})[t.resource] : undefined;
     if (t.resource >= 0 && t.resource < 5) { rates[t.resource] += pips(t.number) * (commodity == null ? v.level : 1); if(commodity != null) rates[commodity] += pips(t.number); }
-    else if (t.resource === 5) rates.forEach((_, r) => { rates[r] += pips(t.number) * v.level / 5; });
+    else if (t.resource === 5) for (let r = 0; r < 5; r++) rates[r] += pips(t.number) * v.level / 5;
   }));
   return rates;
 }
@@ -665,7 +665,7 @@ function botBuildPlans(g, id) {
     if(level<5 && (level<3 || metro?.owner===id || Cities.cities(g,id).some(v=>v.metropolis==null))) goals.push([`improvement:${b}`,level<3?5.5:7]);
   });
   return goals.map(([type, priority]) => {
-    const baseCost = type.startsWith("improvement:") ? hand.map((_,r)=>r===5+Number(type.split(":")[1]) ? g.cities.players[id].levels[r-5]+1-(g.cities.crane?1:0) : 0) : type === "wonder" ? g.scenario.wonderCards.find((x) => x.id === g.players[id].wonder.id).cost : COST[type];
+    const baseCost = type.startsWith("improvement:") ? hand.map((_,r)=>r===5+Number(type.split(":")[1]) ? g.cities.players[id].levels[r-5]+1-(id===g.current&&g.cities.crane?1:0) : 0) : type === "wonder" ? g.scenario.wonderCards.find((x) => x.id === g.players[id].wonder.id).cost : COST[type];
     const cost = hand.map((_,r)=>baseCost[r]||0), missing = cost.reduce((n, amount, r) => n + Math.max(0, amount - hand[r]) * scarcity[r], 0);
     return { type, cost, priority, scarcity, missing, value: priority / (1 + missing * .65) };
   }).sort((a, b) => b.value - a.value);
@@ -674,36 +674,68 @@ function botBuildPlans(g, id) {
 function acceptBotTrade(g, id, offer) {
   const hand = g.players[id].resources;
   if (!affordable(g.players[id], offer.want)) return false;
-  // Hidden victory points are unknown; only visible points and the public card count inform caution.
+  // Only public scores/card counts inform opponent risk, never hidden card types or hands.
   const rivalPoints = score(g, offer.from, false), rivalCards = g.players[offer.from].development.length;
   const target = g.target || 10;
   if (rivalPoints >= target - 2 || (rivalPoints >= target - 3 && rivalCards >= 3)) return false;
-  const plan = botBuildPlans(g, id)[0];
-  if (!plan) return false;
   const after = hand.map((n, r) => n + offer.give[r] - offer.want[r]);
-  const missingAfter = plan.cost.reduce((n, amount, r) => n + Math.max(0, amount - after[r]) * plan.scarcity[r], 0);
-  if (["city", "settlement"].includes(plan.type) && missingAfter > plan.missing + .001) return false;
+  const plans = botBuildPlans(g, id), rates = production(g, id), market = production(g);
+  const scarcity = rates.map(n => 1 + 2 / (n + 2));
+  if (g.cities) {
+    const ownCities = Cities.cities(g, id), knights = Cities.knights(g, id);
+    const inactive = knights.filter(v => !v.knight.active);
+    const strength = Cities.knights(g).reduce((n, v) => n + (v.knight.active ? v.knight.rank : 0), 0);
+    const threatened = g.cities.ship >= 5 && ownCities.some(v => v.metropolis == null)
+      && strength < g.board.vertices.filter(v => v.level === 2).length;
+    // Keep grain needed to reactivate our defenders before an imminent attack.
+    if (threatened && after[3] < Math.min(hand[3], inactive.length)) return false;
+    const addPlan = (type, cost, priority) => plans.push({ type, cost, priority, scarcity });
+    if (inactive.length) addPlan("activate", hand.map((_, r) => r === 3 ? Math.min(inactive.length, 2) : 0), threatened ? 9 : 4);
+    const recruitSite = g.board.vertices.some(v => v.owner < 0 && !v.knight && v.edges.some(e => g.board.edges[e].owner === id));
+    if (ownCities.length && knights.filter(v => v.knight.rank === 1).length < 2 && recruitSite)
+      addPlan("defense", hand.map((_, r) => [2,3,4].includes(r) ? 1 : 0), threatened ? 8 : 3.5);
+  }
+  const rankPlans = cards => plans.map(plan => {
+    const missing = plan.cost.reduce((n, amount, r) => n + Math.max(0, amount - cards[r]) * scarcity[r], 0);
+    return { ...plan, missing, value: plan.priority / (1 + missing * .65) };
+  }).sort((a,b) => b.value - a.value);
+  const beforePlans = rankPlans(hand), afterPlans = rankPlans(after), primary = beforePlans[0];
+  const primaryAfter = primary && afterPlans.find(plan => plan.type === primary.type);
+  // Preserve a promising build, unless the offer opens a better alternative (including upgrades).
+  if (primary && ["city","settlement"].includes(primary.type) && primaryAfter.missing > primary.missing
+      && afterPlans[0].value < primary.value + .2) return false;
+  if (primary?.missing === 0 && primaryAfter.missing > 0 && afterPlans[0].value < primary.value * .95) return false;
 
-  // Surplus cards should not be sold more cheaply than the bot's own bank/port exchange.
-  const outgoing = hand.map((_, r) => r).filter((r) => offer.want[r]);
-  const incoming = hand.map((_, r) => r).filter((r) => offer.give[r]);
+  const outgoing = hand.map((_, r) => r).filter(r => offer.want[r]);
+  const incoming = hand.map((_, r) => r).filter(r => offer.give[r]);
   if (outgoing.length === 1 && incoming.length === 1) {
     const give = outgoing[0], get = incoming[0], bankYield = Math.floor(offer.want[give] / tradeRate(g, id, give));
     if (bankYield > offer.give[get] && g.bank[get] >= bankYield) return false;
   }
-  const value = (cards) => cards.reduce((result, count, r) => {
-    const reserve = Math.max(1, plan.cost[r]), weight = plan.scarcity[r] * (plan.cost[r] ? 1.45 : .85);
-    for (let n = 1; n <= count; n++) result += weight / (1 + Math.max(0, n - reserve) * .55);
-    return result;
+  // Marginal value falls as stock piles up. Public production and bank supply measure
+  // scarcity; all reachable build/upgrade goals contribute demand, not just one plan.
+  const reserves = hand.map((_, r) => Math.max(1, ...beforePlans.filter(p => p.value >= (primary?.value || 0) * .5).map(p => p.cost[r])));
+  const weights = hand.map((_, r) => {
+    const useful = plans.some(p => p.cost[r] > 0);
+    const base = r >= 5 ? (useful ? 1.35 : .8) : [1,1,.9,1.1,1.1][r];
+    const supply = r >= 5 ? 12 : g.resourceSupply || 19;
+    return base * (1 + 1.5 / (rates[r] + 2) + .8 / (market[r] / g.players.length + 2)
+      + .25 * Math.max(0, 1 - g.bank[r] / supply)) * (useful ? 1.25 : .85);
+  });
+  const value = cards => cards.reduce((total, count, r) => {
+    for (let n = 1; n <= count; n++) total += weights[r] / (1 + Math.max(0, n - reserves[r]) * .65);
+    return total;
   }, 0);
   const beforeValue = value(hand);
-  const received = value(hand.map((n, r) => n + offer.give[r])) - beforeValue;
-  const paid = beforeValue - value(hand.map((n, r) => n - offer.want[r]));
-  const completes = plan.missing > 0 && missingAfter === 0;
-  const progress = (plan.missing - missingAfter) * 1.2 + (completes ? plan.priority * .5 : 0);
+  const received = value(hand.map((n,r) => n + offer.give[r])) - beforeValue;
+  const paid = beforeValue - value(hand.map((n,r) => n - offer.want[r]));
+  const portfolio = ranked => ranked.slice(0,3).reduce((n,p,i) => n + p.value * [1,.2,.1][i], 0);
+  const progress = (portfolio(afterPlans) - portfolio(beforePlans)) * 1.5;
+  const completes = afterPlans.some(p => p.missing === 0 && ["city","settlement"].includes(p.type)
+    && beforePlans.find(old => old.type === p.type).missing > 0);
   const cautious = rivalPoints >= target - 3 || (rivalPoints >= target - 4 && rivalCards >= 3);
-  if (cautious && (!completes || !["city", "settlement"].includes(plan.type) || received < paid * 1.5)) return false;
-  return received - paid + progress > .15;
+  if (cautious && (!completes || received < paid * 1.5)) return false;
+  return received - paid + progress > .2;
 }
 
 function chooseBotAction(g, id, rng = random) {

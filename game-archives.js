@@ -1,7 +1,7 @@
 "use strict";
 (() => {
   const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  const names = { catan: "卡坦岛 / Catan", bridge: "桥牌 / Bridge", gomoku: "五子棋 / Gomoku", xiangqi: "中国象棋 / Xiangqi", truth: "真心话与大冒险 / Truth or Dare", million: "百万美金 / Millions of Dollars", poker: "德州扑克 / Hold'em" };
+  const names = { catan: "卡坦岛 / Catan", bridge: "桥牌 / Bridge", gomoku: "五子棋 / Gomoku", xiangqi: "中国象棋 / Xiangqi", truth: "真心话与大冒险 / Truth or Dare", million: "百万美金 / Millions of Dollars", coup: "政变 / Coup", poker: "德州扑克 / Hold'em" };
   function mount({ game, send, view, name, anchor, beforeImport, local }) {
     const dialog = document.createElement("dialog"), input = document.createElement("input"), button = document.createElement("button");
     dialog.className = "room-control-dialog archive-dialog";
@@ -27,11 +27,12 @@
     function requestSave(leave = true) {
       const c = view(); if (!c?.started || c.host !== c.you || c.archive?.saving) return;
       ownerKey = key(c); mode = "confirm"; leaveAfterSave = leave;
+      const historyNote = (typeof game === "function" ? game() : game) === "coup" ? "<p>政变存档保留牌、金币和当前步骤，不保留对局记录或聊天。<small>Coup saves keep cards, coins and the current step, but not the action log or chat.</small></p>" : "";
       if (!leave) {
-        show("保存 / Save", "<p>下载当前进度，所有人继续留在本局。<small>Download the current position and keep playing with everyone in this room.</small></p><p>存档包含暗牌，请交给可信任的朋友。<small>The file contains hidden cards. Share it only with trusted friends.</small></p>", '<button data-archive="cancel">取消 / Cancel</button><button data-archive="prepare"><i data-lucide="download"></i>下载存档 / Download save</button>');
+        show("保存 / Save", "<p>下载当前进度，所有人继续留在本局。<small>Download the current position and keep playing with everyone in this room.</small></p><p>存档包含暗牌，请交给可信任的朋友。<small>The file contains hidden cards. Share it only with trusted friends.</small></p>" + historyNote, '<button data-archive="cancel">取消 / Cancel</button><button data-archive="prepare"><i data-lucide="download"></i>下载存档 / Download save</button>');
         return;
       }
-      show("保存并退出 / Save & leave", `<p>保留当前进度和各座位的手牌、资产。文件下载后再确认退出，所有玩家和机器人都将离开。<small>Keep progress, hands and assets. After downloading, confirm to remove all players and bots.</small></p>${c.seats ? `<p>本次退出 / Leaving: ${c.seats.filter(s => s && !s.vacant).map(s => esc(s.name)).join("、")}</p>` : ""}<p>存档包含暗牌，请交给可信任的朋友。<small>The file contains hidden cards. Share it only with trusted friends.</small></p>`, '<button data-archive="cancel">取消 / Cancel</button><button data-archive="prepare"><i data-lucide="download"></i>下载存档 / Download save</button>');
+      show("保存并退出 / Save & leave", `<p>保留当前进度和各座位的手牌、资产。文件下载后再确认退出，所有玩家和机器人都将离开。<small>Keep progress, hands and assets. After downloading, confirm to remove all players and bots.</small></p>${c.seats ? `<p>本次退出 / Leaving: ${c.seats.filter(s => s && !s.vacant).map(s => esc(s.name)).join("、")}</p>` : ""}<p>存档包含暗牌，请交给可信任的朋友。<small>The file contains hidden cards. Share it only with trusted friends.</small></p>${historyNote}`, '<button data-archive="cancel">取消 / Cancel</button><button data-archive="prepare"><i data-lucide="download"></i>下载存档 / Download save</button>');
     }
     function download(archive) {
       const url = URL.createObjectURL(new Blob([JSON.stringify(archive)], { type: "application/json" }));
